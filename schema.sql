@@ -1834,3 +1834,35 @@ on conflict do nothing;
 -- ============================================================
 -- Selesai Tahap 20. Jenis tantangan bertambah + kolom skor/waktu.
 -- ============================================================
+
+-- ============================================================
+-- TAHAP 21: RESET KEGIATAN SISWA OLEH GURU
+-- ============================================================
+-- Guru bisa menghapus pengerjaan siswa (tugas, ulangan, lab coding,
+-- lab komputer) supaya siswa mengerjakan dari awal. Policy delete
+-- untuk exam_submissions & exam_answers belum ada, dan exam_probes
+-- baru punya select — jadi ketiganya perlu ditambah di sini.
+-- Tabel lain (assignment_submissions, coding_submissions,
+-- komputer_hasil, exam_scores, exam_essay_scores) sudah punya
+-- policy delete / for all untuk authenticated.
+
+drop policy if exists "Guru bisa menghapus submit" on public.exam_submissions;
+create policy "Guru bisa menghapus submit"
+  on public.exam_submissions for delete
+  to authenticated using (true);
+
+drop policy if exists "Guru bisa menghapus jawaban" on public.exam_answers;
+create policy "Guru bisa menghapus jawaban"
+  on public.exam_answers for delete
+  to authenticated using (true);
+
+drop policy if exists "Guru bisa hapus probe" on public.exam_probes;
+create policy "Guru bisa hapus probe"
+  on public.exam_probes for delete
+  to authenticated using (true);
+
+grant delete on table public.exam_probes to authenticated;
+
+-- ============================================================
+-- Selesai Tahap 21. Guru bisa mereset kegiatan siswa.
+-- ============================================================

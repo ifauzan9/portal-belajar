@@ -64,6 +64,24 @@ function IkonSiswa({ className }: IkonProps) {
   );
 }
 
+function IkonRekap({ className }: IkonProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M4 6h2M4 12h2M4 18h2" />
+      <path d="M10 6h10M10 12h10M10 18h7" />
+    </svg>
+  );
+}
+
 function IkonAbsensi({ className }: IkonProps) {
   return (
     <svg
@@ -236,6 +254,7 @@ const MENU = [
   { href: "/guru", label: "Dashboard", Ikon: IkonDashboard },
   { href: "/guru/kelas", label: "Kelas", Ikon: IkonKelas },
   { href: "/guru/siswa", label: "Siswa", Ikon: IkonSiswa },
+  { href: "/guru/rekap", label: "Rekap Siswa", Ikon: IkonRekap },
   { href: "/guru/absensi", label: "Absensi", Ikon: IkonAbsensi },
   { href: "/guru/pengumuman", label: "Pengumuman", Ikon: IkonPengumuman },
   { href: "/guru/ulangan", label: "Ulangan", Ikon: IkonUlangan },
