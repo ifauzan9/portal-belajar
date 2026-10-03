@@ -34,3 +34,14 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Mode Maintenance
+
+Untuk menutup sementara portal dan menampilkan halaman "Sedang Maintenance":
+
+1. Vercel → Project → Settings → Environment Variables.
+2. Tambah `MAINTENANCE_MODE` = `1` (Production).
+3. Deployments → titik tiga pada deploy terakhir → **Redeploy**.
+4. Untuk mematikan: ubah `MAINTENANCE_MODE` menjadi `0`, lalu **Redeploy**.
+
+Saat aktif, semua halaman dialihkan (rewrite) ke `/maintenance` oleh `src/proxy.ts`. Aset statis dan halaman maintenance sendiri tetap bisa diakses.
