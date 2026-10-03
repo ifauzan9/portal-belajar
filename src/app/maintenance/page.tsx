@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 // Halaman yang ditampilkan ke pengguna saat mode maintenance aktif.
 // Diaktifkan lewat env var MAINTENANCE_MODE (lihat src/proxy.ts).
@@ -33,12 +34,12 @@ export default function HalamanMaintenance() {
           Portal sedang dalam perbaikan. Silakan coba beberapa saat lagi ya.
         </p>
 
-        <a
+        <Link
           href="/"
           className="mt-8 inline-block w-full rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700"
         >
           Muat ulang
-        </a>
+        </Link>
 
         <p className="mt-4 text-xs text-slate-400">
           Terima kasih atas kesabarannya.
