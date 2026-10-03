@@ -5,6 +5,7 @@ import { hitungRataRata, tampilkanRataRata } from "@/lib/rata-rata";
 import { ambilKelasUlangan } from "@/lib/ambil-kelas-ulangan";
 import { tenggatSudahLewat } from "@/lib/deadline";
 import { sudahTampil } from "@/lib/jadwal-pengumuman";
+import { tugasDibuka } from "@/lib/tugas";
 import { JamRealtime } from "@/components/jam-realtime";
 import { Kartu, KartuJudul } from "@/components/ui/kartu";
 import { KartuStat } from "@/components/ui/kartu-stat";
@@ -69,7 +70,7 @@ export default async function DashboardSiswaPage() {
       .eq("siswa_id", siswa.id),
     supabase
       .from("assignments")
-      .select("id, judul, tenggat, created_at, assignment_classes(kelas_id)")
+      .select("id, judul, tenggat, dibuka, created_at, assignment_classes(kelas_id)")
       .order("created_at", { ascending: false }),
     supabase
       .from("assignment_submissions")
@@ -172,6 +173,7 @@ export default async function DashboardSiswaPage() {
       id: string;
       judul: string;
       tenggat: string | null;
+      dibuka: boolean | null;
       assignment_classes?: { kelas_id: string }[];
     };
 
@@ -182,6 +184,8 @@ export default async function DashboardSiswaPage() {
       (siswa.kelas_id !== null && daftarKelasId.includes(siswa.kelas_id));
 
     if (!relevan) return [];
+    // Tugas yang ditutup guru tidak bisa dikumpulkan → bukan "menunggu".
+    if (!tugasDibuka(row)) return [];
     if (setTugasSubmit.has(row.id)) return [];
     if (tenggatSudahLewat(row.tenggat)) return [];
 
