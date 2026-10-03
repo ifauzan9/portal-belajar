@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { deleteTugas } from "@/app/guru/tugas/actions";
+import { deleteTugas, toggleTugas } from "@/app/guru/tugas/actions";
 import { FormTugas, type NilaiAwalTugas } from "@/components/form-tugas";
 import { Badge } from "@/components/ui/badge";
 import type { MetodePengumpulan } from "@/lib/tugas";
@@ -25,6 +25,7 @@ export function BarisTugas({
   totalSiswa,
   rataRata,
   kelasList,
+  dibuka,
 }: {
   nomor: number;
   id: string;
@@ -41,6 +42,8 @@ export function BarisTugas({
   totalSiswa: number;
   rataRata: string;
   kelasList: Kelas[];
+  // Tugas dibuka/ditutup guru (false = siswa tidak bisa mengumpulkan)
+  dibuka: boolean;
 }) {
   const [editing, setEditing] = useState(false);
 
@@ -91,6 +94,11 @@ export function BarisTugas({
         >
           {judul}
         </Link>
+        {!dibuka ? (
+          <Badge varian="bahaya" className="ml-2">
+            Ditutup
+          </Badge>
+        ) : null}
         {deskripsi ? (
           <p className="mt-0.5 line-clamp-1 text-sm text-slate-500">
             {deskripsi}
@@ -130,6 +138,27 @@ export function BarisTugas({
           >
             Ubah
           </button>
+          <form action={toggleTugas}>
+            <input type="hidden" name="id" value={id} />
+            <button
+              type="submit"
+              onClick={(event) => {
+                const pesan = dibuka
+                  ? `Tutup tugas "${judul}"? Siswa tidak bisa lagi mengumpulkan.`
+                  : `Buka kembali tugas "${judul}" untuk siswa?`;
+                if (!confirm(pesan)) {
+                  event.preventDefault();
+                }
+              }}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                dibuka
+                  ? "text-amber-700 hover:bg-amber-50"
+                  : "text-emerald-700 hover:bg-emerald-50"
+              }`}
+            >
+              {dibuka ? "Tutup" : "Buka"}
+            </button>
+          </form>
           <form action={deleteTugas}>
             <input type="hidden" name="id" value={id} />
             <button

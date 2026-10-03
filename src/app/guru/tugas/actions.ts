@@ -227,6 +227,44 @@ export async function deleteTugas(formData: FormData) {
   revalidatePath("/siswa/tugas");
 }
 
+// Membalik status buka/tutup tugas. `dibuka=false` berarti guru menutup
+// pengumpulan: siswa tidak bisa mengumpulkan atau memperbarui pengumpulannya
+// (walau tenggat belum lewat). `dibuka=true` (default) = terbuka.
+export async function toggleTugas(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+
+  const supabase = await requireGuru();
+
+  const { data, error } = await supabase
+    .from("assignments")
+    .select("dibuka")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error || !data) {
+    if (error) {
+      console.error("Gagal membaca status tugas:", error.message);
+    }
+    return;
+  }
+
+  const dibukaSekarang = (data as { dibuka: boolean | null }).dibuka !== false;
+  const { error: galatUpdate } = await supabase
+    .from("assignments")
+    .update({ dibuka: !dibukaSekarang, updated_at: new Date().toISOString() })
+    .eq("id", id);
+
+  if (galatUpdate) {
+    console.error("Gagal membalik status tugas:", galatUpdate.message);
+  }
+
+  revalidatePath("/guru/tugas");
+  revalidatePath(`/guru/tugas/${id}`);
+  revalidatePath("/siswa/tugas");
+  revalidatePath(`/siswa/tugas/${id}`);
+}
+
 export async function nilaiTugas(
   _prevState: HasilTugas,
   formData: FormData,

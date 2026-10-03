@@ -1866,3 +1866,19 @@ grant delete on table public.exam_probes to authenticated;
 -- ============================================================
 -- Selesai Tahap 21. Guru bisa mereset kegiatan siswa.
 -- ============================================================
+
+-- ============================================================
+-- TAHAP 22: GURU BISA MENUTUP FORM TUGAS
+-- ============================================================
+-- Kolom `dibuka` di assignments:
+--   true  = tugas terbuka, siswa bisa mengumpulkan (default)
+--   false = ditutup guru, siswa tidak bisa mengumpulkan/memperbarui
+--           walau tenggat belum lewat.
+-- Policy update `for all to authenticated` sudah ada, jadi tidak perlu
+-- policy baru.
+alter table public.assignments
+  add column if not exists dibuka boolean not null default true;
+
+-- ============================================================
+-- Selesai Tahap 22. Kolom baru: "assignments.dibuka".
+-- ============================================================

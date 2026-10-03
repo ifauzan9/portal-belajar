@@ -6,7 +6,7 @@ import { Kartu, KartuJudul } from "@/components/ui/kartu";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { IkonBuku } from "@/components/ui/ikon-siswa";
-import { LABEL_METODE, ambilKelasTugas, bacaMetode } from "@/lib/tugas";
+import { LABEL_METODE, ambilKelasTugas, bacaMetode, tugasDibuka } from "@/lib/tugas";
 
 function tanggalPendek(iso: string | null): string {
   if (!iso) return "-";
@@ -34,7 +34,7 @@ export default async function TugasSiswaPage() {
     supabase
       .from("assignments")
       .select(
-        "id, judul, deskripsi, tenggat, metode, created_at, assignment_classes(kelas_id)",
+        "id, judul, deskripsi, tenggat, metode, dibuka, created_at, assignment_classes(kelas_id)",
       )
       .order("created_at", { ascending: false }),
     supabase
@@ -62,6 +62,7 @@ export default async function TugasSiswaPage() {
       deskripsi: string | null;
       tenggat: string | null;
       metode: string;
+      dibuka: boolean | null;
       assignment_classes?: { kelas_id: string }[];
     };
 
@@ -74,10 +75,13 @@ export default async function TugasSiswaPage() {
 
     const submit = mapSubmit.get(data.id) ?? null;
     const lewat = tenggatSudahLewat(data.tenggat);
+    const dibuka = tugasDibuka(data);
 
     let status: StatusView;
     if (submit) {
       status = { label: "Sudah dikumpulkan", varian: "sukses" };
+    } else if (!dibuka) {
+      status = { label: "Ditutup", varian: "bahaya" };
     } else if (lewat) {
       status = { label: "Lewat tenggat", varian: "bahaya" };
     } else {
@@ -93,6 +97,7 @@ export default async function TugasSiswaPage() {
         metode: bacaMetode(data.metode),
         nilai: submit?.nilai ?? null,
         umpanBalik: submit?.umpan_balik ?? null,
+        dibuka,
         status,
       },
     ];
@@ -140,6 +145,9 @@ export default async function TugasSiswaPage() {
                     <Badge varian={item.status.varian} titik>
                       {item.status.label}
                     </Badge>
+                    {!item.dibuka && item.status.label === "Sudah dikumpulkan" ? (
+                      <Badge varian="bahaya">Ditutup</Badge>
+                    ) : null}
                     {item.nilai !== null ? (
                       <span className="text-sm font-semibold tabular-nums text-slate-900">
                         Nilai: {item.nilai}

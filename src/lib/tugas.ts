@@ -147,3 +147,9 @@ export function normalisasiTautan(tautan: string): string | null {
   if (/^[\w-]+(\.[\w-]+)+([/?#].*)?$/i.test(teks)) return `https://${teks}`;
   return teks;
 }
+
+// Tugas dianggap terbuka kecuali eksplisit ditutup guru (dibuka === false).
+// Aman kalau kolom belum ada / null → dianggap terbuka.
+export function tugasDibuka(row: { dibuka?: boolean | null }): boolean {
+  return row.dibuka !== false;
+}

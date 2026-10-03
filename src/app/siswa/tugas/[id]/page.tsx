@@ -11,6 +11,7 @@ import {
   LABEL_METODE,
   ambilKelasTugas,
   bacaMetode,
+  tugasDibuka,
   formatUkuran,
   urlPublikBerkas,
 } from "@/lib/tugas";
@@ -46,7 +47,7 @@ export default async function DetailTugasSiswaPage(
   const { data: tugasData } = await supabase
     .from("assignments")
     .select(
-      "id, judul, deskripsi, tenggat, metode, file_diizinkan, assignment_classes(kelas_id)",
+      "id, judul, deskripsi, tenggat, metode, file_diizinkan, dibuka, assignment_classes(kelas_id)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -62,6 +63,7 @@ export default async function DetailTugasSiswaPage(
     tenggat: string | null;
     metode: string;
     file_diizinkan: string[] | null;
+    dibuka: boolean | null;
     assignment_classes?: { kelas_id: string }[];
   };
 
@@ -102,7 +104,8 @@ export default async function DetailTugasSiswaPage(
   const dokumen = berkas.filter((b) => b.tipe === "dokumen");
 
   const lewat = tenggatSudahLewat(tugas.tenggat);
-  const bolehKumpul = !lewat;
+  const dibuka = tugasDibuka(tugas);
+  const bolehKumpul = !lewat && dibuka;
 
   return (
     <div className="space-y-6">
@@ -128,6 +131,7 @@ export default async function DetailTugasSiswaPage(
           ) : (
             <Badge varian="peringatan">Belum dikumpulkan</Badge>
           )}
+          {!dibuka ? <Badge varian="bahaya">Ditutup guru</Badge> : null}
         </div>
         {tugas.deskripsi ? (
           <p className="mt-3 text-sm whitespace-pre-wrap text-slate-600">
@@ -245,7 +249,9 @@ export default async function DetailTugasSiswaPage(
 
           {!bolehKumpul ? (
             <p className="mt-3 text-xs text-slate-400">
-              Tenggat sudah lewat, pengumpulan tidak bisa diubah lagi.
+              {!dibuka
+                ? "Tugas sudah ditutup oleh guru, pengumpulan tidak bisa diubah lagi."
+                : "Tenggat sudah lewat, pengumpulan tidak bisa diubah lagi."}
             </p>
           ) : null}
         </Kartu>
@@ -266,10 +272,17 @@ export default async function DetailTugasSiswaPage(
           />
         </div>
       ) : !submission ? (
-        <Notifikasi varian="gagal" judul="Tenggat sudah lewat">
-          Kamu belum mengumpulkan tugas ini dan waktunya sudah habis. Hubungi
-          gurumu kalau ada masalah.
-        </Notifikasi>
+        !dibuka ? (
+          <Notifikasi varian="gagal" judul="Tugas ditutup">
+            Tugas ini sudah ditutup oleh guru. Kamu tidak bisa mengumpulkan
+            lagi.
+          </Notifikasi>
+        ) : (
+          <Notifikasi varian="gagal" judul="Tenggat sudah lewat">
+            Kamu belum mengumpulkan tugas ini dan waktunya sudah habis. Hubungi
+            gurumu kalau ada masalah.
+          </Notifikasi>
+        )
       ) : null}
     </div>
   );

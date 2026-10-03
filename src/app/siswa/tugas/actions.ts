@@ -46,7 +46,7 @@ export async function kumpulkanTugas(
 
   const { data: tugasData } = await supabase
     .from("assignments")
-    .select("id, metode, file_diizinkan, tenggat, assignment_classes(kelas_id)")
+    .select("id, metode, file_diizinkan, tenggat, dibuka, assignment_classes(kelas_id)")
     .eq("id", tugasId)
     .maybeSingle();
 
@@ -59,10 +59,16 @@ export async function kumpulkanTugas(
     metode: string;
     file_diizinkan: string[] | null;
     tenggat: string | null;
+    dibuka: boolean | null;
     assignment_classes?: { kelas_id: string }[];
   };
 
   const metode = bacaMetode(tugas.metode);
+
+  // Tugas ditutup guru? Tolak walau tenggat belum lewat.
+  if (tugas.dibuka === false) {
+    return { message: "Tugas ini sudah ditutup oleh guru.", berhasil: false };
+  }
 
   // Tenggat sudah lewat?
   if (tugas.tenggat && new Date(tugas.tenggat).getTime() < Date.now()) {

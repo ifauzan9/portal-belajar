@@ -7,6 +7,7 @@ import {
   LABEL_METODE,
   ambilKelasTugas,
   bacaMetode,
+  tugasDibuka,
   type MetodePengumpulan,
 } from "@/lib/tugas";
 
@@ -25,6 +26,7 @@ type TugasRow = {
   terkumpul: number;
   totalSiswa: number;
   rataRata: string;
+  dibuka: boolean;
 };
 
 function tenggatPendek(iso: string | null): string {
@@ -58,7 +60,7 @@ export default async function TugasPage() {
     supabase
       .from("assignments")
       .select(
-        "id, judul, deskripsi, tenggat, metode, file_diizinkan, created_at, assignment_classes(kelas_id), assignment_submissions(nilai)",
+        "id, judul, deskripsi, tenggat, metode, file_diizinkan, dibuka, created_at, assignment_classes(kelas_id), assignment_submissions(nilai)",
       )
       .order("created_at", { ascending: false }),
     supabase.from("students").select("id, kelas_id"),
@@ -78,6 +80,7 @@ export default async function TugasPage() {
       tenggat: string | null;
       metode: string;
       file_diizinkan: string[] | null;
+      dibuka: boolean | null;
       assignment_classes?: { kelas_id: string }[];
       assignment_submissions?: { nilai: number | null }[];
     };
@@ -111,6 +114,7 @@ export default async function TugasPage() {
       terkumpul: submissions.length,
       totalSiswa,
       rataRata: tampilkanRataRata(hitungRataRata(nilaiList)),
+      dibuka: tugasDibuka(data),
     };
   });
 
@@ -207,6 +211,7 @@ export default async function TugasPage() {
                     totalSiswa={item.totalSiswa}
                     rataRata={item.rataRata}
                     kelasList={kelasList}
+                    dibuka={item.dibuka}
                   />
                 ))}
               </tbody>
