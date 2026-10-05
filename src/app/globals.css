@@ -16,3 +16,22 @@ body {
   background: var(--background);
   color: var(--foreground);
 }
+
+@keyframes nav-progress {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(420%);
+  }
+}
+
+.nav-progress-bar {
+  animation: nav-progress 1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-progress-bar {
+    animation-duration: 2.4s;
+  }
+}
