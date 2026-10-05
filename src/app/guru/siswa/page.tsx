@@ -6,6 +6,7 @@ import { KepalaUrut } from "@/components/kepala-urut";
 import { PilihSemuaCheckbox, PilihanSiswa } from "@/components/pilihan-siswa";
 import { TambahSiswaForm } from "@/components/tambah-siswa-form";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   bacaArah,
   bacaUrut,
@@ -95,7 +96,8 @@ export default async function SiswaPage(props: PageProps<"/guru/siswa">) {
   // Map username akun login per siswa (untuk kolom "Akun Login").
   // Jika kolom `is_active` belum ada di DB (migration belum dijalankan),
   // query akan gagal → fallback ke semua akun dianggap aktif.
-  const { data: akunData, error: akunError } = await supabase
+  const admin = createAdminClient();
+  const { data: akunData, error: akunError } = await admin
     .from("student_accounts")
     .select("siswa_id, username, is_active");
   const akunPerSiswa = akunError ? new Map<string, { username: string; isActive: boolean }>() : new Map(
@@ -109,7 +111,7 @@ export default async function SiswaPage(props: PageProps<"/guru/siswa">) {
   );
   if (akunError) {
     console.error("Gagal memuat student_accounts dengan is_active, mencoba fallback:", akunError.message);
-    const { data: akunDataLama } = await supabase
+    const { data: akunDataLama } = await admin
       .from("student_accounts")
       .select("siswa_id, username");
     akunPerSiswa.clear();

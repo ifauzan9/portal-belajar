@@ -21,12 +21,14 @@ Set di **Vercel → Project → Settings → Environment Variables** (scope Prod
 | --- | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL` | Ya | URL project Supabase. Tanpa ini aplikasi tidak bisa konek DB. |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Ya | Kunci anon Supabase. |
-| `SISWA_SESSION_SECRET` | Sangat disarankan | Kunci HMAC untuk cookie sesi siswa. **Kalau tidak diisi, kode memakai nilai default yang tertulis di repo → tidak aman.** Isi dengan teks acak panjang. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Ya | Kunci server-only untuk operasi tabel akun siswa. Ambil dari Supabase Project Settings → API Keys; jangan gunakan awalan `NEXT_PUBLIC_` atau kirim ke browser. |
+| `SISWA_SESSION_SECRET` | Ya | Kunci HMAC acak minimal 32 karakter untuk cookie sesi siswa. Aplikasi gagal memproses sesi jika tidak diisi atau terlalu pendek; jangan gunakan nilai yang tersimpan di repo. |
 | `MAINTENANCE_MODE` | Opsional | `1` = tampilkan halaman maintenance. Kosong/`0` = normal. Lihat bagian di bawah. |
 
 Catatan:
 - Perubahan env var **baru berlaku setelah Redeploy**.
 - Mengubah `SISWA_SESSION_SECRET` akan membuat semua sesi siswa yang sedang login menjadi logout (siswa cukup login ulang).
+- Isi `SUPABASE_SERVICE_ROLE_KEY` dan `SISWA_SESSION_SECRET` di environment Preview/Production sebelum redeploy. Migration Tahap 23 mencabut akses `anon` ke `student_accounts`; operasi akun aplikasi memerlukan service-role key di server.
 - Nilai lokal ada di `.env.local` (tidak ikut ke GitHub, memang sengaja).
 
 ## Deploy
@@ -107,7 +109,8 @@ Setelah itu (opsional) samakan **Supabase → Authentication → URL Configurati
 
 - [ ] Repo GitHub terhubung ke Vercel
 - [ ] `NEXT_PUBLIC_SUPABASE_URL` & `NEXT_PUBLIC_SUPABASE_ANON_KEY` terisi
-- [ ] `SISWA_SESSION_SECRET` diisi teks acak (jangan biarkan default)
+- [ ] `SUPABASE_SERVICE_ROLE_KEY` diisi di environment server-only
+- [ ] `SISWA_SESSION_SECRET` diisi teks acak yang panjang
 - [ ] `schema.sql` sudah dijalankan di Supabase
 - [ ] Bucket Storage `tugas` sudah ada
 - [ ] Login guru & siswa sudah dicoba di URL produksi

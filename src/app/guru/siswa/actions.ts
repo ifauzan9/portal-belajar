@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireGuru } from "@/lib/require-guru";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const MAX_NIS = 50;
 const MAX_NAMA = 200;
@@ -151,10 +152,11 @@ export async function aksiSiswaBanyak(
   }
 
   const supabase = await requireGuru();
+  const admin = createAdminClient();
 
   if (aksi === "aktifkan" || aksi === "nonaktifkan") {
     const aktif = aksi === "aktifkan";
-    const { error, count } = await supabase
+    const { error, count } = await admin
       .from("student_accounts")
       .update({ is_active: aktif }, { count: "exact" })
       .in("siswa_id", ids);
@@ -176,7 +178,7 @@ export async function aksiSiswaBanyak(
   }
 
   if (aksi === "hapus-akun") {
-    const { error, count } = await supabase
+    const { error, count } = await admin
       .from("student_accounts")
       .delete({ count: "exact" })
       .in("siswa_id", ids);

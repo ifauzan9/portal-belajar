@@ -2,10 +2,12 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireSiswa } from "@/lib/sesi-siswa";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { LabRunner } from "@/components/lab-runner";
+import { BantuanLab } from "@/components/bantuan-lab";
 import { PetaLevel } from "@/components/peta-level";
-import { Kartu } from "@/components/ui/kartu";
 import { Badge } from "@/components/ui/badge";
+import { hitungLevelTerkunci } from "@/lib/lab";
 
 type LatihanRow = {
   id: string;
@@ -17,6 +19,8 @@ type LatihanRow = {
   kode_awal: string | null;
   keluaran_diharapkan: string;
   poin: number;
+  jenis: string;
+  aturan: { variabel_wajib?: string[] } | null;
 };
 
 type HasilRow = {
@@ -36,10 +40,11 @@ export default async function LevelLabSiswaPage(
 
   const { siswa } = await requireSiswa();
   const supabase = await createClient();
+  const admin = createAdminClient();
 
   const { data: lessonData } = await supabase
     .from("coding_lessons")
-    .select("id, judul, coding_lesson_classes(kelas_id)")
+    .select("id, judul, isi, coding_lesson_classes(kelas_id)")
     .eq("id", id)
     .maybeSingle();
 
@@ -48,6 +53,7 @@ export default async function LevelLabSiswaPage(
   const lesson = lessonData as {
     id: string;
     judul: string;
+    isi: string | null;
     coding_lesson_classes?: { kelas_id: string }[];
   };
 
@@ -63,7 +69,7 @@ export default async function LevelLabSiswaPage(
   const { data: latihanData } = await supabase
     .from("coding_exercises")
     .select(
-      "id, level, judul, penjelasan, contoh_kode, instruksi, kode_awal, keluaran_diharapkan, poin",
+      "id, level, judul, penjelasan, contoh_kode, instruksi, kode_awal, keluaran_diharapkan, poin, jenis, aturan",
     )
     .eq("lesson_id", id)
     .order("level", { ascending: true });
@@ -76,7 +82,7 @@ export default async function LevelLabSiswaPage(
   const exerciseIds = latihan.map((item) => item.id);
   let hasil: HasilRow[] = [];
   if (exerciseIds.length > 0) {
-    const { data } = await supabase
+    const { data } = await admin
       .from("coding_submissions")
       .select("exercise_id, kode, benar, pernah_benar, percobaan")
       .eq("siswa_id", siswa.id)
@@ -94,31 +100,46 @@ export default async function LevelLabSiswaPage(
     .filter((item) => petaHasil.has(item.id))
     .map((item) => item.level);
 
+  // Kunci berurutan ditentukan server: level N terkunci sampai N-1 benar.
+  const levelTerkunci = hitungLevelTerkunci(
+    latihan.map((item) => item.level),
+    new Set(selesai),
+  );
+
+  // Kunci ketat: level terkunci tidak bisa dibuka walau lewat URL langsung.
+  if (levelTerkunci.includes(levelNum)) {
+    redirect(`/siswa/lab/${id}`);
+  }
+
   const total = latihan.length;
   const adaSebelum = levelNum > 1;
   const adaSesudah = levelNum < total;
 
   return (
     <div className="space-y-6">
-      <div>
+      <header className="space-y-3">
         <Link
           href={`/siswa/lab/${id}`}
-          className="text-sm text-slate-500 transition hover:text-slate-900"
+          className="inline-flex min-h-10 items-center text-sm font-medium text-slate-600 underline-offset-4 transition hover:text-slate-950 hover:underline focus-visible:rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
         >
           ← {lesson.judul}
         </Link>
-        <div className="mt-1 flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-semibold text-slate-900">
-            Level {exercise.level} — {exercise.judul}
-          </h1>
-          <Badge varian="netral">{exercise.poin} poin</Badge>
-          {submission?.pernah_benar ? (
-            <Badge varian="sukses" titik>
-              Selesai
-            </Badge>
-          ) : null}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-emerald-700">{lesson.judul}</p>
+            <h1 className="mt-1 text-balance text-2xl font-bold leading-tight text-slate-950 sm:text-3xl">
+              Tantangan {exercise.level}: {exercise.judul}
+            </h1>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge varian="netral">{exercise.poin} poin</Badge>
+            {submission?.pernah_benar ? <Badge varian="sukses" titik>Sudah benar</Badge> : null}
+          </div>
         </div>
-      </div>
+        <p className="max-w-2xl text-base leading-7 text-slate-600">
+          Tulis programmu sendiri. Jalankan untuk melihat hasil, lalu cocokkan dengan target.
+        </p>
+      </header>
 
       <PetaLevel
         lessonId={id}
@@ -129,41 +150,38 @@ export default async function LevelLabSiswaPage(
         selesai={selesai}
         dikerjakan={dikerjakan}
         aktif={levelNum}
+        terkunci={levelTerkunci}
       />
 
-      <Kartu>
-        <h2 className="text-sm font-semibold text-slate-900">📖 Penjelasan</h2>
-        <p className="mt-2 text-sm whitespace-pre-wrap text-slate-700">
-          {exercise.penjelasan}
-        </p>
-
-        {exercise.contoh_kode ? (
-          <details className="mt-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
-            <summary className="cursor-pointer text-sm font-medium text-slate-700">
-              Lihat contoh kode
-            </summary>
-            <pre className="mt-2 overflow-x-auto rounded-lg bg-slate-900 p-3 font-mono text-xs text-slate-100">
-              {exercise.contoh_kode}
-            </pre>
-          </details>
-        ) : null}
-      </Kartu>
-
-      <Kartu>
-        <h2 className="text-sm font-semibold text-slate-900">🎯 Tantangan</h2>
-        <p className="mt-2 text-sm whitespace-pre-wrap text-slate-700">
-          {exercise.instruksi}
-        </p>
-
-        <div className="mt-3">
-          <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">
-            Output yang diharapkan
-          </p>
-          <pre className="mt-1 overflow-x-auto rounded-lg bg-slate-900 p-3 font-mono text-xs whitespace-pre-wrap text-slate-100">
-            {exercise.keluaran_diharapkan}
-          </pre>
+      <section className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm">
+        <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
+          <p className="text-xs font-semibold tracking-wide text-emerald-700 uppercase">Tantangan {exercise.level}</p>
+          <h2 className="mt-1 text-lg font-semibold text-slate-950">Apa yang perlu dibuat?</h2>
         </div>
-      </Kartu>
+        <div className="space-y-5 px-5 py-5 sm:px-6">
+          <div className="max-w-3xl whitespace-pre-wrap text-base leading-7 text-slate-800">
+            {exercise.instruksi}
+          </div>
+
+          {exercise.jenis !== "bebas" ? (
+            <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h3 className="text-sm font-semibold text-slate-800">Target output</h3>
+                <p className="text-xs text-slate-500">Gunakan sebagai acuan, jangan disalin.</p>
+              </div>
+              <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-950 p-4 font-mono text-sm leading-6 text-emerald-100 select-none">
+                {exercise.keluaran_diharapkan}
+              </pre>
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      <BantuanLab
+        penjelasan={exercise.penjelasan}
+        materi={lesson.isi}
+        contoh={exercise.contoh_kode}
+      />
 
       <LabRunner
         exerciseId={exercise.id}
@@ -175,6 +193,9 @@ export default async function LevelLabSiswaPage(
         judul={exercise.judul}
         levelNumber={exercise.level}
         instruksi={exercise.instruksi}
+        jenis={exercise.jenis}
+        bantuan={lesson.isi}
+        wajibVariabel={exercise.aturan?.variabel_wajib ?? []}
       />
 
       <div className="flex items-center justify-between gap-3">
@@ -188,7 +209,7 @@ export default async function LevelLabSiswaPage(
         ) : (
           <span />
         )}
-        {adaSesudah ? (
+        {adaSesudah && submission?.pernah_benar ? (
           <Link
             href={`/siswa/lab/${id}/${levelNum + 1}`}
             className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"

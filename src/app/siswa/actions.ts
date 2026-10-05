@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { hashPassword, verifikasiPassword } from "@/lib/hash-password";
 import { hapusSesiSesi, simpanSesiSesi, ambilSesiSiswa } from "@/lib/sesi-siswa";
 import {
@@ -76,6 +77,7 @@ export async function loginSiswa(
   }
 
   const supabase = await createClient();
+  const admin = createAdminClient();
 
   // Pembatasan percobaan login (anti brute force / spam).
   const kunci = `siswa:${await ambilIp()}:${username.toLowerCase()}`;
@@ -91,7 +93,7 @@ export async function loginSiswa(
   }
 
   // Cari akun siswa berdasarkan username (case-insensitive).
-  const { data: account, error } = await supabase
+  const { data: account, error } = await admin
     .from("student_accounts")
     .select("id, username, password_hash, is_active, students(*)")
     .ilike("username", username)
@@ -188,14 +190,14 @@ export async function gantiPassword(
   formData: FormData,
 ): Promise<HasilGantiPassword> {
   // Verifikasi sesi dulu.
-  const supabase = await createClient();
+  const admin = createAdminClient();
   const sesi = await ambilSesiSiswa();
 
   if (!sesi) {
     redirect("/login-siswa");
   }
 
-  const { data: account } = await supabase
+  const { data: account } = await admin
     .from("student_accounts")
     .select("id, password_hash, is_active")
     .ilike("username", sesi.username)
@@ -233,7 +235,7 @@ export async function gantiPassword(
   }
 
   const hashBaru = hashPassword(passwordBaru);
-  const { error } = await supabase
+  const { error } = await admin
     .from("student_accounts")
     .update({ password_hash: hashBaru })
     .eq("id", account.id);

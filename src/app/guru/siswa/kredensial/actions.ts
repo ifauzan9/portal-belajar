@@ -10,6 +10,7 @@ import {
 } from "@/lib/parse-kredensial-xlsx";
 import { hashPassword } from "@/lib/hash-password";
 import { requireGuru } from "@/lib/require-guru";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 // ============================================================================
 // Aksi kredensial siswa: import massal dari Excel + buat otomatis.
@@ -28,10 +29,8 @@ async function ambilSiswa(
   return { siswa: (data ?? []) as SiswaRef[], error: null };
 }
 
-async function ambilUsernameTerpakai(
-  supabase: Awaited<ReturnType<typeof requireGuru>>,
-) {
-  const { data, error } = await supabase
+async function ambilUsernameTerpakai() {
+  const { data, error } = await createAdminClient()
     .from("student_accounts")
     .select("username, siswa_id");
   if (error) return { data: [] as { username: string; siswa_id: string }[], error: error.message };
@@ -72,7 +71,7 @@ export async function previewKredensial(
     return { rows: [], error: `Gagal memuat data kelas: ${kelasError.message}` };
   }
 
-  const usernameRes = await ambilUsernameTerpakai(supabase);
+  const usernameRes = await ambilUsernameTerpakai();
   if (usernameRes.error) {
     return { rows: [], error: `Gagal memuat akun: ${usernameRes.error}` };
   }
@@ -100,6 +99,7 @@ export async function simpanImportKredensial(
   formData: FormData,
 ): Promise<HasilSimpanKredensial> {
   const supabase = await requireGuru();
+  const admin = createAdminClient();
 
   let input: unknown;
   try {
@@ -121,7 +121,7 @@ export async function simpanImportKredensial(
     return { jumlah: 0, dilewati: 0, error: `Gagal memuat data siswa: ${siswaRes.error}` };
   }
 
-  const usernameRes = await ambilUsernameTerpakai(supabase);
+  const usernameRes = await ambilUsernameTerpakai();
   if (usernameRes.error) {
     return { jumlah: 0, dilewati: 0, error: `Gagal memuat akun: ${usernameRes.error}` };
   }
@@ -188,7 +188,7 @@ export async function simpanImportKredensial(
     );
 
     if (adaAkun) {
-      const { error } = await supabase
+      const { error } = await admin
         .from("student_accounts")
         .update({ username, password_hash: hash })
         .eq("siswa_id", siswa.id);
@@ -197,7 +197,7 @@ export async function simpanImportKredensial(
         continue;
       }
     } else {
-      const { error } = await supabase
+      const { error } = await admin
         .from("student_accounts")
         .insert({ siswa_id: siswa.id, username, password_hash: hash });
       if (error) {
@@ -258,6 +258,7 @@ export async function buatKredensialOtomatis(
   formData: FormData,
 ): Promise<HasilBuatOtomatis> {
   const supabase = await requireGuru();
+  const admin = createAdminClient();
 
   // Filter kelas (kosong = semua kelas).
   const kelasPilihan = String(formData.get("kelas") ?? "").trim();
@@ -273,7 +274,7 @@ export async function buatKredensialOtomatis(
     akunRes,
   ] = await Promise.all([
     siswaQuery,
-    supabase.from("student_accounts").select("siswa_id, username"),
+    admin.from("student_accounts").select("siswa_id, username"),
   ]);
 
   if (siswaError) {
@@ -330,7 +331,7 @@ export async function buatKredensialOtomatis(
     const password = acakHanging("abcdefghjkmnpqrstuvwxyz23456789", 8);
 
     const hash = hashPassword(password);
-    const { error } = await supabase
+    const { error } = await admin
       .from("student_accounts")
       .insert({
         siswa_id: siswa.id,

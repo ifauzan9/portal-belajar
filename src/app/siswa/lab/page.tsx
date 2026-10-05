@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireSiswa } from "@/lib/sesi-siswa";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Kartu } from "@/components/ui/kartu";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -17,6 +18,7 @@ type LessonRow = {
 export default async function LabSiswaPage() {
   const { siswa, kelas } = await requireSiswa();
   const supabase = await createClient();
+  const admin = createAdminClient();
 
   const [hasilLesson, hasilLatihan, hasilHasil] = await Promise.all([
     supabase
@@ -24,7 +26,7 @@ export default async function LabSiswaPage() {
       .select("id, judul, isi, urutan, coding_lesson_classes(kelas_id)")
       .order("urutan", { ascending: true }),
     supabase.from("coding_exercises").select("id, lesson_id"),
-    supabase
+    admin
       .from("coding_submissions")
       .select("exercise_id, pernah_benar")
       .eq("siswa_id", siswa.id)
@@ -96,12 +98,22 @@ export default async function LabSiswaPage() {
                 <h2 className="mt-4 font-semibold text-slate-900">
                   {lesson.judul}
                 </h2>
-                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                <div
+                  role="progressbar"
+                  aria-label={`Progres ${lesson.judul}`}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={persen}
+                  className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100"
+                >
                   <div
                     className="h-full rounded-full bg-emerald-500 transition-all"
                     style={{ width: `${persen}%` }}
                   />
                 </div>
+                <p className="mt-2 text-sm text-slate-600">
+                  {lesson.selesai} dari {lesson.total} tantangan benar
+                </p>
               </Link>
             );
           })}

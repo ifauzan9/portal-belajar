@@ -1882,3 +1882,321 @@ alter table public.assignments
 -- ============================================================
 -- Selesai Tahap 22. Kolom baru: "assignments.dibuka".
 -- ============================================================
+
+-- ============================================================
+-- TAHAP 23: BATASI AKSES LANGSUNG KE AKUN SISWA
+-- ============================================================
+-- Operasi student_accounts dilakukan oleh server menggunakan
+-- SUPABASE_SERVICE_ROLE_KEY setelah validasi sesi/aplikasi.
+-- Jangan berikan akses service-role key ke browser.
+
+revoke all privileges on table public.student_accounts from anon, authenticated, public;
+
+drop policy if exists "Anon bisa baca akun siswa" on public.student_accounts;
+drop policy if exists "Anon bisa ubah password akun siswa" on public.student_accounts;
+drop policy if exists "Guru bisa membaca akun siswa" on public.student_accounts;
+drop policy if exists "Guru bisa menambah akun siswa" on public.student_accounts;
+drop policy if exists "Guru bisa mengubah akun siswa" on public.student_accounts;
+drop policy if exists "Guru bisa menghapus akun siswa" on public.student_accounts;
+
+-- service_role adalah kunci server-only yang dipakai aplikasi (createAdminClient).
+-- Role ini tidak memakai policy RLS, tetapi tetap butuh GRANT pada tabel yang
+-- diakses. `students` diperlukan karena query akun menyertakan relasi students(*).
+grant all privileges on table public.student_accounts to service_role;
+grant select on table public.students to service_role;
+
+-- ============================================================
+-- Selesai Tahap 23. Akses langsung anon/authenticated dicabut dari
+-- student_accounts; aplikasi mengaksesnya via service_role di server.
+-- ============================================================
+
+-- ============================================================
+-- TAHAP 24: BATASI HASIL LAB KE SERVER
+-- ============================================================
+-- Hasil lab (coding_submissions) hanya dibaca/ditulis oleh server
+-- (Server Component + Server Action) memakai service-role. Siswa tidak
+-- lagi memakai kunci anon langsung untuk tabel ini, sehingga tidak bisa
+-- membaca/mengubah hasil milik siswa lain.
+
+revoke all privileges on table public.coding_submissions from anon, public;
+
+drop policy if exists "Anon baca hasil lab" on public.coding_submissions;
+drop policy if exists "Anon kirim hasil lab" on public.coding_submissions;
+drop policy if exists "Anon ubah hasil lab" on public.coding_submissions;
+
+grant all privileges on table public.coding_submissions to service_role;
+
+-- ============================================================
+-- Selesai Tahap 24. Akses anon ke coding_submissions dicabut.
+-- ============================================================
+
+-- ============================================================
+-- TAHAP 25: MODUL PERTEMUAN 2 — VARIABEL + print()
+-- ============================================================
+-- Modul praktik Python untuk kelas 9: 15 tantangan berurutan yang hanya
+-- memakai variabel dan print(). Tantangan 1-14 dinilai dengan mencocokkan
+-- output; tantangan 15 (karya bebas) dinilai berdasarkan syarat kode.
+-- Kolom `jenis` membedakan keduanya; `aturan` menyimpan syarat karya bebas.
+
+-- 81. Kolom jenis/aturan untuk latihan coding (idempoten).
+alter table public.coding_exercises
+  add column if not exists jenis text not null default 'output';
+alter table public.coding_exercises
+  add column if not exists aturan jsonb;
+
+-- 82. SEED modul "Pertemuan 2" (idempoten).
+insert into public.coding_lessons (judul, urutan, isi)
+select
+  $j$Pertemuan 2 — Variabel + print()$j$,
+  2,
+  $i$BANTUAN MATERI — VARIABEL & print()
+
+Apa itu variabel?
+Variabel adalah wadah untuk menyimpan data. Setiap variabel punya nama.
+Contoh membuat variabel berisi teks:
+  nama_variabel = "isi teks"
+
+Apa itu print()?
+print() menampilkan sesuatu ke layar. Bisa teks langsung, bisa isi variabel.
+Contoh:
+  print("Halo")   → menampilkan: Halo
+
+Teks dan angka
+- Teks (string) harus diapit tanda kutip: "Python"
+- Angka tidak perlu tanda kutip: 2026
+
+Memakai variabel
+- Setelah dibuat, variabel bisa dipakai berkali-kali di dalam print().
+- Isi variabel bisa diganti dengan membuatnya lagi memakai nilai baru.
+- Urutan print() menentukan urutan output.
+
+Tips:
+1. Tulis satu perintah per baris.
+2. Bandingkan hasilmu dengan target output dengan teliti.
+3. Selesaikan tantangan secara berurutan; tantangan berikutnya terbuka setelah yang sekarang benar.$i$
+where not exists (
+  select 1 from public.coding_lessons where judul = $j$Pertemuan 2 — Variabel + print()$j$
+);
+
+-- 83. SEED 15 tantangan Pertemuan 2 (hanya disisipkan kalau belum ada).
+insert into public.coding_exercises
+  (lesson_id, level, judul, penjelasan, contoh_kode, instruksi, kode_awal, keluaran_diharapkan, poin, urutan, jenis, aturan)
+select
+  l.id, v.level, v.judul, v.penjelasan, null::text, v.instruksi, null::text,
+  v.keluaran_diharapkan, v.poin, v.level, v.jenis, v.aturan
+from public.coding_lessons l
+cross join (values
+  (1,
+   $j$Variabel Pertama$j$,
+   $p$Variabel menyimpan data. Teks ditulis di antara tanda kutip, misalnya "Python". print() menampilkan isi variabel ke layar.$p$,
+   $t$1. Buat variabel bernama bahasa yang berisi teks Python.
+2. Tampilkan isi variabel itu dengan print().$t$,
+   $o$Python$o$, 5, 'output', null::jsonb),
+  (2,
+   $j$Pelajaran$j$,
+   $p$Setiap variabel punya nama sendiri. Nama variabel tidak boleh berspasi; gunakan huruf, angka, atau garis bawah.$p$,
+   $t$1. Buat variabel bernama pelajaran yang berisi teks Informatika.
+2. Tampilkan isi variabel itu dengan print().$t$,
+   $o$Informatika$o$, 5, 'output', null::jsonb),
+  (3,
+   $j$Dua Variabel$j$,
+   $p$Kamu bisa membuat lebih dari satu variabel. Urutan print() menentukan urutan tampilannya.$p$,
+   $t$1. Buat variabel bahasa berisi "Python".
+2. Buat variabel kelas berisi "IX".
+3. Tampilkan isi kedua variabel secara berurutan (bahasa dulu, lalu kelas).$t$,
+   $o$Python
+IX$o$, 5, 'output', null::jsonb),
+  (4,
+   $j$Tiga Data$j$,
+   $p$Semakin banyak data, semakin banyak variabel. Pastikan setiap variabel ditampilkan dengan print().$p$,
+   $t$1. Buat variabel pelajaran berisi "Informatika".
+2. Buat variabel materi berisi "Variabel".
+3. Buat variabel kelas berisi "IX".
+4. Tampilkan ketiganya secara berurutan.$t$,
+   $o$Informatika
+Variabel
+IX$o$, 5, 'output', null::jsonb),
+  (5,
+   $j$Variabel Angka$j$,
+   $p$Angka tidak memakai tanda kutip. Kalau diberi tanda kutip, angkanya dianggap teks.$p$,
+   $t$1. Buat variabel bernama tahun dengan nilai angka 2026.
+2. Tampilkan nilainya dengan print().$t$,
+   $o$2026$o$, 5, 'output', null::jsonb),
+  (6,
+   $j$Teks dan Angka$j$,
+   $p$Teks memakai tanda kutip, angka tidak. Keduanya bisa ditampilkan dengan print().$p$,
+   $t$1. Buat variabel bahasa berisi teks "Python".
+2. Buat variabel pertemuan berisi angka 2.
+3. Tampilkan keduanya (bahasa dulu, lalu pertemuan).$t$,
+   $o$Python
+2$o$, 5, 'output', null::jsonb),
+  (7,
+   $j$Judul Program$j$,
+   $p$Kamu bisa mencetak teks langsung (misalnya garis) tanpa variabel, lalu menggabungkannya dengan isi variabel.$p$,
+   $t$1. Buat variabel judul berisi "BELAJAR PYTHON".
+2. Buat variabel materi berisi "VARIABEL".
+3. Buat tampilan persis seperti target: garis, judul, materi, garis.$t$,
+   $o$====================
+BELAJAR PYTHON
+VARIABEL
+====================$o$, 10, 'output', null::jsonb),
+  (8,
+   $j$Informasi Teknologi$j$,
+   $p$Gunakan beberapa variabel dan teks langsung untuk membuat tampilan yang rapi.$p$,
+   $t$1. Buat variabel perangkat berisi "Komputer".
+2. Buat variabel sistem berisi "Windows".
+3. Buat variabel bahasa berisi "Python".
+4. Buat tampilan persis seperti target (judul, garis, lalu isi).$t$,
+   $o$PERANGKAT TEKNOLOGI
+--------------------
+Komputer
+Windows
+Python
+--------------------$o$, 10, 'output', null::jsonb),
+  (9,
+   $j$Data Game$j$,
+   $p$Campurkan teks dan angka dalam satu tampilan. Ikuti urutan baris pada target.$p$,
+   $t$1. Buat variabel nama_game berisi "Minecraft".
+2. Buat variabel jenis berisi "Sandbox".
+3. Buat variabel tahun berisi angka 2011.
+4. Buat tampilan persis seperti target.$t$,
+   $o$====================
+DATA GAME
+====================
+Minecraft
+Sandbox
+2011
+====================$o$, 10, 'output', null::jsonb),
+  (10,
+   $j$Label dan Variabel$j$,
+   $p$Label adalah teks biasa di dalam print(). Bedakan antara menulis label dan menampilkan isi variabel.$p$,
+   $t$1. Buat variabel nama_barang berisi "Keyboard".
+2. Buat variabel jenis berisi "Perangkat Input".
+3. Buat variabel jumlah berisi angka 25.
+4. Tampilkan setiap label lalu nilainya, persis seperti target.$t$,
+   $o$Nama Barang:
+Keyboard
+Jenis:
+Perangkat Input
+Jumlah:
+25$o$, 10, 'output', null::jsonb),
+  (11,
+   $j$Data Komputer$j$,
+   $p$Gabungkan judul, garis, label, dan isi variabel menjadi satu tampilan spesifikasi.$p$,
+   $t$1. Buat variabel cpu berisi "Intel Core i5".
+2. Buat variabel ram berisi "8 GB".
+3. Buat variabel penyimpanan berisi "512 GB".
+4. Buat tampilan persis seperti target.$t$,
+   $o$========================
+SPESIFIKASI KOMPUTER
+========================
+CPU
+Intel Core i5
+RAM
+8 GB
+Penyimpanan
+512 GB
+========================$o$, 10, 'output', null::jsonb),
+  (12,
+   $j$Mengubah Isi Variabel$j$,
+   $p$Isi variabel bisa diganti. Buat variabel dengan nama sama dan nilai baru, lalu tampilkan lagi.$p$,
+   $t$1. Buat variabel status berisi "Belum Selesai", lalu tampilkan.
+2. Ubah isi variabel status menjadi "Selesai", lalu tampilkan kembali.$t$,
+   $o$Belum Selesai
+Selesai$o$, 15, 'output', null::jsonb),
+  (13,
+   $j$Variabel Digunakan Berulang$j$,
+   $p$Satu variabel bisa dipakai berkali-kali. Cukup panggil print() beberapa kali dengan variabel yang sama.$p$,
+   $t$1. Buat satu variabel bernama kata berisi "Python".
+2. Tampilkan kata Python sebanyak 5 kali (5 baris) memakai variabel itu.
+3. Jangan memakai perulangan (loop belum dipelajari).$t$,
+   $o$Python
+Python
+Python
+Python
+Python$o$, 15, 'output', null::jsonb),
+  (14,
+   $j$Kartu Teknologi$j$,
+   $p$Susun beberapa variabel menjadi satu kartu. Perhatikan spasi di depan judul agar sama dengan target.$p$,
+   $t$1. Buat variabel judul berisi "TEKNOLOGI MASA DEPAN" (beri spasi di depan agar tampil ke tengah).
+2. Buat variabel teknologi1 berisi "Robot".
+3. Buat variabel teknologi2 berisi "Artificial Intelligence".
+4. Buat variabel teknologi3 berisi "Internet".
+5. Buat tampilan persis seperti target.$t$,
+   $o$################################
+      TEKNOLOGI MASA DEPAN
+################################
+Robot
+Artificial Intelligence
+Internet
+################################$o$, 15, 'output', null::jsonb),
+  (15,
+   $j$Karya Variabel Bebas$j$,
+   $p$Ini tantangan terakhir. Buat program bebas memakai variabel dan print(). Tidak ada satu jawaban yang sama untuk semua orang — yang penting semua syarat terpenuhi.$p$,
+   $t$Buat satu program bebas dengan syarat:
+- minimal 5 variabel
+- minimal 4 variabel berisi teks
+- minimal 1 variabel berisi angka
+- minimal 10 perintah print()
+- semua variabel yang dibuat harus ditampilkan
+- punya judul, isi, dan garis/bingkai sederhana
+- output minimal 7 baris
+
+Tema bebas: komputer, game, sekolah, teknologi, robot, olahraga, lingkungan, atau cita-cita.$t$,
+   $o$$o$, 25, 'bebas', $a${"min_variabel": 5, "min_teks": 4, "min_angka": 1, "min_print": 10, "min_baris": 7}$a$::jsonb)
+) as v(level, judul, penjelasan, instruksi, keluaran_diharapkan, poin, jenis, aturan)
+where l.judul = $j$Pertemuan 2 — Variabel + print()$j$
+  and not exists (
+    select 1 from public.coding_exercises e
+    where e.lesson_id = l.id and e.level = v.level
+  );
+
+-- 84. SEED target kelas Pertemuan 2 → kelas 9 (kalau ada).
+insert into public.coding_lesson_classes (lesson_id, kelas_id)
+select l.id, c.id
+from public.coding_lessons l
+join public.classes c
+  on (c.nama_kelas ilike '9%' or c.nama_kelas ilike 'kelas 9%' or c.nama_kelas ilike 'ix%')
+where l.judul = $j$Pertemuan 2 — Variabel + print()$j$
+on conflict do nothing;
+
+-- ============================================================
+-- Selesai Tahap 25. Modul baru: "Pertemuan 2 — Variabel + print()"
+-- dengan 15 tantangan berurutan.
+-- ============================================================
+
+-- ============================================================
+-- TAHAP 26: KOREKSI VARIABEL WAJIB (PERTEMUAN 2)
+-- ============================================================
+-- Selain output harus cocok, tantangan 1-14 juga mengharuskan siswa
+-- benar-benar membuat dan memakai variabel dengan nama tertentu
+-- (mis. "bahasa", "pelajaran"). Daftar nama disimpan di kolom
+-- `aturan` -> {"variabel_wajib": [...]}. Pengecekan memakai analisis
+-- AST dari worker Pyodide, divalidasi di server.
+
+update public.coding_exercises as e
+set aturan = coalesce(e.aturan, '{}'::jsonb) || jsonb_build_object('variabel_wajib', v.wajib)
+from (values
+  (1, '["bahasa"]'::jsonb),
+  (2, '["pelajaran"]'::jsonb),
+  (3, '["bahasa", "kelas"]'::jsonb),
+  (4, '["pelajaran", "materi", "kelas"]'::jsonb),
+  (5, '["tahun"]'::jsonb),
+  (6, '["bahasa", "pertemuan"]'::jsonb),
+  (7, '["judul", "materi"]'::jsonb),
+  (8, '["perangkat", "sistem", "bahasa"]'::jsonb),
+  (9, '["nama_game", "jenis", "tahun"]'::jsonb),
+  (10, '["nama_barang", "jenis", "jumlah"]'::jsonb),
+  (11, '["cpu", "ram", "penyimpanan"]'::jsonb),
+  (12, '["status"]'::jsonb),
+  (13, '["kata"]'::jsonb),
+  (14, '["judul", "teknologi1", "teknologi2", "teknologi3"]'::jsonb)
+) as v(level, wajib)
+where e.level = v.level
+  and e.lesson_id = (
+    select id from public.coding_lessons where judul = $j$Pertemuan 2 — Variabel + print()$j$
+  );
+
+-- ============================================================
+-- Selesai Tahap 26. Tantangan 1-14 kini juga memeriksa variabel wajib.
+-- ============================================================

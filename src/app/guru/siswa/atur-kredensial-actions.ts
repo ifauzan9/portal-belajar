@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireGuru } from "@/lib/require-guru";
 import { hashPassword } from "@/lib/hash-password";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const MAX_USERNAME = 50;
 const MIN_PASSWORD = 6;
@@ -40,10 +41,11 @@ export async function aturKredensialSiswa(
     return { message: `Password minimal ${MIN_PASSWORD} karakter.` };
   }
 
-  const supabase = await requireGuru();
+  await requireGuru();
+  const admin = createAdminClient();
 
   // Cek apakah username sudah dipakai siswa lain.
-  const { data: pakaiUsername } = await supabase
+  const { data: pakaiUsername } = await admin
     .from("student_accounts")
     .select("id, siswa_id")
     .ilike("username", username)
@@ -61,7 +63,7 @@ export async function aturKredensialSiswa(
   if (pakaiUsername && pakaiUsername.length > 0) {
     // Sudah ada akun untuk siswa ini (atau username dipakai sendiri) → update.
     const akun = pakaiUsername[0];
-    const { error } = await supabase
+    const { error } = await admin
       .from("student_accounts")
       .update({ username, password_hash: hash })
       .eq("id", akun.id);
@@ -70,7 +72,7 @@ export async function aturKredensialSiswa(
       return { message: `Gagal menyimpan kredensial: ${error.message}` };
     }
   } else {
-    const { error } = await supabase
+    const { error } = await admin
       .from("student_accounts")
       .insert({ siswa_id: siswaId, username, password_hash: hash });
 
@@ -91,8 +93,9 @@ export async function hapusKredensialSiswa(formData: FormData) {
   const siswaId = String(formData.get("siswa_id") ?? "");
   if (!siswaId) return;
 
-  const supabase = await requireGuru();
-  const { error } = await supabase
+  await requireGuru();
+  const admin = createAdminClient();
+  const { error } = await admin
     .from("student_accounts")
     .delete()
     .eq("siswa_id", siswaId);
@@ -121,9 +124,10 @@ export async function toggleAkunSiswa(
 
   const nilaiAktifkan = formData.get("aktifkan") === "true";
 
-  const supabase = await requireGuru();
+  await requireGuru();
+  const admin = createAdminClient();
 
-  const { error } = await supabase
+  const { error } = await admin
     .from("student_accounts")
     .update({ is_active: nilaiAktifkan })
     .eq("siswa_id", siswaId);

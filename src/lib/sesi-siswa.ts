@@ -1,6 +1,7 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 // ============================================================================
@@ -8,19 +9,24 @@ import { createClient } from "@/lib/supabase/server";
 //
 // Mekanisme:
 //  - Cookie "siswa_session" berisi token: "<payload-base64url>.<hmac>"
-//    payload = "<uuid>|<siswa_id>|<username>"
+//    payload = "<uuid>|<siswa_id>|<username>|<iat_ms>"
 //    hmac   = HMAC-SHA256(payload, secret)
-//  - requireSiswa() baca cookie → cek HMAC → ambil siswa dari DB berdasarkan
-//    username (pastikan akun masih ada & belum dihapus).
+//  - requireSiswa() baca cookie → cek HMAC + umur token → ambil siswa dari DB
+//    berdasarkan username (pastikan akun masih ada & belum dihapus).
 //
-// Token stateless (tanpa tabel session).
+// Token stateless (tanpa tabel session), tetapi tetap kedaluwarsa di server
+// lewat stempel waktu terbit (iat) yang ditandatangani.
 // ============================================================================
 
 export const NAMA_COOKIE = "siswa_session";
 const UMUR_SESI_MS = 1000 * 60 * 60 * 12; // 12 jam
 
 function ambilSecret(): string {
-  return process.env.SISWA_SESSION_SECRET ?? "projek9-siswa-sesi-rahasia";
+  const secret = process.env.SISWA_SESSION_SECRET;
+  if (!secret || secret.length < 32) {
+    throw new Error("SISWA_SESSION_SECRET wajib berisi minimal 32 karakter.");
+  }
+  return secret;
 }
 
 function tandaHmac(payload: string): string {
@@ -35,7 +41,7 @@ export type SesiSiswa = {
 // Buat token sesi untuk cookie.
 export function buatTokenSesi(sesi: SesiSiswa): string {
   const uuid = randomUUID();
-  const payload = `${uuid}|${sesi.siswaId}|${sesi.username}`;
+  const payload = `${uuid}|${sesi.siswaId}|${sesi.username}|${Date.now()}`;
   const b64 = Buffer.from(payload, "utf8").toString("base64url");
   const hmac = tandaHmac(payload);
   return `${b64}.${hmac}`;
@@ -61,9 +67,16 @@ export function bacaTokenSesi(token: string | undefined): SesiSiswa | null {
   }
 
   const bagian = payload.split("|");
-  if (bagian.length !== 3) return null;
-  const [, siswaId, username] = bagian;
+  if (bagian.length < 4) return null;
+  const [, siswaId] = bagian;
+  const iat = Number(bagian[bagian.length - 1]);
+  const username = bagian.slice(2, -1).join("|");
   if (!siswaId || !username) return null;
+
+  // Tolak token yang kedaluwarsa (atau stempel waktu tidak masuk akal).
+  if (!Number.isFinite(iat)) return null;
+  const umur = Date.now() - iat;
+  if (umur < 0 || umur > UMUR_SESI_MS) return null;
 
   return { siswaId, username };
 }
@@ -114,9 +127,9 @@ export async function requireSiswa(): Promise<HasilRequireSiswa> {
   const sesi = await ambilSesiSiswa();
   if (!sesi) redirect("/login-siswa");
 
-  const supabase = await createClient();
+  const admin = createAdminClient();
 
-  const { data: account } = await supabase
+  const { data: account } = await admin
     .from("student_accounts")
     .select("username, is_active, students(*)")
     .ilike("username", sesi.username)
@@ -141,6 +154,7 @@ export async function requireSiswa(): Promise<HasilRequireSiswa> {
 
   let kelas: { id: string; nama_kelas: string } | null = null;
   if (siswaRaw.kelas_id) {
+    const supabase = await createClient();
     const { data: kelasData } = await supabase
       .from("classes")
       .select("id, nama_kelas")

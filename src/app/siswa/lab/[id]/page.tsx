@@ -2,6 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireSiswa } from "@/lib/sesi-siswa";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { hitungLevelTerkunci } from "@/lib/lab";
 import { Kartu } from "@/components/ui/kartu";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -13,6 +15,7 @@ export default async function ModulLabSiswaPage(
   const { id } = await props.params;
   const { siswa } = await requireSiswa();
   const supabase = await createClient();
+  const admin = createAdminClient();
 
   const { data: lessonData } = await supabase
     .from("coding_lessons")
@@ -47,7 +50,7 @@ export default async function ModulLabSiswaPage(
     .eq("lesson_id", id)
     .order("level", { ascending: true });
 
-  const { data: submitData } = await supabase
+  const { data: submitData } = await admin
     .from("coding_submissions")
     .select("exercise_id, benar, pernah_benar, percobaan")
     .eq("siswa_id", siswa.id);
@@ -71,9 +74,14 @@ export default async function ModulLabSiswaPage(
     poin: number;
   }[];
 
-  const selesai = latihan.filter(
-    (l) => petaHasil.get(l.id)?.pernah_benar === true,
-  ).length;
+  const levelSelesai = latihan
+    .filter((l) => petaHasil.get(l.id)?.pernah_benar === true)
+    .map((l) => l.level);
+  const selesai = levelSelesai.length;
+  const levelTerkunci = hitungLevelTerkunci(
+    latihan.map((l) => l.level),
+    new Set(levelSelesai),
+  );
 
   return (
     <div className="space-y-6">
@@ -106,6 +114,34 @@ export default async function ModulLabSiswaPage(
             const hasil = petaHasil.get(item.id);
             const sudah = hasil?.pernah_benar === true;
             const pernahCoba = Boolean(hasil);
+            const kunci = levelTerkunci.includes(item.level);
+
+            if (kunci) {
+              return (
+                <div
+                  key={item.id}
+                  aria-disabled="true"
+                  title={`Level ${item.level} terkunci. Selesaikan level sebelumnya dulu.`}
+                  className="flex cursor-not-allowed items-center justify-between gap-3 rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200"
+                >
+                  <span className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-200 text-sm font-semibold text-slate-400">
+                      🔒
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium text-slate-400">
+                        {item.judul}
+                      </span>
+                      <span className="text-xs text-slate-400">Terkunci</span>
+                    </span>
+                  </span>
+                  <span className="shrink-0">
+                    <Badge varian="netral">🔒 Terkunci</Badge>
+                  </span>
+                </div>
+              );
+            }
+
             return (
               <Link
                 key={item.id}
