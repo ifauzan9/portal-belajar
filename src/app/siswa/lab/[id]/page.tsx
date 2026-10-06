@@ -46,7 +46,7 @@ export default async function ModulLabSiswaPage(
 
   const { data: latihanData } = await supabase
     .from("coding_exercises")
-    .select("id, level, judul, poin, urutan")
+    .select("id, level, judul, poin, urutan, aturan")
     .eq("lesson_id", id)
     .order("level", { ascending: true });
 
@@ -72,6 +72,7 @@ export default async function ModulLabSiswaPage(
     level: number;
     judul: string;
     poin: number;
+    aturan: { final_boss?: boolean; badge?: string } | null;
   }[];
 
   const levelSelesai = latihan
@@ -146,24 +147,30 @@ export default async function ModulLabSiswaPage(
               <Link
                 key={item.id}
                 href={`/siswa/lab/${id}/${item.level}`}
-                className="flex items-center justify-between gap-3 rounded-2xl bg-white p-4 ring-1 ring-slate-200 transition hover:ring-emerald-300"
+                className={`flex items-center justify-between gap-3 rounded-2xl bg-white p-4 ring-1 transition hover:ring-emerald-300 ${
+                  item.aturan?.final_boss
+                    ? "ring-2 ring-amber-300 shadow-sm"
+                    : "ring-slate-200"
+                }`}
               >
                 <span className="flex min-w-0 items-center gap-3">
                   <span
                     className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold ${
-                      sudah
-                        ? "bg-emerald-600 text-white"
-                        : "bg-slate-100 text-slate-600"
+                      item.aturan?.final_boss
+                        ? "bg-amber-400 text-slate-900"
+                        : sudah
+                          ? "bg-emerald-600 text-white"
+                          : "bg-slate-100 text-slate-600"
                     }`}
                   >
-                    {item.level}
+                    {item.aturan?.final_boss ? "⭐" : item.level}
                   </span>
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-medium text-slate-900">
                       {item.judul}
                     </span>
                     <span className="text-xs text-slate-400">
-                      {item.poin} poin
+                      {item.poin} XP{item.aturan?.final_boss ? " · Final Boss" : ""}
                     </span>
                   </span>
                 </span>
@@ -174,6 +181,8 @@ export default async function ModulLabSiswaPage(
                     </Badge>
                   ) : pernahCoba ? (
                     <Badge varian="peringatan">Sedang dikerjakan</Badge>
+                  ) : item.aturan?.final_boss ? (
+                    <Badge varian="peringatan">⭐ Final Boss</Badge>
                   ) : (
                     <Badge varian="netral">Belum</Badge>
                   )}

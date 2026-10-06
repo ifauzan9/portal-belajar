@@ -4,7 +4,6 @@ import { requireSiswa } from "@/lib/sesi-siswa";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { LabRunner } from "@/components/lab-runner";
-import { BantuanLab } from "@/components/bantuan-lab";
 import { PetaLevel } from "@/components/peta-level";
 import { Badge } from "@/components/ui/badge";
 import { hitungLevelTerkunci } from "@/lib/lab";
@@ -20,7 +19,11 @@ type LatihanRow = {
   keluaran_diharapkan: string;
   poin: number;
   jenis: string;
-  aturan: { variabel_wajib?: string[] } | null;
+  aturan: {
+    variabel_wajib?: string[];
+    final_boss?: boolean;
+    badge?: string;
+  } | null;
 };
 
 type HasilRow = {
@@ -132,7 +135,10 @@ export default async function LevelLabSiswaPage(
             </h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge varian="netral">{exercise.poin} poin</Badge>
+            {exercise.aturan?.final_boss ? (
+              <Badge varian="peringatan">⭐ FINAL BOSS</Badge>
+            ) : null}
+            <Badge varian="netral">{exercise.poin} XP</Badge>
             {submission?.pernah_benar ? <Badge varian="sukses" titik>Sudah benar</Badge> : null}
           </div>
         </div>
@@ -177,12 +183,6 @@ export default async function LevelLabSiswaPage(
         </div>
       </section>
 
-      <BantuanLab
-        penjelasan={exercise.penjelasan}
-        materi={lesson.isi}
-        contoh={exercise.contoh_kode}
-      />
-
       <LabRunner
         exerciseId={exercise.id}
         kodeAwal={exercise.kode_awal}
@@ -196,6 +196,9 @@ export default async function LevelLabSiswaPage(
         jenis={exercise.jenis}
         bantuan={lesson.isi}
         wajibVariabel={exercise.aturan?.variabel_wajib ?? []}
+        finalBoss={exercise.aturan?.final_boss ?? false}
+        badge={exercise.aturan?.badge ?? null}
+        contoh={exercise.contoh_kode}
       />
 
       <div className="flex items-center justify-between gap-3">

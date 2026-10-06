@@ -7,6 +7,7 @@ import dynamic from "next/dynamic";
 import { python } from "@codemirror/lang-python";
 import { Badge } from "@/components/ui/badge";
 import { simpanHasilLab } from "@/app/siswa/lab/actions";
+import { BantuanLab } from "@/components/bantuan-lab";
 import type { AnalisisBebas } from "@/lib/lab";
 
 const CodeMirror = dynamic(() => import("@uiw/react-codemirror"), {
@@ -35,6 +36,9 @@ export function LabRunner({
   jenis,
   bantuan,
   wajibVariabel,
+  finalBoss = false,
+  badge,
+  contoh,
 }: {
   exerciseId: string;
   kodeAwal: string | null;
@@ -48,6 +52,12 @@ export function LabRunner({
   jenis: string;
   bantuan: string | null;
   wajibVariabel: string[];
+  /** Level puncak (mis. level 15 "FINAL BOSS"). */
+  finalBoss?: boolean;
+  /** Nama badge saat final boss berhasil (mis. "PRINT MASTER"). */
+  badge?: string | null;
+  /** Contoh pola pengerjaan (isinya berbeda dari target soal). */
+  contoh?: string | null;
 }) {
   const router = useRouter();
   const [kode, setKode] = useState(kodeTersimpan ?? kodeAwal ?? "");
@@ -61,6 +71,8 @@ export function LabRunner({
   const [sudahJalan, setSudahJalan] = useState(false);
   const [fokus, setFokus] = useState(false);
   const [pesan, setPesan] = useState<string | null>(null);
+  // Berapa kali siswa salah di level ini (untuk memunculkan petunjuk).
+  const [salahCount, setSalahCount] = useState(0);
 
   const pekerjaRef = useRef<Worker | null>(null);
   const hitungRef = useRef(0);
@@ -118,6 +130,7 @@ export function LabRunner({
         setTersimpan(true);
         setBenar(hasil.benar);
         setPesan(hasil.benar ? PESAN_BENAR : hasil.petunjuk);
+        if (!hasil.benar) setSalahCount((n) => n + 1);
         if (hasil.benar) router.refresh();
       } else if (hasil.message) {
         setGalat(hasil.message);
@@ -380,6 +393,33 @@ export function LabRunner({
     </div>
   );
 
+  // Panel kemenangan spesial untuk FINAL BOSS (level puncak).
+  const panelFinalBoss =
+    finalBoss && benar === true ? (
+      <section
+        role="status"
+        aria-live="assertive"
+        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-emerald-600 p-1 shadow-lg"
+      >
+        <div className="rounded-[calc(1rem-1px)] bg-slate-950 p-6 text-center">
+          <p className="text-4xl" aria-hidden="true">
+            🏆
+          </p>
+          <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-amber-300">
+            FINAL BOSS TAKLUK!
+          </h2>
+          <p className="mt-2 text-base text-slate-200">
+            Kamu menuntaskan seluruh tantangan dengan tepat. Kerja kerasmu luar biasa!
+          </p>
+          {badge ? (
+            <p className="mt-4 inline-flex items-center gap-2 rounded-full bg-amber-400 px-5 py-2.5 text-base font-extrabold text-slate-900 shadow">
+              <span aria-hidden="true">🏆</span> {badge}
+            </p>
+          ) : null}
+        </div>
+      </section>
+    ) : null;
+
   // ---------------- Mode fokus (layar penuh + gelap) ----------------
   if (fokus) {
     return createPortal(
@@ -410,6 +450,7 @@ export function LabRunner({
               {panelTombol(true)}
               {panelGalat}
               {panelOutput(true)}
+              {panelFinalBoss}
               {panelPesan}
             </div>
 
@@ -430,7 +471,7 @@ export function LabRunner({
               {bantuan ? (
                 <details className="rounded-2xl bg-slate-900 p-4 ring-1 ring-slate-800">
                   <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold text-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400">
-                    Bantuan materi: variabel dan print()
+                    Bantuan materi: print()
                   </summary>
                   <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-300">{bantuan}</p>
                 </details>
@@ -452,8 +493,16 @@ export function LabRunner({
       {panelTombol(false)}
       {panelGalat}
       {panelOutput(false)}
+      {panelFinalBoss}
       {panelPesan}
       {panelStatus}
+
+      <BantuanLab
+        penjelasan={instruksi}
+        materi={bantuan}
+        contoh={contoh ?? null}
+        salahCount={salahCount}
+      />
     </div>
   );
 }

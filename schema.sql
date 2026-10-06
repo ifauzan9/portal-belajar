@@ -2200,3 +2200,231 @@ where e.level = v.level
 -- ============================================================
 -- Selesai Tahap 26. Tantangan 1-14 kini juga memeriksa variabel wajib.
 -- ============================================================
+
+-- ============================================================
+-- TAHAP 27: GANTI MODUL 1 MENJADI "Mencetak dengan print()"
+-- ============================================================
+-- Modul 1 lama ("Mencetak & Variabel") diganti total dengan 15 tantangan
+-- yang HANYA memakai print(). Tidak ada variabel, input(), if, perulangan,
+-- list, atau fungsi lain. Tingkat kesulitan naik bertahap; level 15 adalah
+-- "FINAL BOSS" dengan badge PRINT MASTER.
+--
+-- Semua bersifat idempoten: aman dijalankan berulang kali.
+
+-- 85. Ganti judul + materi modul 1.
+update public.coding_lessons
+set judul = $j$Modul 1 — Mencetak dengan print()$j$,
+    isi = $i$Selamat datang di Lab Coding Python!
+
+Di modul ini kamu hanya belajar satu hal yang sangat penting: perintah print().
+
+Apa itu print()?
+print() menampilkan sesuatu ke layar. Setiap print() menghasilkan SATU baris baru.
+  print("Halo")      → menampilkan: Halo
+  print(100)         → menampilkan: 100
+
+Teks dan angka
+- Teks (string) harus diapit tanda kutip: "Halo" atau 'Halo'
+- Angka tidak perlu tanda kutip: 100, 2026
+
+Beberapa baris
+- Untuk menampilkan banyak baris, tulis beberapa print().
+  print("Baris 1")
+  print("Baris 2")
+
+Simbol
+- print() juga bisa menampilkan simbol apa pun: *, =, -, dan lain-lain.
+
+Tips:
+1. Tulis satu perintah print() per baris.
+2. Perhatikan huruf besar/kecil, tanda baca, spasi, dan panjang garis.
+3. Selesaikan tantangan secara berurutan; tantangan berikutnya terbuka setelah yang sekarang benar.
+4. Tantangan 15 adalah FINAL BOSS. Kalau semua benar, kamu mendapat badge PRINT MASTER!$i$
+where judul = $j$Modul 1 — Mencetak & Variabel$j$;
+
+-- 86. Reset progres modul 1 (isi tantangan berubah total).
+delete from public.coding_submissions
+where exercise_id in (
+  select e.id
+  from public.coding_exercises e
+  join public.coding_lessons l on l.id = e.lesson_id
+  where l.judul = $j$Modul 1 — Mencetak dengan print()$j$
+);
+
+-- 87. Ganti 15 latihan modul 1 (upsert per level).
+--     Kolom: judul, penjelasan, contoh_kode, instruksi, keluaran_diharapkan,
+--            poin (XP), jenis, aturan.
+insert into public.coding_exercises
+  (lesson_id, level, judul, penjelasan, contoh_kode, instruksi, kode_awal,
+   keluaran_diharapkan, poin, urutan, jenis, aturan)
+select
+  l.id, v.level, v.judul, v.penjelasan, v.contoh_kode, v.instruksi, null::text,
+  v.keluaran_diharapkan, v.poin, v.level, 'output', v.aturan
+from public.coding_lessons l
+cross join (values
+  (1,
+   $j$Halo Python$j$,
+   $p$print() adalah perintah untuk menampilkan sesuatu ke layar. Teks harus diapit tanda kutip, misalnya "Halo".$p$,
+   $c$print("Selamat datang")$c$,
+   $t$Buat satu print() yang menampilkan tepat: Halo Python!$t$,
+   $o$Halo Python!$o$, 100, null::jsonb),
+  (2,
+   $j$Salam Pagi$j$,
+   $p$Tanda seru (!) ikut ditampilkan. Pastikan berada di dalam tanda kutip.$p$,
+   $c$print("Selamat sore!")$c$,
+   $t$Tampilkan tepat: Selamat pagi!$t$,
+   $o$Selamat pagi!$o$, 100, null::jsonb),
+  (3,
+   $j$Perkenalan$j$,
+   $p$Kalimat boleh berisi spasi. Semua kalimat ditulis di dalam tanda kutip.$p$,
+   $c$print("Nama saya Siti")$c$,
+   $t$Tampilkan tepat: Nama saya Budi$t$,
+   $o$Nama saya Budi$o$, 100, null::jsonb),
+  (4,
+   $j$Belajar Python$j$,
+   $p$Python membedakan huruf besar dan kecil. Contoh: "Python" berbeda dengan "python".$p$,
+   $c$print("Saya sedang belajar coding")$c$,
+   $t$Tampilkan tepat: Saya sedang belajar Python$t$,
+   $o$Saya sedang belajar Python$o$, 100, null::jsonb),
+  (5,
+   $j$Pesan Semangat$j$,
+   $p$Kalimat boleh lebih panjang. Tetap perhatikan huruf besar/kecil dan tanda seru.$p$,
+   $c$print("Ayo semangat belajar!")$c$,
+   $t$Tampilkan tepat: Saya pasti bisa belajar coding!$t$,
+   $o$Saya pasti bisa belajar coding!$o$, 100, null::jsonb),
+  (6,
+   $j$Dua Baris$j$,
+   $p$Setiap print() menghasilkan satu baris baru. Dua baris berarti butuh dua print().$p$,
+   $c$print("Baris pertama")
+print("Baris kedua")$c$,
+   $t$Buat dua baris dengan dua print(). Baris 1: Halo!  Baris 2: Selamat belajar Python$t$,
+   $o$Halo!
+Selamat belajar Python$o$, 100, null::jsonb),
+  (7,
+   $j$Tiga Baris$j$,
+   $p$Urutan print() menentukan urutan baris pada output. Tulis dengan urutan yang benar.$p$,
+   $c$print("Nama: Siti")
+print("Kelas: 8A")
+print("Sekolah: SMA")$c$,
+   $t$Buat tiga baris dengan tiga print(): Nama: Budi, lalu Kelas: 7A, lalu Sekolah: SMP$t$,
+   $o$Nama: Budi
+Kelas: 7A
+Sekolah: SMP$o$, 100, null::jsonb),
+  (8,
+   $j$Cetak Angka$j$,
+   $p$print() juga bisa menampilkan angka. Angka ditulis TANPA tanda kutip.$p$,
+   $c$print(50)$c$,
+   $t$Tampilkan angka tepat: 100$t$,
+   $o$100$o$, 100, null::jsonb),
+  (9,
+   $j$Tahun Sekarang$j$,
+   $p$Angka tidak perlu tanda kutip. Kalau diberi tanda kutip, angkanya tetap tampil sama tetapi itu dianggap teks.$p$,
+   $c$print(2025)$c$,
+   $t$Tampilkan angka tepat: 2026$t$,
+   $o$2026$o$, 100, null::jsonb),
+  (10,
+   $j$Teks dan Angka$j$,
+   $p$Pada tahap ini, kalimat yang memuat angka boleh ditulis seluruhnya sebagai satu teks di dalam tanda kutip.$p$,
+   $c$print("Umur saya 12 tahun")$c$,
+   $t$Tampilkan tepat: Umur saya 13 tahun$t$,
+   $o$Umur saya 13 tahun$o$, 100, null::jsonb),
+  (11,
+   $j$Biodata Mini$j$,
+   $p$Tanda titik dua (:) ikut ditampilkan apa adanya. Perhatikan spasi setelah titik dua.$p$,
+   $c$print("Nama: Rina")
+print("Kelas: 8C")
+print("Hobi: Menyanyi")$c$,
+   $t$Buat tiga baris: Nama: Andi, lalu Kelas: 7B, lalu Hobi: Membaca$t$,
+   $o$Nama: Andi
+Kelas: 7B
+Hobi: Membaca$o$, 100, null::jsonb),
+  (12,
+   $j$Jadwal Pelajaran$j$,
+   $p$Gabungkan teks dan angka dalam beberapa baris. Titik pada jam juga ikut ditampilkan.$p$,
+   $c$print("Hari: Selasa")
+print("Pelajaran: Matematika")
+print("Jam: 07.00")$c$,
+   $t$Buat tiga baris: Hari: Senin, lalu Pelajaran: KKA, lalu Jam: 08.00$t$,
+   $o$Hari: Senin
+Pelajaran: KKA
+Jam: 08.00$o$, 100, null::jsonb),
+  (13,
+   $j$Kotak Pesan$j$,
+   $p$print() bisa menampilkan simbol apa pun, termasuk tanda bintang (*). Hitung panjang garisnya dengan teliti.$p$,
+   $c$print("========")
+print("HALO SEMUA")
+print("========")$c$,
+   $t$Buat tiga baris: 15 tanda bintang, lalu SELAMAT DATANG, lalu 15 tanda bintang$t$,
+   $o$***************
+SELAMAT DATANG
+***************$o$, 150, null::jsonb),
+  (14,
+   $j$Mini Poster$j$,
+   $p$Poster menggabungkan teks dan simbol. Untuk baris tertentu, tandanya berbeda dan lebih panjang. Perhatikan panjang setiap baris.$p$,
+   $c$print("=== POSTER 8A ===")
+print("Belajar Bersama")
+print("Belajar Seru")
+print("==================")$c$,
+   $t$Buat output tepat 4 baris:
+1) === KKA KELAS 7 ===
+2) Belajar Python
+3) Belajar Coding
+4) ===================$t$,
+   $o$=== KKA KELAS 7 ===
+Belajar Python
+Belajar Coding
+===================$o$, 200, null::jsonb),
+  (15,
+   $j$FINAL BOSS: PRINT MASTER$j$,
+   $p$Ini tantangan terakhir. Gabungkan semua yang sudah kamu pelajari: teks, simbol, beberapa baris, huruf besar/kecil, dan SPASI. Baris "     PYTHON LAB" memiliki 5 spasi di depan agar tampak ke tengah. Perhatikan setiap karakter dengan teliti.$p$,
+   $c$print("====================")
+print("   LATIHAN HEBAT")
+print("====================")
+print("Saya suka coding")
+print("Saya suka belajar")
+print("Coding itu seru!")
+print("====================")$c$,
+   $t$Buat output tepat 6 baris persis seperti target. Baris ketiga diawali 5 spasi sebelum PYTHON LAB. Baris terakhir memakai tanda seru.
+
+Target:
+====================
+     PYTHON LAB
+====================
+Saya belajar Python
+Saya belajar coding
+Coding itu menyenangkan!
+====================$t$,
+   $o$====================
+     PYTHON LAB
+====================
+Saya belajar Python
+Saya belajar coding
+Coding itu menyenangkan!
+====================$o$, 300, $a${"final_boss": true, "badge": "PRINT MASTER"}$a$::jsonb)
+) as v(level, judul, penjelasan, contoh_kode, instruksi, keluaran_diharapkan, poin, aturan)
+where l.judul = $j$Modul 1 — Mencetak dengan print()$j$
+on conflict (lesson_id, level) do update set
+  judul = excluded.judul,
+  penjelasan = excluded.penjelasan,
+  contoh_kode = excluded.contoh_kode,
+  instruksi = excluded.instruksi,
+  kode_awal = excluded.kode_awal,
+  keluaran_diharapkan = excluded.keluaran_diharapkan,
+  poin = excluded.poin,
+  urutan = excluded.urutan,
+  jenis = excluded.jenis,
+  aturan = excluded.aturan;
+
+-- 88. Pastikan modul 1 tetap dipetakan ke kelas 9 (kalau ada).
+insert into public.coding_lesson_classes (lesson_id, kelas_id)
+select l.id, c.id
+from public.coding_lessons l
+join public.classes c
+  on (c.nama_kelas ilike '9%' or c.nama_kelas ilike 'kelas 9%' or c.nama_kelas ilike 'ix%')
+where l.judul = $j$Modul 1 — Mencetak dengan print()$j$
+on conflict do nothing;
+
+-- ============================================================
+-- Selesai Tahap 27. Modul 1 kini fokus pada print() dengan 15 tantangan,
+-- level 15 adalah FINAL BOSS dengan badge PRINT MASTER.
+-- ============================================================

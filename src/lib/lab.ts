@@ -73,6 +73,10 @@ export type AturanBebas = {
   min_print?: number;
   min_baris?: number;
   variabel_wajib?: string[];
+  // Penanda tantangan puncak (mis. level 15 "FINAL BOSS").
+  final_boss?: boolean;
+  // Badge yang diberikan saat tantangan puncak berhasil (mis. "PRINT MASTER").
+  badge?: string;
 };
 
 // Cek variabel wajib: setiap nama harus dibuat dan dipakai di print().
