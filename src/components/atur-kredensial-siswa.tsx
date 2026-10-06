@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useActionState } from "react";
 import {
   aturKredensialSiswa,
@@ -24,10 +24,17 @@ export function AturKredensialSiswa({
   const [state, formAction, pending] = useActionState<
     HasilAturKredensial,
     FormData
-  >(aturKredensialSiswa, { message: null });
+  >(aturKredensialSiswa, { message: null, sukses: false });
 
   const [bukaForm, setBukaForm] = useState(!usernameAwal);
   const [tampilkanPassword, setTampilkanPassword] = useState(false);
+
+  // Kalau baru saja berhasil, tutup form otomatis setelah beberapa detik.
+  useEffect(() => {
+    if (!state.sukses) return;
+    const timer = setTimeout(() => setBukaForm(false), 2500);
+    return () => clearTimeout(timer);
+  }, [state.sukses]);
 
   const label = usernameAwal ? "Ubah kredensial" : "Buat akun login";
 
@@ -113,7 +120,13 @@ export function AturKredensialSiswa({
       </div>
 
       {state.message ? (
-        <p className="mt-2 text-xs text-red-600">{state.message}</p>
+        <p
+          className={`mt-2 text-xs ${
+            state.sukses ? "text-emerald-600" : "text-red-600"
+          }`}
+        >
+          {state.message}
+        </p>
       ) : null}
     </form>
   );

@@ -8,7 +8,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 const MAX_USERNAME = 50;
 const MIN_PASSWORD = 6;
 
-export type HasilAturKredensial = { message: string | null };
+export type HasilAturKredensial = {
+  message: string | null;
+  // Pesan sukses terpisah dari error, supaya UI bisa menampilkannya hijau.
+  sukses?: boolean;
+};
 
 // Guru atur kredensial login siswa (username + password).
 // Field: siswa_id, username, password
@@ -44,29 +48,35 @@ export async function aturKredensialSiswa(
   await requireGuru();
   const admin = createAdminClient();
 
-  // Cek apakah username sudah dipakai siswa lain.
+  // Cek apakah username sudah dipakai siswa LAIN (bukan siswa ini).
+  // Pengecekan harus mengecualikan siswa_id ini, supaya saat guru mengedit
+  // username siswa yang sudah punya akun tidak salah dianggap konflik.
   const { data: pakaiUsername } = await admin
     .from("student_accounts")
-    .select("id, siswa_id")
+    .select("id")
     .ilike("username", username)
+    .neq("siswa_id", siswaId)
     .limit(1);
 
-  const konflik = (pakaiUsername ?? []).find(
-    (a) => a.siswa_id !== siswaId,
-  );
-  if (konflik) {
+  if (pakaiUsername && pakaiUsername.length > 0) {
     return { message: "Username sudah dipakai siswa lain." };
   }
 
   const hash = hashPassword(password);
 
-  if (pakaiUsername && pakaiUsername.length > 0) {
-    // Sudah ada akun untuk siswa ini (atau username dipakai sendiri) → update.
-    const akun = pakaiUsername[0];
+  // Cek apakah siswa ini sudah punya akun → tentukan update atau insert.
+  const { data: akunSiswa } = await admin
+    .from("student_accounts")
+    .select("id")
+    .eq("siswa_id", siswaId)
+    .maybeSingle();
+
+  if (akunSiswa) {
+    // Sudah ada akun untuk siswa ini → update.
     const { error } = await admin
       .from("student_accounts")
       .update({ username, password_hash: hash })
-      .eq("id", akun.id);
+      .eq("id", akunSiswa.id);
 
     if (error) {
       return { message: `Gagal menyimpan kredensial: ${error.message}` };
@@ -85,7 +95,7 @@ export async function aturKredensialSiswa(
   }
 
   revalidatePath("/guru/siswa");
-  return { message: null };
+  return { message: "Username berhasil disimpan.", sukses: true };
 }
 
 // Hapus akun login siswa (kalau guru ingin nonaktifkan).

@@ -142,8 +142,14 @@ self.onmessage = async (event) => {
 
   self.postMessage({ id, status: "running" });
 
+  // Setiap percobaan harus dijalankan di namespace BERSIH.
+  // Kalau memakai pyodide.globals yang persisten, variabel dari run
+  // sebelumnya (mis. `angkas = 2`) masih terbaca di run berikutnya,
+  // padahal kode barunya tidak lagi mendefinisikannya.
+  let namespaceRun = null;
   try {
-    await pyodide.runPythonAsync(data.kode);
+    namespaceRun = pyodide.globals.get("dict")();
+    await pyodide.runPythonAsync(data.kode, { globals: namespaceRun });
   } catch (galat) {
     self.postMessage({
       id,
@@ -154,6 +160,10 @@ self.onmessage = async (event) => {
       analisis: null,
     });
     return;
+  } finally {
+    if (namespaceRun && typeof namespaceRun.destroy === "function") {
+      namespaceRun.destroy();
+    }
   }
 
   // Analisis kode (opsional) untuk tantangan "karya bebas".
