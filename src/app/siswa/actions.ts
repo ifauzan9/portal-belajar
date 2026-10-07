@@ -176,6 +176,111 @@ export async function logoutSiswa() {
 }
 
 // ============================================================================
+// Login siswa memakai TOKEN KELAS.
+// Field: kelas_id, siswa_id, token
+// Token dibuat/diatur guru per kelas. Validasi dilakukan di server memakai
+// service-role (tabel class_tokens tidak bisa dibaca browser).
+// ============================================================================
+
+export async function loginSiswaToken(
+  _prevState: HasilLogin,
+  formData: FormData,
+): Promise<HasilLogin> {
+  const kelasId = String(formData.get("kelas_id") ?? "").trim();
+  const siswaId = String(formData.get("siswa_id") ?? "").trim();
+  const token = String(formData.get("token") ?? "").trim().toUpperCase();
+
+  if (!kelasId || !siswaId || !token) {
+    return { message: "Kelas, nama, dan token wajib dipilih/diisi." };
+  }
+
+  const supabase = await createClient();
+  const admin = createAdminClient();
+
+  // Pembatasan percobaan (anti brute force) per IP + kelas.
+  const kunci = `siswa-token:${await ambilIp()}:${kelasId}`;
+  const cek = cekBlokir(kunci);
+  if (!cek.boleh) {
+    await catatLogLogin(supabase, {
+      siswaId: null,
+      username: `token:${kelasId}`,
+      berhasil: false,
+      alasan: "diblokir",
+    });
+    return { message: pesanTerlaluBanyak(cek.sisaDetik) };
+  }
+
+  // Pastikan siswa memang terdaftar di kelas yang dipilih (cegah manipulasi).
+  const { data: siswa } = await admin
+    .from("students")
+    .select("id, nama_siswa, kelas_id")
+    .eq("id", siswaId)
+    .maybeSingle();
+
+  const dataSiswa = siswa as
+    | { id: string; nama_siswa: string; kelas_id: string | null }
+    | null;
+
+  if (!dataSiswa || dataSiswa.kelas_id !== kelasId) {
+    catatGagal(kunci);
+    await catatLogLogin(supabase, {
+      siswaId: null,
+      username: `token:${kelasId}`,
+      berhasil: false,
+      alasan: "siswa_bukan_di_kelas",
+    });
+    return { message: "Data kelas atau nama tidak cocok. Coba pilih ulang." };
+  }
+
+  // Ambil token kelas dari DB (via service-role).
+  const { data: tokenRow } = await admin
+    .from("class_tokens")
+    .select("token")
+    .eq("kelas_id", kelasId)
+    .maybeSingle();
+
+  const tokenSimpan = ((tokenRow as { token: string } | null)?.token ?? "")
+    .trim()
+    .toUpperCase();
+
+  if (!tokenSimpan) {
+    catatGagal(kunci);
+    await catatLogLogin(supabase, {
+      siswaId: siswaId,
+      username: `token:${kelasId}`,
+      berhasil: false,
+      alasan: "token_kelas_belum_dibuat",
+    });
+    return {
+      message: "Kelas ini belum punya token. Tanyakan ke gurumu.",
+    };
+  }
+
+  if (token !== tokenSimpan) {
+    catatGagal(kunci);
+    await catatLogLogin(supabase, {
+      siswaId: siswaId,
+      username: `token:${kelasId}`,
+      berhasil: false,
+      alasan: "token_salah",
+    });
+    return { message: "Token kelas salah. Cek lagi dengan gurumu." };
+  }
+
+  // Token benar → reset penghitung gagal, catat log, buat sesi.
+  resetGagal(kunci);
+  await catatLogLogin(supabase, {
+    siswaId: siswaId,
+    username: `token:${kelasId}`,
+    berhasil: true,
+    alasan: null,
+  });
+
+  await simpanSesiSesi({ siswaId: dataSiswa.id, username: `token:${kelasId}` });
+  redirect("/siswa");
+}
+
+// ============================================================================
 // Ganti password (siswa atur sendiri).
 // Field: password_lama, password_baru
 // ============================================================================

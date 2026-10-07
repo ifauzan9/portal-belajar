@@ -2428,3 +2428,45 @@ on conflict do nothing;
 -- Selesai Tahap 27. Modul 1 kini fokus pada print() dengan 15 tantangan,
 -- level 15 adalah FINAL BOSS dengan badge PRINT MASTER.
 -- ============================================================
+
+-- ============================================================
+-- TAHAP 28: LOGIN SISWA DENGAN TOKEN KELAS
+-- ============================================================
+-- Guru membuat SATU token per kelas. Siswa memilih kelas → memilih
+-- namanya → memasukkan token untuk login (tanpa username/password).
+-- Token bisa diganti kapan saja (berputar); token lama langsung tidak
+-- berlaku. Login username+password lama tetap tersedia.
+--
+-- Catatan keamanan:
+--  - Token hanya dibandingkan di SERVER (Server Action) memakai
+--    service-role, jadi token tidak pernah bocor ke browser siswa.
+--  - Tabel class_tokens TIDAK diakses anon/authenticated langsung
+--    (revoke), sama seperti pola student_accounts (Tahap 23).
+
+-- 89. Tabel token per kelas (1 kelas = 1 token).
+create table if not exists public.class_tokens (
+  id uuid primary key default gen_random_uuid(),
+  kelas_id uuid not null unique references public.classes(id) on delete cascade,
+  token text not null,
+  dibuat_at timestamptz not null default now(),
+  diubah_at timestamptz not null default now()
+);
+
+create index if not exists idx_class_tokens_kelas
+  on public.class_tokens (kelas_id);
+
+-- 90. Aktifkan RLS.
+alter table public.class_tokens enable row level security;
+
+-- 91. Cabut akses langsung anon/authenticated. Token hanya dibaca
+--     guru lewat server (createAdminClient / service_role).
+revoke all privileges on table public.class_tokens from anon, authenticated, public;
+
+grant all privileges on table public.class_tokens to service_role;
+-- Relasi kelas dibaca saat menyusun daftar kelas di halaman login siswa.
+grant select on table public.classes to service_role;
+grant select on table public.students to service_role;
+
+-- ============================================================
+-- Selesai Tahap 28. Tabel baru: "class_tokens".
+-- ============================================================

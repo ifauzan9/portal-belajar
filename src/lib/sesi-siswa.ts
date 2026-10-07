@@ -129,6 +129,9 @@ export async function requireSiswa(): Promise<HasilRequireSiswa> {
 
   const admin = createAdminClient();
 
+  // Cari akun lama (login username+password). Untuk login lewat token
+  // kelas, siswa mungkin TIDAK punya akun — jadi kalau tidak ada akun
+  // yang cocok, kita ambil data siswa langsung dari sesi.siswaId.
   const { data: account } = await admin
     .from("student_accounts")
     .select("username, is_active, students(*)")
@@ -139,14 +142,27 @@ export async function requireSiswa(): Promise<HasilRequireSiswa> {
     ?.students;
   const isActive = (account as { is_active: boolean } | null)?.is_active;
 
-  // Akun nonaktif → keluarkan sesi lewat route handler.
-  if (!account || !students || isActive === false) {
-    redirect("/logout-siswa");
-  }
-
-  const siswaRaw = (Array.isArray(students) ? students[0] : students) as
+  let siswaRaw:
     | { id: string; nis: string | null; nama_siswa: string; kelas_id: string | null }
-    | null;
+    | null = null;
+
+  if (account) {
+    // Akun nonaktif → keluarkan sesi lewat route handler.
+    if (!students || isActive === false) {
+      redirect("/logout-siswa");
+    }
+    siswaRaw = (Array.isArray(students) ? students[0] : students) as
+      | { id: string; nis: string | null; nama_siswa: string; kelas_id: string | null }
+      | null;
+  } else {
+    // Tidak ada akun → kemungkinan sesi login token. Ambil siswa by id.
+    const { data: siswaData } = await admin
+      .from("students")
+      .select("id, nis, nama_siswa, kelas_id")
+      .eq("id", sesi.siswaId)
+      .maybeSingle();
+    siswaRaw = (siswaData as typeof siswaRaw) ?? null;
+  }
 
   if (!siswaRaw) {
     redirect("/logout-siswa");

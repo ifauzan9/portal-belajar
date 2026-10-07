@@ -24,6 +24,9 @@ const LABEL_ALASAN: Record<string, string> = {
   akun_nonaktif: "Akun nonaktif",
   username_tidak_ditemukan: "Username tidak ditemukan",
   diblokir: "Diblokir (percobaan berlebih)",
+  token_salah: "Token kelas salah",
+  siswa_bukan_di_kelas: "Nama/kelas tidak cocok",
+  token_kelas_belum_dibuat: "Token kelas belum dibuat",
 };
 
 type LogRow = {

@@ -3,7 +3,9 @@ import { redirect } from "next/navigation";
 import { BarisKelas } from "@/components/baris-kelas";
 import { KepalaUrut } from "@/components/kepala-urut";
 import { TambahKelasForm } from "@/components/tambah-kelas-form";
+import { TokenKelasForm } from "@/components/token-kelas-form";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   bacaArah,
   bacaUrutKelas,
@@ -56,6 +58,23 @@ export default async function KelasPage(props: PageProps<"/guru/kelas">) {
   const semuaKelas: KelasRow[] = data ?? [];
   const hasil = urutkanKelas(filterKelas(semuaKelas, cari), urut, arah);
   const urlTanpaCari = buatUrl(urut, arah, "");
+
+  // Token login per kelas (hanya terlihat guru). Dibaca via service-role;
+  // kalau tabel belum dibuat (schema Tahap 28 belum dijalankan), gagal
+  // diam-diam dan halaman tetap tampil.
+  const admin = createAdminClient();
+  const { data: tokenData, error: tokenError } = await admin
+    .from("class_tokens")
+    .select("kelas_id, token");
+  const tokenPerKelas = new Map<string, string>(
+    (tokenData ?? []).map((t) => [
+      (t as { kelas_id: string }).kelas_id,
+      (t as { token: string }).token,
+    ]),
+  );
+  if (tokenError) {
+    console.error("Gagal memuat class_tokens:", tokenError.message);
+  }
 
   return (
     <div className="space-y-6">
@@ -172,6 +191,43 @@ export default async function KelasPage(props: PageProps<"/guru/kelas">) {
       {error ? (
         <p className="text-sm text-red-600">Gagal memuat kelas: {error.message}</p>
       ) : null}
+
+      <div className="space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">
+            Token Login Siswa per Kelas
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Buat token untuk tiap kelas. Siswa memakainya di halaman{" "}
+            <span className="font-medium text-slate-700">/login-siswa</span>{" "}
+            dengan memilih kelas lalu namanya. Mengganti token langsung
+            membatalkan token lama.
+          </p>
+        </div>
+
+        {semuaKelas.length > 0 ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {semuaKelas.map((kelas) => (
+              <TokenKelasForm
+                key={kelas.id}
+                kelasId={kelas.id}
+                namaKelas={kelas.nama_kelas}
+                tokenAwal={tokenPerKelas.get(kelas.id) ?? null}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-2xl bg-white px-4 py-6 text-center text-sm text-slate-500 ring-1 ring-slate-200">
+            Belum ada kelas. Tambahkan kelas dulu untuk membuat token.
+          </p>
+        )}
+
+        {tokenError ? (
+          <p className="text-sm text-amber-600">
+            Jalankan schema.sql Tahap 28 supaya fitur token aktif.
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }
