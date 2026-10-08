@@ -23,6 +23,13 @@ type Status = "siap" | "memuat" | "menjalankan" | "menilai";
 
 const PESAN_BENAR = "Benar! Tantangan berikutnya sudah terbuka.";
 
+// Batas waktu eksekusi kode Python (dihitung sejak Python benar-benar berjalan,
+// bukan sejak tombol Run diklik). Ini untuk mendeteksi infinite loop.
+const BATAS_JALAN_MS = 8000;
+// Batas waktu menyiapkan Pyodide pertama kali (unduh + kompilasi WASM ~13 MB).
+// Di PC lambat ini bisa lama, jadi sengaja diberi kelonggaran besar.
+const BATAS_MUAT_MS = 90000;
+
 export function LabRunner({
   exerciseId,
   kodeAwal,
@@ -157,17 +164,33 @@ export function LabRunner({
     setPesan(null);
 
     let selesai = false;
-
-    const timer = setTimeout(() => {
+    // Fase 1: menyiapkan Python. Timer ini besar dan TIDAK men-terminate worker,
+    // supaya pemuatan Pyodide yang sedang berjalan tidak terbuang sia-sia.
+    let timer = setTimeout(() => {
       if (selesai) return;
       selesai = true;
-      pekerja.terminate();
-      pekerjaRef.current = null;
       setStatus("siap");
       setGalat(
-        "Program berjalan terlalu lama (lebih dari 8 detik) dan dihentikan. Periksa kemungkinan perulangan tanpa henti.",
+        "Python masih disiapkan dan memakan waktu lama. Periksa koneksi internet, lalu tekan Run Python lagi — pemuatan akan dilanjutkan.",
       );
-    }, 8000);
+    }, BATAS_MUAT_MS);
+
+    // Fase 2: kode sedang berjalan. Baru di sini batas 8 detik berlaku.
+    function mulaiBatasJalan() {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (selesai) return;
+        selesai = true;
+        pekerja.terminate();
+        pekerjaRef.current = null;
+        setStatus("siap");
+        setGalat(
+          `Program berjalan terlalu lama (lebih dari ${
+            BATAS_JALAN_MS / 1000
+          } detik) dan dihentikan. Periksa kemungkinan perulangan tanpa henti.`,
+        );
+      }, BATAS_JALAN_MS);
+    }
 
     pekerja.onmessage = (event) => {
       const data = event.data as {
@@ -186,6 +209,8 @@ export function LabRunner({
       }
       if (data.status === "running") {
         setStatus("menjalankan");
+        // Python siap dan kode mulai dieksekusi: mulai hitung batas 8 detik.
+        if (!selesai) mulaiBatasJalan();
         return;
       }
 
@@ -224,7 +249,7 @@ export function LabRunner({
 
   const statusText =
     status === "memuat"
-      ? "Menyiapkan Python... (pertama kali agak lama)"
+      ? "Menyiapkan Python pertama kali (unduh + kompilasi). Di PC lambat ini bisa lama — setelah sekali, run berikutnya instan."
       : status === "menjalankan"
         ? "Menjalankan program..."
         : status === "menilai"
