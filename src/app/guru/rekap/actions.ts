@@ -12,12 +12,18 @@ import { BUCKET_TUGAS } from "@/lib/tugas";
 
 export type HasilReset = { message: string | null; berhasil: boolean };
 
-type JenisReset = "tugas" | "ulangan" | "lab_coding" | "lab_komputer";
+type JenisReset =
+  | "tugas"
+  | "ulangan"
+  | "lab_coding"
+  | "lab_coding_modul"
+  | "lab_komputer";
 
 const JENIS_VALID: JenisReset[] = [
   "tugas",
   "ulangan",
   "lab_coding",
+  "lab_coding_modul",
   "lab_komputer",
 ];
 
@@ -141,6 +147,47 @@ export async function resetKegiatan(
     }
   }
 
+  if (jenis === "lab_coding_modul") {
+    // Reset satu modul sekaligus: ambil semua latihan milik modul, lalu
+    // hapus pengerjaan siswa pada latihan-latihan itu. Siswa mengulang
+    // modul dari level 1 (termasuk membuka kembali level yang terkunci).
+    const { data: latihan, error: galatLatihan } = await supabase
+      .from("coding_exercises")
+      .select("id")
+      .eq("lesson_id", refId);
+
+    if (galatLatihan) {
+      return {
+        message: `Gagal memuat latihan modul: ${galatLatihan.message}`,
+        berhasil: false,
+      };
+    }
+
+    const daftarLatihanId = (latihan ?? []).map(
+      (baris) => (baris as { id: string }).id,
+    );
+
+    if (daftarLatihanId.length === 0) {
+      return {
+        message: "Modul ini belum punya latihan untuk direset.",
+        berhasil: false,
+      };
+    }
+
+    const { error } = await supabase
+      .from("coding_submissions")
+      .delete()
+      .eq("siswa_id", siswaId)
+      .in("exercise_id", daftarLatihanId);
+
+    if (error) {
+      return {
+        message: `Gagal mereset modul lab coding: ${error.message}`,
+        berhasil: false,
+      };
+    }
+  }
+
   if (jenis === "lab_komputer") {
     const { error } = await supabase
       .from("komputer_hasil")
@@ -160,6 +207,7 @@ export async function resetKegiatan(
   revalidatePath("/guru/rekap");
   revalidatePath("/guru/tugas");
   revalidatePath("/guru/ulangan");
+  revalidatePath("/guru/lab");
   revalidatePath("/guru/lab/hasil");
   revalidatePath("/guru/komputer/hasil");
 

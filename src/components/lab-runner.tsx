@@ -6,8 +6,10 @@ import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { python } from "@codemirror/lang-python";
 import { Badge } from "@/components/ui/badge";
-import { simpanHasilLab } from "@/app/siswa/lab/actions";
+import { ambilMasukanUji, simpanHasilLab } from "@/app/siswa/lab/actions";
 import { BantuanLab } from "@/components/bantuan-lab";
+import { ModalInputLab, type ModalInputState } from "@/components/modal-input-lab";
+import { bacaInput } from "@/lib/input-lab";
 import type { AnalisisBebas } from "@/lib/lab";
 
 const CodeMirror = dynamic(() => import("@uiw/react-codemirror"), {
@@ -22,6 +24,14 @@ const CodeMirror = dynamic(() => import("@uiw/react-codemirror"), {
 type Status = "siap" | "memuat" | "menjalankan" | "menilai";
 
 const PESAN_BENAR = "Benar! Tantangan berikutnya sudah terbuka.";
+
+// Input wajib disimpan satu baris per input(). Baris kosong di akhir dibuang,
+// baris kosong di tengah tetap dipertahankan (bisa jadi input yang memang kosong).
+function barisInput(teks: string): string[] {
+  const baris = teks.replace(/\r\n/g, "\n").split("\n");
+  while (baris.length > 0 && baris[baris.length - 1].trim() === "") baris.pop();
+  return baris;
+}
 
 // Batas waktu eksekusi kode Python (dihitung sejak Python benar-benar berjalan,
 // bukan sejak tombol Run diklik). Ini untuk mendeteksi infinite loop.
@@ -46,6 +56,8 @@ export function LabRunner({
   finalBoss = false,
   badge,
   contoh,
+  masukan = "",
+  punyaUji = false,
 }: {
   exerciseId: string;
   kodeAwal: string | null;
@@ -65,6 +77,10 @@ export function LabRunner({
   badge?: string | null;
   /** Contoh pola pengerjaan (isinya berbeda dari target soal). */
   contoh?: string | null;
+  /** Input wajib, satu baris per input(). Ditampilkan ke siswa. */
+  masukan?: string;
+  /** Ada uji internal dengan input berbeda (tidak ditampilkan). */
+  punyaUji?: boolean;
 }) {
   const router = useRouter();
   const [kode, setKode] = useState(kodeTersimpan ?? kodeAwal ?? "");
@@ -80,10 +96,14 @@ export function LabRunner({
   const [pesan, setPesan] = useState<string | null>(null);
   // Berapa kali siswa salah di level ini (untuk memunculkan petunjuk).
   const [salahCount, setSalahCount] = useState(0);
+  // Modal input: null = tidak tampil.
+  const [modal, setModal] = useState<ModalInputState | null>(null);
+  // Input yang dipakai saat run terakhir (submitted lewat modal).
+  const [inputTerpakai, setInputTerpakai] = useState<string[]>([]);
 
   const pekerjaRef = useRef<Worker | null>(null);
   const hitungRef = useRef(0);
-  const sibuk = status !== "siap";
+  const sibuk = status !== "siap" || modal !== null;
 
   // Mode fokus: kunci scroll halaman & keluar dengan Esc.
   useEffect(() => {
@@ -112,49 +132,92 @@ export function LabRunner({
     return pekerjaRef.current;
   }
 
-  async function simpan(
-    keluaranBaru: string,
-    analisis: AnalisisBebas | null,
-    galatBaru: string | null,
-  ) {
+  async function simpan(hasil: {
+    keluaran: string;
+    keluaranUji: string | null;
+    galatUji: string | null;
+    analisis: AnalisisBebas | null;
+    galat: string | null;
+    stdinDipakai: string[];
+  }) {
     // Tahan output sampai server/database selesai menilai.
     setStatus("menilai");
     try {
-      const hasil = await simpanHasilLab({
+      const jawab = await simpanHasilLab({
         exerciseId,
         kode,
-        keluaran: keluaranBaru,
-        analisis,
+        keluaran: hasil.keluaran,
+        keluaranUji: hasil.keluaranUji,
+        galatUji: hasil.galatUji,
+        masukanDipakai: hasil.stdinDipakai,
+        analisis: hasil.analisis,
       });
 
-      setKeluaran(keluaranBaru);
+      setKeluaran(hasil.keluaran);
       setSudahJalan(true);
-      setGalat(galatBaru);
+      setGalat(hasil.galat);
 
-      if (hasil.sukses) {
-        setPercobaan(hasil.percobaan);
-        setPernahBenar(hasil.pernahBenar);
+      if (jawab.sukses) {
+        setPercobaan(jawab.percobaan);
+        setPernahBenar(jawab.pernahBenar);
         setTersimpan(true);
-        setBenar(hasil.benar);
-        setPesan(hasil.benar ? PESAN_BENAR : hasil.petunjuk);
-        if (!hasil.benar) setSalahCount((n) => n + 1);
-        if (hasil.benar) router.refresh();
-      } else if (hasil.message) {
-        setGalat(hasil.message);
+        setBenar(jawab.benar);
+        setPesan(jawab.benar ? PESAN_BENAR : jawab.petunjuk);
+        if (!jawab.benar) setSalahCount((n) => n + 1);
+        if (jawab.benar) router.refresh();
+      } else if (jawab.message) {
+        setGalat(jawab.message);
       }
     } catch {
-      setKeluaran(keluaranBaru);
+      setKeluaran(hasil.keluaran);
       setSudahJalan(true);
-      setGalat(galatBaru ?? "Gagal menghubungi server penilaian. Coba lagi.");
+      setGalat(hasil.galat ?? "Gagal menghubungi server penilaian. Coba lagi.");
     } finally {
       setStatus("siap");
     }
   }
 
+  // Langkah 1: Run ditekan → tampilkan modal input (kalau kode meminta input).
   function jalankan() {
+    const rencana = bacaInput(kode);
+    setKeluaran("");
+    setGalat(null);
+    setTersimpan(false);
+    setSudahJalan(false);
+    setBenar(null);
+    setPesan(null);
+
+    if (rencana.jumlah === 0 && barisInput(masukan).length > 0) {
+      // Soal memakai input wajib tetapi kode belum punya input(): beri tahu
+      // tanpa modal kosong.
+      setGalat(
+        "Program ini belum memakai input(). Pada tantangan ini kamu harus mengambil data dengan input().",
+      );
+      setSudahJalan(true);
+      return;
+    }
+
+    if (rencana.jumlah === 0) {
+      void mulaiJalan([], []);
+      return;
+    }
+
+    setModal({ rencana, saran: barisInput(masukan) });
+  }
+
+  // Batal di modal: jangan jalankan apa pun, dan kembalikan tampilan ke
+  // keadaan sebelum Run (output lama tetap terlihat kalau ada).
+  function batalModal() {
+    setModal(null);
+    setStatus("siap");
+  }
+
+  // Langkah 5: jalankan program memakai data dari modal.
+  async function mulaiJalan(nilai: string[], prompt: string[]) {
     const pekerja = ambilPekerja();
     const id = ++hitungRef.current;
 
+    setInputTerpakai(nilai);
     setStatus("memuat");
     setKeluaran("");
     setGalat(null);
@@ -162,6 +225,26 @@ export function LabRunner({
     setSudahJalan(false);
     setBenar(null);
     setPesan(null);
+
+    // Input uji diambil saat Run ditekan (bukan saat halaman dimuat), supaya
+    // isinya tidak ikut terkirim bersama halaman. Fail-closed: kalau uji gagal
+    // dimuat, jangan jalankan kode tanpa uji — hentikan dengan pesan jelas.
+    let stdinUji: string[] | null = null;
+    if (punyaUji) {
+      try {
+        const uji = await ambilMasukanUji(exerciseId);
+        if (uji?.masukan) stdinUji = barisInput(uji.masukan);
+      } catch {
+        stdinUji = null;
+      }
+      if (!stdinUji || stdinUji.length === 0) {
+        setStatus("siap");
+        setGalat(
+          "Gagal memuat data uji untuk soal ini. Periksa koneksimu, lalu tekan Run Python lagi.",
+        );
+        return;
+      }
+    }
 
     let selesai = false;
     // Fase 1: menyiapkan Python. Timer ini besar dan TIDAK men-terminate worker,
@@ -199,6 +282,9 @@ export function LabRunner({
         stdout?: string;
         stderr?: string;
         error?: string | null;
+        stdinDipakai?: string[] | null;
+        stdoutUji?: string | null;
+        errorUji?: string | null;
         analisis?: AnalisisBebas | null;
       };
       if (!data || data.id !== id) return;
@@ -219,7 +305,29 @@ export function LabRunner({
       clearTimeout(timer);
 
       const keluaranBaru = data.stdout ?? "";
-      void simpan(keluaranBaru, data.analisis ?? null, data.error ?? null);
+      const keluaranUjiBaru =
+        typeof data.stdoutUji === "string" ? data.stdoutUji : null;
+      // Baris input yang benar-benar dikonsumsi input(). Kalau kosong (kode
+      // error sebelum input()), kirim null supaya server menolak dengan jelas.
+      const stdinDipakai = Array.isArray(data.stdinDipakai)
+        ? data.stdinDipakai
+        : [];
+      // Run uji memakai input berbeda; kalau error di situ, tampilkan
+      // penyebabnya (mis. EOFError karena input() dipanggil lebih banyak).
+      const galatBaru = data.error
+        ? data.error
+        : data.errorUji
+          ? `Saat diuji dengan input berbeda: ${data.errorUji}`
+          : null;
+
+      void simpan({
+        keluaran: keluaranBaru,
+        keluaranUji: keluaranUjiBaru,
+        galatUji: data.errorUji ?? null,
+        analisis: data.analisis ?? null,
+        galat: galatBaru,
+        stdinDipakai,
+      });
     };
 
     pekerja.onerror = () => {
@@ -233,6 +341,11 @@ export function LabRunner({
     pekerja.postMessage({
       id,
       kode,
+      stdin: nilai,
+      stdinUji,
+      // Teks input("...") tidak boleh ikut jadi output; prompt dikirim
+      // supaya worker bisa membersihkannya dari stdout.
+      prompt,
       analisis: jenis === "bebas" || wajibVariabel.length > 0,
     });
   }
@@ -245,6 +358,7 @@ export function LabRunner({
     setSudahJalan(false);
     setTersimpan(false);
     setPesan(null);
+    setInputTerpakai([]);
   }
 
   const statusText =
@@ -262,13 +376,21 @@ export function LabRunner({
       className="overflow-hidden rounded-2xl bg-slate-950 ring-1 ring-slate-800 shadow-sm"
     >
       <div className="flex min-h-12 items-center justify-between gap-3 border-b border-slate-800 bg-slate-900 px-4 py-3">
-        <div>
-          <h2 id="editor-python-heading" className="text-sm font-semibold text-white">
-            Editor Python
-          </h2>
-          <p className="mt-0.5 text-xs text-slate-400">Tulis kode, lalu jalankan untuk memeriksa hasil.</p>
+        <div className="flex items-center gap-2.5">
+          <span
+            aria-hidden="true"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30"
+          >
+            <span className="font-mono text-sm font-bold">&gt;_</span>
+          </span>
+          <div>
+            <h2 id="editor-python-heading" className="text-sm font-semibold text-white">
+              Editor Python
+            </h2>
+            <p className="mt-0.5 text-xs text-slate-400">Tulis kode, lalu jalankan untuk memeriksa hasil.</p>
+          </div>
         </div>
-        <span className="shrink-0 rounded-full bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-300">
+        <span className="shrink-0 rounded-full bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 ring-1 ring-emerald-500/25">
           Percobaan {percobaan}
         </span>
       </div>
@@ -353,6 +475,40 @@ export function LabRunner({
     </div>
   ) : null;
 
+  // Input yang benar-benar dipakai saat Run terakhir (bukti bagi siswa).
+  const panelInputDipakai =
+    sudahJalan && masukan.trim() && inputTerpakai.length > 0 ? (
+      <section className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <h3 className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+          Input yang dipakai program
+        </h3>
+        <ul className="mt-2 space-y-1">
+          {inputTerpakai.map((isi, urutan) => {
+            const wajib = barisInput(masukan)[urutan];
+            const beda = wajib !== undefined && wajib !== isi;
+            return (
+              <li
+                key={urutan}
+                className="flex items-start gap-2 font-mono text-xs leading-5"
+              >
+                <span className="w-4 shrink-0 text-right text-slate-400">
+                  {urutan + 1}
+                </span>
+                <span className={beda ? "text-amber-800" : "text-slate-800"}>
+                  {isi === "" ? "(kosong)" : isi}
+                </span>
+                {beda ? (
+                  <span className="font-sans text-[11px] font-semibold text-amber-700">
+                    (wajib: {wajib})
+                  </span>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    ) : null;
+
   const panelOutput = (gelap: boolean) =>
     sudahJalan ? (
       <section
@@ -395,14 +551,19 @@ export function LabRunner({
     <div
       role="status"
       aria-live="polite"
-      className={`rounded-2xl p-4 text-base leading-6 ring-1 ${
+      className={`rounded-2xl p-4 ring-1 ${
         benar
           ? "bg-emerald-50 text-emerald-900 ring-emerald-200"
           : "bg-amber-50 text-amber-900 ring-amber-200"
       }`}
     >
-      <p className="font-semibold">{benar ? "✓ Berhasil" : "Petunjuk"}</p>
-      <p className="mt-1">{pesan}</p>
+      <p className="flex items-center gap-2 text-base font-bold">
+        <span aria-hidden="true" className="font-mono">
+          {benar ? "✓" : "✕"}
+        </span>
+        {benar ? "BENAR!" : "BELUM TEPAT"}
+      </p>
+      <p className="mt-1.5 text-sm leading-6">{pesan}</p>
     </div>
   ) : null;
 
@@ -475,6 +636,7 @@ export function LabRunner({
               {panelTombol(true)}
               {panelGalat}
               {panelOutput(true)}
+              {panelInputDipakai}
               {panelFinalBoss}
               {panelPesan}
             </div>
@@ -484,6 +646,38 @@ export function LabRunner({
                 <p className="text-xs font-semibold tracking-wide text-emerald-300 uppercase">Tantangan {levelNumber}</p>
                 <p className="mt-2 whitespace-pre-wrap text-base leading-7 text-slate-100">{instruksi}</p>
               </section>
+
+              {masukan.trim() ? (
+                <section className="rounded-2xl bg-slate-900 p-4 ring-1 ring-slate-800">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-white">
+                      {jenis === "bebas" ? "Contoh input" : "Input wajib"}
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      {jenis === "bebas"
+                        ? `${barisInput(masukan).length} baris`
+                        : `${barisInput(masukan).length} input`}
+                    </p>
+                  </div>
+                  <ol className="mt-3 space-y-1.5">
+                    {barisInput(masukan).map((isi, urutan) => (
+                      <li key={urutan} className="flex items-start gap-2">
+                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded bg-slate-800 text-[11px] font-semibold text-slate-400">
+                          {urutan + 1}
+                        </span>
+                        <code className="font-mono text-sm break-words text-emerald-200">
+                          {isi === "" ? "(kosong)" : isi}
+                        </code>
+                      </li>
+                    ))}
+                  </ol>
+                  <p className="mt-3 text-xs leading-5 text-slate-400">
+                    {jenis === "bebas"
+                      ? "Isi jawaban modal sesuai contoh ini. Pakai minimal 5 baris pertama."
+                      : "Ketik jawaban modal persis seperti ini dengan urutan yang sama. Menulis input(\"Teks: \") tidak masalah — teksnya hanya tampil di modal."}
+                  </p>
+                </section>
+              ) : null}
 
               {jenis !== "bebas" ? (
                 <section className="rounded-2xl bg-slate-900 p-4 ring-1 ring-slate-800">
@@ -496,7 +690,7 @@ export function LabRunner({
               {bantuan ? (
                 <details className="rounded-2xl bg-slate-900 p-4 ring-1 ring-slate-800">
                   <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold text-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400">
-                    Bantuan materi: print()
+                    Bantuan materi
                   </summary>
                   <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-300">{bantuan}</p>
                 </details>
@@ -506,6 +700,17 @@ export function LabRunner({
             </aside>
           </div>
         </div>
+        {modal ? (
+          <ModalInputLab
+            state={modal}
+            onBatal={batalModal}
+            onKirim={(nilai) => {
+              const prompt = modal.rencana.daftar.map((item) => item.pertanyaan);
+              setModal(null);
+              void mulaiJalan(nilai, prompt);
+            }}
+          />
+        ) : null}
       </div>,
       document.body,
     );
@@ -518,6 +723,7 @@ export function LabRunner({
       {panelTombol(false)}
       {panelGalat}
       {panelOutput(false)}
+      {panelInputDipakai}
       {panelFinalBoss}
       {panelPesan}
       {panelStatus}
@@ -528,6 +734,18 @@ export function LabRunner({
         contoh={contoh ?? null}
         salahCount={salahCount}
       />
+
+      {modal ? (
+        <ModalInputLab
+          state={modal}
+          onBatal={batalModal}
+          onKirim={(nilai) => {
+            const prompt = modal.rencana.daftar.map((item) => item.pertanyaan);
+            setModal(null);
+            void mulaiJalan(nilai, prompt);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

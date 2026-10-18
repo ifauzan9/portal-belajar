@@ -212,7 +212,13 @@ export default async function SiswaPage(props: PageProps<"/guru/siswa">) {
         </p>
       </div>
 
-      <PilihanSiswa semuaId={hasil.map((item) => item.id)}>
+      <PilihanSiswa
+        semuaId={hasil.map((item) => item.id)}
+        kelasList={kelasList}
+        kelasPerSiswa={Object.fromEntries(
+          hasil.map((item) => [item.id, item.kelas_id]),
+        )}
+      >
         <ul className="space-y-3 lg:hidden">
           {hasil.map((item, index) => (
             <BarisSiswa

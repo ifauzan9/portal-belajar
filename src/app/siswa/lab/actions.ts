@@ -7,7 +7,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   cekKaryaBebas,
   cekVariabelWajib,
+  inputSesuaiWajib,
   keluaranCocok,
+  bandingkanPerBaris,
+  pesanBanding,
+  pecahInput,
   type AnalisisBebas,
   type AturanBebas,
 } from "@/lib/lab";
@@ -41,10 +45,32 @@ const HASIL_GAGAL: HasilSimpanLab = {
   petunjuk: null,
 };
 
+// Petunjuk saat output belum cocok. Kasus tersering di modul input():
+// siswa menulis input("Nama: ") sehingga teks label ikut tercetak.
+// Urutan pemeriksaan mengikuti spesifikasi: jumlah baris → isi baris yang
+// berbeda → spasi di awal baris. Pesan tidak pernah memuat isi target, supaya
+// siswa tetap membaca soal dan memperbaiki kodenya sendiri.
+function petunjukOutputSalah(
+  keluaran: string,
+  diharapkan: string,
+  analisis: AnalisisBebas | null | undefined,
+): string {
+  if ((analisis?.input_berprompt ?? 0) > 0) {
+    return 'Output belum sesuai. Kamu menulis teks di dalam input("..."). Teks itu hanya tampil di modal, bukan bagian output, jadi jangan di-print ulang.';
+  }
+  const banding = bandingkanPerBaris(keluaran, diharapkan);
+  if (banding.cocok) return "Output sudah sesuai.";
+  return `Output belum sesuai. ${pesanBanding(banding)}`;
+}
+
 export async function simpanHasilLab(input: {
   exerciseId: string;
   kode: string;
   keluaran: string;
+  keluaranUji?: string | null;
+  galatUji?: string | null;
+  /** Baris input yang benar-benar dikonsumsi input() pada run utama. */
+  masukanDipakai?: string[] | null;
   analisis?: AnalisisBebas | null;
 }): Promise<HasilSimpanLab> {
   const { siswa } = await requireSiswa();
@@ -57,23 +83,36 @@ export async function simpanHasilLab(input: {
   const supabase = await createClient();
   const admin = createAdminClient();
 
-  // Ambil latihan (jenis, target output, aturan, level, modul).
-  const { data: exercise } = await supabase
-    .from("coding_exercises")
-    .select("lesson_id, level, jenis, keluaran_diharapkan, aturan")
-    .eq("id", exerciseId)
-    .maybeSingle();
+  // Ambil latihan (jenis, target output, aturan, level, modul, input wajib).
+  // Kolom input baru ada setelah SQL Tahap 29 dijalankan.
+  const KOLOM_LATIHAN = "lesson_id, level, jenis, keluaran_diharapkan, aturan";
+  const ambilLatihan = (kolom: string) =>
+    supabase
+      .from("coding_exercises")
+      .select(kolom)
+      .eq("id", exerciseId)
+      .maybeSingle();
+
+  const lengkap = await ambilLatihan(
+    `${KOLOM_LATIHAN}, masukan, masukan_uji, keluaran_uji`,
+  );
+  const { data: exercise } = lengkap.error
+    ? await ambilLatihan(KOLOM_LATIHAN)
+    : lengkap;
 
   if (!exercise) {
     return { ...HASIL_GAGAL, message: "Latihan tidak ditemukan." };
   }
 
-  const exerciseRow = exercise as {
+  const exerciseRow = exercise as unknown as {
     lesson_id: string;
     level: number;
     jenis: string;
     keluaran_diharapkan: string;
     aturan: AturanBebas | null;
+    masukan?: string | null;
+    masukan_uji?: string | null;
+    keluaran_uji?: string | null;
   };
 
   // Pastikan latihan ini memang untuk kelas siswa (kalau ada target kelas).
@@ -123,29 +162,110 @@ export async function simpanHasilLab(input: {
   }
 
   const keluaranTeks = String(input.keluaran ?? "");
+  const keluaranUjiTeks =
+    typeof input.keluaranUji === "string" ? input.keluaranUji : null;
+  const galatUjiTeks =
+    typeof input.galatUji === "string" && input.galatUji.trim()
+      ? input.galatUji
+      : null;
+
+  const aturan = exerciseRow.aturan ?? {};
+  // Ada uji internal (input berbeda) untuk latihan ini?
+  const adaUji = Boolean(exerciseRow.masukan_uji?.trim());
+  // Input wajib modul input(). Kosong untuk modul lama (Modul 1 & 2).
+  const inputWajib = pecahInput(exerciseRow.masukan);
+  // Baris yang benar-benar dikonsumsi input() saat run utama.
+  const inputDipakai = Array.isArray(input.masukanDipakai)
+    ? input.masukanDipakai.map((baris) => String(baris))
+    : null;
+  // Siswa mengganti input wajib? Kalau ya, target output tidak lagi berarti.
+  const inputDiubah =
+    inputWajib.length > 0 && !inputSesuaiWajib(inputDipakai, inputWajib);
 
   // Penilaian di server.
   let benarBaru: boolean;
   let petunjuk: string | null = null;
 
   if (exerciseRow.jenis === "bebas") {
-    const hasilCek = cekKaryaBebas(
-      input.analisis,
-      keluaranTeks,
-      exerciseRow.aturan ?? {},
-    );
+    const hasilCek = cekKaryaBebas(input.analisis, keluaranTeks, aturan);
     benarBaru = hasilCek.benar;
     petunjuk = hasilCek.petunjuk;
-  } else if (!keluaranCocok(keluaranTeks, exerciseRow.keluaran_diharapkan)) {
-    benarBaru = false;
-    petunjuk =
-      "Output belum sesuai. Periksa kembali isi variabel, urutan print(), dan jumlah baris.";
+
+    // Karya bebas: output harus berubah saat inputnya diganti.
+    if (benarBaru && aturan.wajib_dinamis) {
+      if (galatUjiTeks) {
+        benarBaru = false;
+        petunjuk =
+          "Dengan input berbeda, program berhenti karena error. Pastikan program memakai data dari input() dan menampilkan semua masukan.";
+      } else if (keluaranUjiTeks === null) {
+        benarBaru = false;
+        petunjuk =
+          "Program perlu diuji ulang dengan input berbeda. Tekan Run Python sekali lagi.";
+      } else if (keluaranCocok(keluaranUjiTeks, keluaranTeks)) {
+        benarBaru = false;
+        petunjuk =
+          "Output tidak berubah saat inputnya diganti. Pastikan semua data ditampilkan dari variabel hasil input().";
+      }
+    }
   } else {
-    // Output sudah cocok; pastikan variabel wajib benar-benar dipakai.
-    const wajib = exerciseRow.aturan?.variabel_wajib ?? [];
-    const cekVar = cekVariabelWajib(input.analisis, wajib);
-    benarBaru = cekVar.benar;
-    petunjuk = cekVar.petunjuk;
+    // Target output hanya berlaku untuk input wajib yang tertulis di soal.
+    // Dicek lebih dulu supaya pesan "input berbeda" tidak menutupi pesan
+    // bahwa program tidak memakai input sama sekali (hardcode).
+    benarBaru = !inputDiubah;
+    petunjuk = inputDiubah
+      ? "Input yang kamu pakai berbeda dari input wajib. Ketik ulang input wajib persis seperti yang tertulis, lalu tekan Run Python lagi."
+      : null;
+
+    if (benarBaru && !keluaranCocok(keluaranTeks, exerciseRow.keluaran_diharapkan)) {
+      benarBaru = false;
+      petunjuk = petunjukOutputSalah(
+        keluaranTeks,
+        exerciseRow.keluaran_diharapkan,
+        input.analisis,
+      );
+    }
+
+    // Pastikan variabel wajib benar-benar dibuat, diisi dari input(), dan
+    // ditampilkan dengan print().
+    if (benarBaru) {
+      const cekVar = cekVariabelWajib(input.analisis, aturan.variabel_wajib ?? [], {
+        dariInput: aturan.dari_input === true,
+      });
+      benarBaru = cekVar.benar;
+      petunjuk = cekVar.petunjuk;
+    }
+
+    // Larangan perulangan (mis. tantangan "PESAN BERULANG").
+    if (benarBaru && aturan.tanpa_loop && (input.analisis?.jumlah_loop ?? 0) > 0) {
+      benarBaru = false;
+      petunjuk =
+        "Tantangan ini diminta tanpa perulangan. Tulis print() beberapa kali, bukan for/while.";
+    }
+
+    // Uji internal: kode yang sama dijalankan dengan input berbeda.
+    // Fail-closed: latihan bermodul input WAJIB punya uji. Kalau uji tidak
+    // tersedia, jangan pernah meloloskan jawaban tanpa uji.
+    if (benarBaru && (adaUji || inputWajib.length > 0)) {
+      if (!adaUji || !exerciseRow.keluaran_uji?.trim()) {
+        benarBaru = false;
+        petunjuk =
+          "Soal ini belum siap dinilai karena data ujinya tidak lengkap. Hubungi gurumu.";
+      } else if (galatUjiTeks) {
+        benarBaru = false;
+        petunjuk =
+          "Dengan input berbeda, program berhenti karena error. Pastikan jumlah input() dan pengolahan datanya benar.";
+      } else if (keluaranUjiTeks === null) {
+        benarBaru = false;
+        petunjuk =
+          "Program perlu diuji ulang dengan input berbeda. Tekan Run Python sekali lagi.";
+      } else if (
+        !keluaranCocok(keluaranUjiTeks, exerciseRow.keluaran_uji)
+      ) {
+        benarBaru = false;
+        petunjuk =
+          "Dengan input berbeda, output tidak sesuai. Pastikan program mengolah data dari input(), bukan menulis jawaban langsung.";
+      }
+    }
   }
 
   const { data: lama } = await admin
@@ -192,6 +312,17 @@ export async function simpanHasilLab(input: {
   revalidatePath("/siswa/lab");
   revalidatePath("/guru/lab/hasil");
 
+  // Catat input yang dipakai (tidak wajib; kolomnya baru ada setelah Tahap 29).
+  void supabase
+    .from("coding_submissions")
+    .update({ masukan_dipakai: inputDipakai })
+    .eq("exercise_id", exerciseId)
+    .eq("siswa_id", siswa.id)
+    .then(
+      () => undefined,
+      () => undefined,
+    );
+
   return {
     sukses: true,
     message: null,
@@ -200,4 +331,33 @@ export async function simpanHasilLab(input: {
     benar: benarBaru,
     petunjuk,
   };
+}
+
+// ============================================================================
+// Ambil input uji (input berbeda) untuk sebuah latihan.
+//
+// Sengaja dipisah dari data halaman: isinya baru diambil saat siswa menekan
+// Run, jadi tidak ikut terkirim waktu halaman dimuat. Dipakai untuk menguji
+// bahwa program benar-benar mengolah data dari input(), bukan menulis jawaban.
+// ============================================================================
+export async function ambilMasukanUji(
+  exerciseId: string,
+): Promise<{ masukan: string } | null> {
+  await requireSiswa();
+
+  const id = String(exerciseId ?? "").trim();
+  if (!id) return null;
+
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("coding_exercises")
+    .select("masukan_uji")
+    .eq("id", id)
+    .maybeSingle();
+
+  // Kolom bisa belum ada sebelum SQL Tahap 29 dijalankan → data null.
+  const masukan = (data as { masukan_uji?: string | null } | null)?.masukan_uji;
+  if (!masukan || !masukan.trim()) return null;
+
+  return { masukan };
 }

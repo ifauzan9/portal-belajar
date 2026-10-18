@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Kartu, KartuJudul } from "@/components/ui/kartu";
 import { EmptyState } from "@/components/ui/empty-state";
 import { TombolReset } from "@/components/tombol-reset";
+import { TabModul } from "@/components/tab-modul";
+import { ProgresBar } from "@/components/ui/progres";
 import { createClient } from "@/lib/supabase/server";
 import { ambilKelasTugas } from "@/lib/tugas";
 import { ambilKelasUlangan } from "@/lib/ambil-kelas-ulangan";
@@ -52,11 +54,9 @@ function BarisKegiatan({
 
 const badgeBelum = <Badge varian="netral">Belum</Badge>;
 
-export default async function DetailRekapPage({
-  params,
-}: {
-  params: Promise<{ siswaId: string }>;
-}) {
+export default async function DetailRekapPage(
+  props: PageProps<"/guru/rekap/[siswaId]">,
+) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -66,7 +66,10 @@ export default async function DetailRekapPage({
     redirect("/login");
   }
 
-  const { siswaId } = await params;
+  const { siswaId } = await props.params;
+  const searchParams = await props.searchParams;
+  const modulParam =
+    typeof searchParams.modul === "string" ? searchParams.modul : "";
 
   const [hasilSiswa, hasilKelas] = await Promise.all([
     supabase
@@ -236,6 +239,33 @@ export default async function DetailRekapPage({
       if (ua !== ub) return ua - ub;
       return a.level - b.level;
     });
+
+  // Kelompokkan latihan per modul (hanya modul yang relevan & punya latihan).
+  // "Dikerjakan" mengikuti definisi kartu ringkasan di atas: sudah ada baris
+  // coding_submissions untuk level tersebut.
+  const modulLab = lessonLab
+    .filter((lesson) =>
+      relevansiKelas(
+        (lesson.coding_lesson_classes ?? []).map((k) => k.kelas_id),
+        siswa.kelas_id,
+      ),
+    )
+    .sort((a, b) => a.urutan - b.urutan)
+    .map((lesson) => {
+      const levels = latihanRelevan.filter((l) => l.lesson_id === lesson.id);
+      return {
+        id: lesson.id,
+        judul: lesson.judul,
+        levels,
+        selesai: levels.filter((l) => mapSubLab.has(l.id)).length,
+        total: levels.length,
+      };
+    })
+    .filter((modul) => modul.total > 0);
+
+  // Modul yang sedang dibuka. Parameter tidak dikenal → modul pertama.
+  const modulAktif =
+    modulLab.find((modul) => modul.id === modulParam) ?? modulLab[0] ?? null;
 
   // ---------- Lab Komputer ----------
   const lessonKom = (hasilLessonKom.data ?? []) as {
@@ -447,44 +477,94 @@ export default async function DetailRekapPage({
         <KartuJudul
           judul="Lab Coding"
           subjudul={`${labCodingSelesai} dari ${latihanRelevan.length} level dikerjakan`}
+          aksi={
+            modulAktif && modulAktif.selesai > 0 ? (
+              <TombolReset
+                jenis="lab_coding_modul"
+                siswaId={siswa.id}
+                refId={modulAktif.id}
+                label={modulAktif.judul}
+                varian="outline"
+                teks="Reset modul"
+                konfirmasi={`Yakin reset seluruh modul "${modulAktif.judul}"? ${modulAktif.selesai} level yang sudah dikerjakan akan dihapus dan siswa mengulang modul ini dari level 1.`}
+              />
+            ) : null
+          }
         />
-        {latihanRelevan.length > 0 ? (
-          <div className="mt-4 space-y-2">
-            {latihanRelevan.map((l) => {
-              const sub = mapSubLab.get(l.id);
-              const lesson = mapLessonLab.get(l.lesson_id);
-              return (
-                <BarisKegiatan
-                  key={l.id}
-                  judul={`${lesson?.judul ?? "Modul"} — Level ${l.level}: ${l.judul}`}
-                  keterangan={
-                    sub
-                      ? `${sub.percobaan} percobaan · ${formatWaktu(sub.updated_at)}`
-                      : "Belum dikerjakan"
+
+        {modulAktif ? (
+          <>
+            <TabModul
+              daftar={modulLab.map((modul) => ({
+                id: modul.id,
+                judul: modul.judul,
+                selesai: modul.selesai,
+                total: modul.total,
+              }))}
+              aktifId={modulAktif.id}
+              basePath={`/guru/rekap/${siswa.id}`}
+            />
+
+            <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="min-w-0 truncate text-sm font-semibold text-slate-900">
+                  {modulAktif.judul}
+                </p>
+                <Badge
+                  varian={
+                    modulAktif.selesai === modulAktif.total ? "sukses" : "netral"
                   }
-                  badge={
-                    sub ? (
-                      <Badge varian={sub.pernah_benar ? "sukses" : "bahaya"}>
-                        {sub.pernah_benar ? "Pernah benar" : "Belum benar"}
-                      </Badge>
-                    ) : (
-                      badgeBelum
-                    )
-                  }
-                  reset={
-                    sub ? (
-                      <TombolReset
-                        jenis="lab_coding"
-                        siswaId={siswa.id}
-                        refId={l.id}
-                        label={l.judul}
-                      />
-                    ) : null
-                  }
-                />
-              );
-            })}
-          </div>
+                >
+                  {modulAktif.selesai === modulAktif.total ? "✓ Tuntas · " : ""}
+                  {modulAktif.selesai}/{modulAktif.total} level
+                </Badge>
+              </div>
+              <ProgresBar
+                nilai={Math.round(
+                  (modulAktif.selesai / modulAktif.total) * 100,
+                )}
+                label={`Progres ${modulAktif.judul}`}
+                ukuran="sm"
+                className="mt-3"
+              />
+            </div>
+
+            <div className="mt-3 space-y-2">
+              {modulAktif.levels.map((l) => {
+                const sub = mapSubLab.get(l.id);
+                return (
+                  <BarisKegiatan
+                    key={l.id}
+                    judul={`Level ${l.level}: ${l.judul}`}
+                    keterangan={
+                      sub
+                        ? `${sub.percobaan} percobaan · ${formatWaktu(sub.updated_at)}`
+                        : "Belum dikerjakan"
+                    }
+                    badge={
+                      sub ? (
+                        <Badge varian={sub.pernah_benar ? "sukses" : "bahaya"}>
+                          {sub.pernah_benar ? "Pernah benar" : "Belum benar"}
+                        </Badge>
+                      ) : (
+                        badgeBelum
+                      )
+                    }
+                    reset={
+                      sub ? (
+                        <TombolReset
+                          jenis="lab_coding"
+                          siswaId={siswa.id}
+                          refId={l.id}
+                          label={`Level ${l.level}: ${l.judul}`}
+                        />
+                      ) : null
+                    }
+                  />
+                );
+              })}
+            </div>
+          </>
         ) : (
           <EmptyState padat judul="Belum ada latihan untuk kelas ini" />
         )}

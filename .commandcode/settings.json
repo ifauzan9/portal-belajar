@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Shell(npm:*)"
+      "Shell(npm:*)",
+      "powershell"
     ],
     "deny": [],
     "defaultMode": "default"

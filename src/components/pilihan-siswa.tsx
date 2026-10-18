@@ -14,6 +14,9 @@ import {
   aksiSiswaBanyak,
   type HasilAksiSiswaBanyak,
 } from "@/app/guru/siswa/actions";
+import { PindahKelasBanyak } from "@/components/pindah-kelas";
+
+type Kelas = { id: string; nama_kelas: string };
 
 // ============================================================================
 // Pilihan siswa untuk aksi massal (dipakai di halaman Data Siswa).
@@ -35,9 +38,15 @@ export function usePilihanSiswa() {
 
 export function PilihanSiswa({
   semuaId,
+  kelasList = [],
+  kelasPerSiswa = {},
   children,
 }: {
   semuaId: string[];
+  // Daftar kelas untuk aksi massal "Pindahkan ke ...".
+  kelasList?: Kelas[];
+  // Kelas siswa per id (null = belum ada kelas), untuk ringkasan konfirmasi.
+  kelasPerSiswa?: Record<string, string | null>;
   children: ReactNode;
 }) {
   const [dipilih, setDipilih] = useState<string[]>([]);
@@ -79,88 +88,99 @@ export function PilihanSiswa({
   return (
     <Konteks.Provider value={nilai}>
       {dipilih.length > 0 ? (
-        <form
-          action={formAction}
-          className="mb-2 flex flex-wrap items-center gap-2 rounded-2xl bg-slate-900 p-3 text-sm text-white"
-        >
-          {dipilih.map((id) => (
-            <input key={id} type="hidden" name="ids" value={id} />
-          ))}
+        <div className="mb-2 space-y-3 rounded-2xl bg-slate-900 p-3 text-sm text-white">
+          <form
+            action={formAction}
+            className="flex flex-wrap items-center gap-2"
+          >
+            {dipilih.map((id) => (
+              <input key={id} type="hidden" name="ids" value={id} />
+            ))}
 
-          <span className="mr-1 font-semibold">
-            {dipilih.length} siswa dipilih
-          </span>
+            <span className="mr-1 font-semibold">
+              {dipilih.length} siswa dipilih
+            </span>
 
-          <button
-            type="submit"
-            name="aksi"
-            value="aktifkan"
-            disabled={pending}
-            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Aktifkan akun
-          </button>
-          <button
-            type="submit"
-            name="aksi"
-            value="nonaktifkan"
-            disabled={pending}
-            className="rounded-lg border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-100 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Nonaktifkan akun
-          </button>
-          <button
-            type="submit"
-            name="aksi"
-            value="hapus-akun"
-            disabled={pending}
-            onClick={(event) => {
-              if (
-                !confirm(
-                  `Hapus akun login ${dipilih.length} siswa terpilih? Siswa tetap ada, hanya akunnya yang dihapus.`,
-                )
-              ) {
-                event.preventDefault();
-              }
-            }}
-            className="rounded-lg border border-red-400/50 px-3 py-1.5 text-xs font-semibold text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Hapus akun login
-          </button>
-          <button
-            type="submit"
-            name="aksi"
-            value="hapus-siswa"
-            disabled={pending}
-            onClick={(event) => {
-              if (
-                !confirm(
-                  `Hapus ${dipilih.length} siswa terpilih beserta SEMUA nilainya? Tindakan ini tidak bisa dibatalkan.`,
-                )
-              ) {
-                event.preventDefault();
-              }
-            }}
-            className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Hapus siswa
-          </button>
+            <button
+              type="submit"
+              name="aksi"
+              value="aktifkan"
+              disabled={pending}
+              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Aktifkan akun
+            </button>
+            <button
+              type="submit"
+              name="aksi"
+              value="nonaktifkan"
+              disabled={pending}
+              className="rounded-lg border border-slate-600 px-3 py-1.5 text-xs font-semibold text-slate-100 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Nonaktifkan akun
+            </button>
+            <button
+              type="submit"
+              name="aksi"
+              value="hapus-akun"
+              disabled={pending}
+              onClick={(event) => {
+                if (
+                  !confirm(
+                    `Hapus akun login ${dipilih.length} siswa terpilih? Siswa tetap ada, hanya akunnya yang dihapus.`,
+                  )
+                ) {
+                  event.preventDefault();
+                }
+              }}
+              className="rounded-lg border border-red-400/50 px-3 py-1.5 text-xs font-semibold text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Hapus akun login
+            </button>
+            <button
+              type="submit"
+              name="aksi"
+              value="hapus-siswa"
+              disabled={pending}
+              onClick={(event) => {
+                if (
+                  !confirm(
+                    `Hapus ${dipilih.length} siswa terpilih beserta SEMUA nilainya? Tindakan ini tidak bisa dibatalkan.`,
+                  )
+                ) {
+                  event.preventDefault();
+                }
+              }}
+              className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Hapus siswa
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setDipilih([])}
-            className="ml-auto rounded-lg px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-800"
-          >
-            Batal pilih
-          </button>
+            <button
+              type="button"
+              onClick={() => setDipilih([])}
+              className="ml-auto rounded-lg px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-800"
+            >
+              Batal pilih
+            </button>
 
-          {pending ? (
-            <span className="text-xs text-slate-300">Memproses...</span>
-          ) : null}
-          {state.message ? (
-            <span className="text-xs text-red-300">{state.message}</span>
-          ) : null}
-        </form>
+            {pending ? (
+              <span className="text-xs text-slate-300">Memproses...</span>
+            ) : null}
+            {state.message ? (
+              <span className="text-xs text-red-300">{state.message}</span>
+            ) : null}
+          </form>
+
+          <div className="border-t border-slate-700 pt-3">
+            <PindahKelasBanyak
+              ids={dipilih}
+              kelasList={kelasList}
+              kelasPerSiswa={kelasPerSiswa}
+              onSukses={() => setDipilih([])}
+            />
+          </div>
+        </div>
       ) : null}
 
       {state.info ? (

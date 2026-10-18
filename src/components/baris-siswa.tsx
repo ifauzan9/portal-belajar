@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { HapusSiswaButton } from "@/components/hapus-siswa-button";
 import { AturKredensialSiswa, ToggleAkunSiswa } from "@/components/atur-kredensial-siswa";
 import { KotakPilihSiswa } from "@/components/pilihan-siswa";
+import { PindahKelasSiswa } from "@/components/pindah-kelas";
 import { updateSiswa } from "@/app/guru/siswa/actions";
 
 type Kelas = { id: string; nama_kelas: string };
@@ -80,6 +81,12 @@ export function BarisSiswa({
         </button>
         <HapusSiswaButton id={id} nama={nama} />
       </div>
+      <PindahKelasSiswa
+        siswaId={id}
+        namaSiswa={nama}
+        kelasId={kelasId}
+        kelasList={kelasList}
+      />
       <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2">
         <AturKredensialSiswa
           siswaId={id}

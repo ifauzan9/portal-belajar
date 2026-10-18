@@ -2470,3 +2470,553 @@ grant select on table public.students to service_role;
 -- ============================================================
 -- Selesai Tahap 28. Tabel baru: "class_tokens".
 -- ============================================================
+
+-- ============================================================
+-- TAHAP 29: MODUL PERTEMUAN 3 — INPUT(), VARIABEL & print()
+-- ============================================================
+-- 92. Kolom masukan untuk latihan (idempoten).
+--     masukan      : input wajib, satu baris per input(); DITAMPILKAN ke siswa.
+--     masukan_uji  : input berbeda untuk uji internal; TIDAK ditampilkan.
+--     keluaran_uji : target output untuk input uji tersebut.
+-- Uji internal dipakai untuk membuktikan program benar-benar mengolah data
+-- dari input(), bukan mencetak jawaban langsung.
+alter table public.coding_exercises
+  add column if not exists masukan text not null default '';
+alter table public.coding_exercises
+  add column if not exists masukan_uji text;
+alter table public.coding_exercises
+  add column if not exists keluaran_uji text;
+
+-- Input yang benar-benar diketik siswa saat Run terakhir (jejak di hasil lab).
+-- Disimpan di coding_submissions supaya guru bisa melihat apa yang diuji.
+alter table public.coding_submissions
+  add column if not exists masukan_dipakai text[];
+
+-- 92b. Reset progres modul Pertemuan 3 (idempoten).
+--     Wajib dijalankan sekali setelah aturan penilaian input diperbaiki:
+--     hasil "pernah_benar" dari pengujian sebelum perbaikan (level 1 & 2)
+--     tidak sah dan harus bisa dikerjakan ulang serta mengunci level berikutnya.
+delete from public.coding_submissions
+where exercise_id in (
+  select e.id
+  from public.coding_exercises e
+  join public.coding_lessons l on l.id = e.lesson_id
+  where l.judul = $j$Pertemuan 3 — Input, Variabel & print()$j$
+);
+
+-- 93. SEED modul "Pertemuan 3" (idempoten).
+insert into public.coding_lessons (judul, urutan, isi)
+select
+  $j$Pertemuan 3 — Input, Variabel & print()$j$,
+  3,
+  $i$BANTUAN MATERI — input(), VARIABEL & print()
+
+Apa itu input()?
+input() mengambil data yang diketik pengguna, lalu data itu bisa disimpan
+ke dalam variabel.
+  nama = input()
+Artinya: program menunggu satu baris masukan, lalu menyimpannya di variabel nama.
+
+Penting: tanda kurung pada input()
+- input()          → jendela input tanpa teks pertanyaan.
+- input("Nama: ")  → jendela input menampilkan teks "Nama: ".
+  Teks pertanyaan itu hanya tampil di jendela input, TIDAK ikut menjadi
+  output program. Jadi kedua bentuk di atas sama-sama boleh dipakai.
+
+Menampilkan isi variabel
+  print(nama)            → isi variabel saja
+  print("Halo", nama)    → Halo Dina   (print menambah satu spasi)
+  print("Halo " + nama)  → Halo Dina   (spasi ditulis sendiri)
+  print("Nama:", nama)   → Nama: Dina
+
+Menggabungkan teks dan variabel
+- Tanda + menyambung teks. Spasi harus ditulis sendiri.
+- Tanda koma di dalam print() menambahkan satu spasi otomatis.
+
+Urutan itu penting
+Program berjalan dari atas ke bawah. Setiap input() mengambil satu baris
+masukan sesuai urutan pemanggilannya.
+
+Cara mengerjakan
+1. Tentukan variabel untuk setiap data (mis. nama, kelas, hobi).
+2. Isi variabel dari input(): satu input() untuk satu data.
+3. Tampilkan dengan print() persis seperti target: huruf besar/kecil,
+   tanda baca, garis, dan spasi di depan judul.
+4. Tekan Run Python. Jendela input muncul satu per satu — ketik datanya
+   sesuai daftar "Input wajib", lalu tekan Enter atau tombol Kirim.
+5. Kalau belum benar, baca petunjuknya lalu perbaiki.
+6. Tantangan berikutnya terbuka setelah tantangan ini benar.$i$
+where not exists (
+  select 1 from public.coding_lessons
+  where judul = $j$Pertemuan 3 — Input, Variabel & print()$j$
+);
+
+-- 93b. Segarkan materi modul Pertemuan 3 yang sudah tersimpan, supaya
+-- petunjuk lama dihilangkan.
+update public.coding_lessons l
+set isi = (
+    select $i$BANTUAN MATERI — input(), VARIABEL & print()
+
+Apa itu input()?
+input() mengambil data yang diketik pengguna, lalu data itu bisa disimpan
+ke dalam variabel.
+  nama = input()
+Artinya: program menunggu satu baris masukan, lalu menyimpannya di variabel nama.
+
+Penting: tanda kurung pada input()
+- input()          → jendela input tanpa teks pertanyaan.
+- input("Nama: ")  → jendela input menampilkan teks "Nama: ".
+  Teks pertanyaan itu hanya tampil di jendela input, TIDAK ikut menjadi
+  output program. Jadi kedua bentuk di atas sama-sama boleh dipakai.
+
+Menampilkan isi variabel
+  print(nama)            → isi variabel saja
+  print("Halo", nama)    → Halo Dina   (print menambah satu spasi)
+
+Menggabungkan teks dan variabel
+- Tanda + menyambung teks. Spasi harus ditulis sendiri.
+- Tanda koma di dalam print() menambahkan satu spasi otomatis.
+
+Urutan itu penting
+Program berjalan dari atas ke bawah. Setiap input() mengambil satu baris
+masukan sesuai urutan pemanggilannya.
+
+Cara mengerjakan
+1. Tentukan variabel untuk setiap data (mis. nama, kelas, hobi).
+2. Isi variabel dari input(): satu input() untuk satu data.
+3. Tampilkan dengan print() persis seperti target: huruf besar/kecil,
+   tanda baca, garis, dan spasi di depan judul.
+4. Tekan Run Python. Jendela input muncul satu per satu — ketik datanya
+   sesuai daftar "Input wajib", lalu tekan Enter atau tombol Kirim.
+5. Kalau belum benar, baca petunjuknya lalu perbaiki.
+6. Tantangan berikutnya terbuka setelah tantangan ini benar.$i$
+)
+where l.judul = $j$Pertemuan 3 — Input, Variabel & print()$j$;
+
+-- 94. SEED 15 tantangan Pertemuan 3 (idempoten per level).
+insert into public.coding_exercises
+  (lesson_id, level, judul, penjelasan, instruksi, keluaran_diharapkan, poin,
+   jenis, aturan, masukan, masukan_uji, keluaran_uji)
+select
+  l.id, v.level, v.judul, v.penjelasan, v.instruksi, v.keluaran_diharapkan,
+  v.poin, v.jenis, v.aturan, v.masukan, v.masukan_uji, v.keluaran_uji
+from public.coding_lessons l
+cross join (values
+  (1,
+   $j$SIAPA NAMAMU?$j$,
+   $p$input() mengambil data dari pengguna. Simpan ke variabel, lalu tampilkan isinya.$p$,
+   $t$Buat variabel bernama nama untuk menyimpan nama yang dimasukkan pengguna menggunakan input(). Kemudian tampilkan isi variabel tersebut menggunakan print().
+
+Catatan: input("Teks: ") juga boleh dipakai.$t$,
+   $o$Randi$o$, 5, 'output',
+   $a${"variabel_wajib": ["nama"], "dari_input": true}$a$::jsonb,
+   $m$Randi$m$, $m$Budi$m$, $o$Budi$o$),
+
+  (2,
+   $j$KELAS BERAPA?$j$,
+   $p$Pola yang sama seperti tantangan sebelumnya, dengan nama variabel berbeda.$p$,
+   $t$Buat variabel bernama kelas yang menerima masukan kelas pengguna. Kemudian tampilkan isi variabel tersebut.
+
+Catatan: input("Teks: ") juga boleh dipakai.$t$,
+   $o$IX A$o$, 5, 'output',
+   $a${"variabel_wajib": ["kelas"], "dari_input": true}$a$::jsonb,
+   $m$IX A$m$, $m$IX D$m$, $o$IX D$o$),
+
+  (3,
+   $j$HOBI FAVORIT$j$,
+   $p$Satu input(), satu variabel, satu print().$p$,
+   $t$Buat variabel bernama hobi untuk menyimpan hobi yang dimasukkan pengguna. Tampilkan isi variabel tersebut.
+
+Catatan: input("Teks: ") juga boleh dipakai.$t$,
+   $o$Membaca$o$, 5, 'output',
+   $a${"variabel_wajib": ["hobi"], "dari_input": true}$a$::jsonb,
+   $m$Membaca$m$, $m$Bermain bola$m$, $o$Bermain bola$o$),
+
+  (4,
+   $j$DUA PERTANYAAN$j$,
+   $p$Dua input() dijalankan berurutan. Input pertama masuk ke variabel pertama, input kedua ke variabel kedua.$p$,
+   $t$Buat program untuk menerima dua data:
+- nama untuk menyimpan nama pengguna.
+- kelas untuk menyimpan kelas pengguna.
+
+Gunakan dua perintah input(), kemudian tampilkan isi kedua variabel secara berurutan.
+
+Catatan: input("Teks: ") juga boleh dipakai.$t$,
+   $o$Alya
+IX B$o$, 10, 'output',
+   $a${"variabel_wajib": ["nama", "kelas"], "dari_input": true}$a$::jsonb,
+   $m$Alya
+IX B$m$, $m$Riko
+IX E$m$, $o$Riko
+IX E$o$),
+
+  (5,
+   $j$NAMA DAN ASAL KOTA$j$,
+   $p$Label ditulis dengan print() terpisah, isi variabel ditampilkan di baris berikutnya.$p$,
+   $t$Buat dua variabel:
+- nama untuk menyimpan nama pengguna.
+- kota untuk menyimpan kota asal.
+
+Gunakan input() untuk menerima kedua data. Kemudian tampilkan data beserta labelnya menggunakan print().
+
+Catatan: input("Teks: ") juga boleh dipakai.$t$,
+   $o$Nama:
+Rafa
+Kota:
+Cianjur$o$, 10, 'output',
+   $a${"variabel_wajib": ["nama", "kota"], "dari_input": true}$a$::jsonb,
+   $m$Rafa
+Cianjur$m$, $m$Sinta
+Bandung$m$, $o$Nama:
+Sinta
+Kota:
+Bandung$o$),
+
+  (6,
+   $j$PELAJARAN FAVORIT$j$,
+   $p$Perhatikan titik dua di akhir label dan urutan barisnya.$p$,
+   $t$Buat program yang meminta pengguna memasukkan pelajaran favoritnya.
+
+Simpan menggunakan variabel pelajaran, kemudian tampilkan dengan label sesuai target.
+
+Catatan: input("Teks: ") juga boleh dipakai.$t$,
+   $o$Pelajaran favorit:
+Informatika$o$, 10, 'output',
+   $a${"variabel_wajib": ["pelajaran"], "dari_input": true}$a$::jsonb,
+   $m$Informatika$m$, $m$Matematika$m$, $o$Pelajaran favorit:
+Matematika$o$),
+
+  (7,
+   $j$PROGRAM PENYAPA$j$,
+   $p$Gabungkan teks langsung dengan isi variabel di dalam satu print(). Perhatikan spasi antara kata.$p$,
+   $t$Buat program yang meminta pengguna memasukkan nama. Simpan menggunakan variabel nama.
+
+Gunakan print() untuk menampilkan sapaan yang menggabungkan teks langsung dengan isi variabel.
+
+Catatan: input("Teks: ") juga boleh dipakai.$t$,
+   $o$Halo Dina
+Selamat belajar Python!$o$, 15, 'output',
+   $a${"variabel_wajib": ["nama"], "dari_input": true}$a$::jsonb,
+   $m$Dina$m$, $m$Rudi$m$, $o$Halo Rudi
+Selamat belajar Python!$o$),
+
+  (8,
+   $j$SELAMAT DATANG DI KELAS$j$,
+   $p$Dua variabel dipakai di dua kalimat berbeda. Pastikan spasinya tepat satu.$p$,
+   $t$Buat program yang meminta pengguna memasukkan nama dan kelas.
+
+Simpan menggunakan variabel nama dan kelas.
+
+Kemudian tampilkan dua kalimat yang menggabungkan teks dengan isi variabel.
+
+Catatan: input("Teks: ") juga boleh dipakai.$t$,
+   $o$Halo Fikri
+Selamat datang di kelas IX C$o$, 15, 'output',
+   $a${"variabel_wajib": ["nama", "kelas"], "dari_input": true}$a$::jsonb,
+   $m$Fikri
+IX C$m$, $m$Sari
+IX G$m$, $o$Halo Sari
+Selamat datang di kelas IX G$o$),
+
+  (9,
+   $j$PERKENALAN DIRI$j$,
+   $p$Umur tetap diterima sebagai teks dari input(). Tidak perlu int(). Judul memakai huruf besar semua.$p$,
+   $t$Buat program yang meminta tiga informasi:
+- Nama.
+- Umur.
+- Hobi.
+
+Simpan setiap informasi dalam variabel yang berbeda. Gunakan nama variabel: nama, umur, hobi.
+
+Tampilkan hasilnya menjadi sebuah perkenalan diri menggunakan print().
+
+Catatan: umur tetap diterima sebagai teks dari input(). Tidak perlu menggunakan int().
+Catatan: input("Teks: ") juga boleh dipakai.$t$,
+   $o$PERKENALAN DIRI
+Nama: Nabila
+Umur: 15
+Hobi: Menggambar$o$, 20, 'output',
+   $a${"variabel_wajib": ["nama", "umur", "hobi"], "dari_input": true}$a$::jsonb,
+   $m$Nabila
+15
+Menggambar$m$, $m$Bagas
+14
+Membaca$m$, $o$PERKENALAN DIRI
+Nama: Bagas
+Umur: 14
+Hobi: Membaca$o$),
+
+  (10,
+   $j$BIODATA INTERAKTIF$j$,
+   $p$Kartu biodata memakai garis pembatas. Judul diawali beberapa spasi agar tampak ke tengah — hitung spasinya dengan teliti.$p$,
+   $t$Buat program yang meminta empat informasi:
+- Nama.
+- Kelas.
+- Sekolah.
+- Cita-cita.
+
+Gunakan empat variabel untuk menyimpan seluruh masukan. Gunakan nama variabel: nama, kelas, sekolah, cita_cita.
+
+Kemudian buat tampilan biodata lengkap dengan judul dan garis pembatas.
+
+Catatan: baris judul diawali 6 spasi.
+Catatan: input("Teks: ") juga boleh dipakai.$t$,
+   $o$========================
+      BIODATA SISWA
+========================
+Nama: Andi
+Kelas: IX A
+Sekolah: SMP Harapan
+Cita-cita: Programmer
+========================$o$, 20, 'output',
+   $a${"variabel_wajib": ["nama", "kelas", "sekolah", "cita_cita"], "dari_input": true}$a$::jsonb,
+   $m$Andi
+IX A
+SMP Harapan
+Programmer$m$, $m$Budi
+IX F
+SMP Nusantara
+Guru$m$, $o$========================
+      BIODATA SISWA
+========================
+Nama: Budi
+Kelas: IX F
+Sekolah: SMP Nusantara
+Cita-cita: Guru
+========================$o$),
+
+  (11,
+   $j$PESAN BERULANG$j$,
+   $p$Satu variabel dipakai tiga kali. Jangan memakai perulangan — tulis tiga print() terpisah.$p$,
+   $t$Buat variabel bernama kata yang menerima masukan pengguna melalui input().
+
+Tampilkan isi variabel tersebut sebanyak tiga kali menggunakan tiga perintah print().
+
+Jangan menggunakan perulangan.
+
+Catatan: input("Teks: ") juga boleh dipakai.$t$,
+   $o$Semangat
+Semangat
+Semangat$o$, 10, 'output',
+   $a${"variabel_wajib": ["kata"], "dari_input": true, "tanpa_loop": true}$a$::jsonb,
+   $m$Semangat$m$, $m$Belajar$m$, $o$Belajar
+Belajar
+Belajar$o$),
+
+  (12,
+   $j$PROFIL GAME FAVORIT$j$,
+   $p$Kartu game memakai garis pembatas. Judul diawali beberapa spasi agar tampak ke tengah.$p$,
+   $t$Buat program yang meminta tiga informasi:
+- Nama game.
+- Genre game.
+- Karakter favorit.
+
+Simpan dalam tiga variabel berbeda. Gunakan nama variabel: game, genre, karakter.
+
+Kemudian tampilkan informasi tersebut dalam bentuk kartu game dengan garis pembatas.
+
+Catatan: baris judul diawali 4 spasi.
+Catatan: input("Teks: ") juga boleh dipakai.$t$,
+   $o$========================
+    GAME FAVORIT
+========================
+Nama Game: Minecraft
+Genre: Sandbox
+Karakter: Steve
+========================$o$, 20, 'output',
+   $a${"variabel_wajib": ["game", "genre", "karakter"], "dari_input": true}$a$::jsonb,
+   $m$Minecraft
+Sandbox
+Steve$m$, $m$Roblox
+Adventure
+Alex$m$, $o$========================
+    GAME FAVORIT
+========================
+Nama Game: Roblox
+Genre: Adventure
+Karakter: Alex
+========================$o$),
+
+  (13,
+   $j$KARTU BUKU PERPUSTAKAAN$j$,
+   $p$Kartu peminjaman memakai garis dari tanda minus. Judul diawali beberapa spasi.$p$,
+   $t$Buat program sederhana untuk mencatat peminjaman buku perpustakaan.
+
+Program meminta:
+- Nama peminjam.
+- Judul buku.
+- Kelas peminjam.
+
+Gunakan tiga variabel berbeda. Gunakan nama variabel: peminjam, buku, kelas.
+
+Kemudian tampilkan kartu peminjaman sesuai target.
+
+Catatan: baris judul diawali 3 spasi.
+Catatan: input("Teks: ") juga boleh dipakai.$t$,
+   $o$------------------------
+   KARTU PEMINJAMAN
+------------------------
+Peminjam: Rani
+Buku: Laskar Pelangi
+Kelas: IX D
+------------------------$o$, 20, 'output',
+   $a${"variabel_wajib": ["peminjam", "buku", "kelas"], "dari_input": true}$a$::jsonb,
+   $m$Rani
+Laskar Pelangi
+IX D$m$, $m$Doni
+Bumi Manusia
+IX H$m$, $o$------------------------
+   KARTU PEMINJAMAN
+------------------------
+Peminjam: Doni
+Buku: Bumi Manusia
+Kelas: IX H
+------------------------$o$),
+
+  (14,
+   $j$KARTU PROFIL TEKNOLOGI$j$,
+   $p$Kartu teknologi memakai garis dari tanda pagar. Empat data, empat variabel, empat baris isi.$p$,
+   $t$Buat program yang meminta informasi mengenai perangkat teknologi:
+- Nama perangkat.
+- Merek.
+- Warna.
+- Kegunaan.
+
+Simpan seluruh data dalam empat variabel berbeda. Gunakan nama variabel: perangkat, merek, warna, kegunaan.
+
+Kemudian tampilkan dalam bentuk kartu teknologi menggunakan print().
+
+Catatan: baris judul diawali 4 spasi.
+Catatan: input("Teks: ") juga boleh dipakai.$t$,
+   $o$########################
+    PROFIL TEKNOLOGI
+########################
+Perangkat: Laptop
+Merek: ASUS
+Warna: Hitam
+Kegunaan: Belajar
+########################$o$, 25, 'output',
+   $a${"variabel_wajib": ["perangkat", "merek", "warna", "kegunaan"], "dari_input": true}$a$::jsonb,
+   $m$Laptop
+ASUS
+Hitam
+Belajar$m$, $m$Ponsel
+Samsung
+Putih
+Komunikasi$m$, $o$########################
+    PROFIL TEKNOLOGI
+########################
+Perangkat: Ponsel
+Merek: Samsung
+Warna: Putih
+Kegunaan: Komunikasi
+########################$o$),
+
+  (15,
+   $j$PROGRAM INTERAKTIF BUATANKU$j$,
+   $p$Tantangan terakhir: karya bebas. Tidak ada satu jawaban benar untuk semua orang — semua ketentuan harus terpenuhi, dan output harus berubah kalau inputnya diganti.$p$,
+   $t$Sekarang buat sebuah program Python interaktif dengan tema pilihan sendiri.
+
+Tema yang dapat dipilih:
+- Profil siswa.
+- Sekolah.
+- Game.
+- Komputer.
+- Teknologi.
+- Perpustakaan.
+- Olahraga.
+- Lingkungan.
+
+Ketentuan program:
+1. Minimal menggunakan 5 perintah input().
+2. Minimal membuat 5 variabel untuk menyimpan masukan.
+3. Minimal menggunakan 10 perintah print().
+4. Semua variabel hasil input harus ditampilkan.
+5. Memiliki judul program.
+6. Memiliki garis atau bingkai.
+7. Memiliki minimal 10 baris output.
+8. Memiliki pesan penutup.
+9. Program harus benar-benar menampilkan data yang dimasukkan pengguna.
+
+Contoh input:
+Alya
+IX A
+Informatika
+Membaca
+Dokter
+
+Contoh output:
+==========================
+     PROFIL SISWA
+==========================
+Nama: Alya
+Kelas: IX A
+Pelajaran: Informatika
+Hobi: Membaca
+Cita-cita: Dokter
+==========================
+   TERIMA KASIH!
+==========================
+
+Contoh tersebut hanya sebagai referensi. Kamu bebas memilih judul, tema, isi masukan, dan bentuk tampilan.
+
+Catatan: input("Teks: ") juga boleh dipakai.$t$,
+   $o$$o$, 50, 'bebas',
+   $a${"min_input": 5, "min_variabel": 5, "min_print": 10, "min_baris": 10, "wajib_garis": true, "wajib_dinamis": true, "final_boss": true, "badge": "INPUT MASTER"}$a$::jsonb,
+   $m$Alya
+IX A
+Informatika
+Membaca
+Dokter
+SMP Harapan
+Bandung
+2026
+Berenang
+Guru$m$, $m$Bima
+IX C
+Matematika
+Berenang
+Polisi
+SMP Nusantara
+Cianjur
+2027
+Membaca
+Pilot$m$, null::text)
+) as v(level, judul, penjelasan, instruksi, keluaran_diharapkan, poin, jenis,
+        aturan, masukan, masukan_uji, keluaran_uji)
+where l.judul = $j$Pertemuan 3 — Input, Variabel & print()$j$
+  and not exists (
+    select 1 from public.coding_exercises e
+    where e.lesson_id = l.id and e.level = v.level
+  );
+
+-- 95. SEED target kelas Pertemuan 3 → kelas 9 (kalau ada).
+insert into public.coding_lesson_classes (lesson_id, kelas_id)
+select l.id, c.id
+from public.coding_lessons l
+join public.classes c
+  on (c.nama_kelas ilike '9%' or c.nama_kelas ilike 'kelas 9%' or c.nama_kelas ilike 'ix%')
+where l.judul = $j$Pertemuan 3 — Input, Variabel & print()$j$
+on conflict do nothing;
+
+-- 96. Instruksi lama menyuruh "tulis input() tanpa teks". Sejak modal input
+-- dipakai, teks di dalam input("...") hanya tampil di modal dan TIDAK ikut
+-- menjadi output, jadi sekarang boleh dipakai. Samakan instruksi yang sudah
+-- tersimpan (selain yang baru dibuat) supaya tidak membingungkan siswa.
+update public.coding_exercises e
+set instruksi = replace(
+      e.instruksi,
+      'Catatan: tulis input() tanpa teks di dalam kurung.',
+      'Catatan: input("Teks: ") juga boleh dipakai.'
+    )
+from public.coding_lessons l
+where l.id = e.lesson_id
+  and l.judul = $j$Pertemuan 3 — Input, Variabel & print()$j$
+  and e.instruksi like '%tanpa teks di dalam kurung%';
+
+-- ============================================================
+-- Selesai Tahap 29. Modul baru: "Pertemuan 3 — Input, Variabel &
+-- print()" dengan 15 tantangan berurutan. Level 1-14 dinilai dari
+-- output + variabel dari input() + uji input berbeda; level 15 dinilai
+-- dari ketentuan karya bebas dan perubahan output saat input diganti.
+-- ============================================================

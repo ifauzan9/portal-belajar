@@ -224,3 +224,150 @@ export async function aksiSiswaBanyak(
 
   return { message: "Aksi tidak dikenal.", sukses: false, info: null };
 }
+
+// ============================================================================
+// Pindah kelas siswa (satu atau banyak sekaligus).
+// Field: `ids` (boleh banyak), `kelas_id` (kelas tujuan; kosong = tanpa kelas)
+//
+// Catatan:
+//  - Data tugas/ulangan/lab/nilai menempel ke siswa_id, jadi tidak terpengaruh.
+//  - Absensi menyimpan kelas_id sendiri → ikut dipindah ke kelas tujuan.
+//  - Constraint unik (siswa_id, tanggal) bisa bentrok kalau siswa punya
+//    absensi di kelas tujuan pada tanggal yang sama; baris kelas tujuan
+//    dipertahankan dan jumlah bentrokan dilaporkan sebagai info.
+// ============================================================================
+
+export type HasilPindahKelas = {
+  message: string | null;
+  sukses: boolean;
+  info: string | null;
+};
+
+export async function pindahKelasSiswa(
+  _prevState: HasilPindahKelas,
+  formData: FormData,
+): Promise<HasilPindahKelas> {
+  const ids = Array.from(
+    new Set(
+      formData
+        .getAll("ids")
+        .map((nilai) => String(nilai))
+        .filter(Boolean),
+    ),
+  );
+  const kelasIdTujuan = String(formData.get("kelas_id") ?? "").trim() || null;
+
+  if (ids.length === 0) {
+    return { message: "Tidak ada siswa yang dipilih.", sukses: false, info: null };
+  }
+
+  const supabase = await requireGuru();
+
+  // Kalau tujuan bukan "tanpa kelas", pastikan kelasnya memang ada.
+  if (kelasIdTujuan) {
+    const { data: kelas, error: kelasError } = await supabase
+      .from("classes")
+      .select("id, nama_kelas")
+      .eq("id", kelasIdTujuan)
+      .maybeSingle();
+
+    if (kelasError) {
+      return {
+        message: `Gagal memeriksa kelas tujuan: ${kelasError.message}`,
+        sukses: false,
+        info: null,
+      };
+    }
+
+    if (!kelas) {
+      return { message: "Kelas tujuan tidak ditemukan.", sukses: false, info: null };
+    }
+  }
+
+  // Cari siswa yang kelasnya benar-benar berubah.
+  let siswaQuery = supabase
+    .from("students")
+    .select("id, nama_siswa, kelas_id")
+    .in("id", ids);
+  siswaQuery = kelasIdTujuan
+    ? siswaQuery.or(`kelas_id.is.null,kelas_id.neq.${kelasIdTujuan}`)
+    : siswaQuery.not("kelas_id", "is", null);
+
+  const { data: siswaBerubah, error: siswaError } = await siswaQuery;
+
+  if (siswaError) {
+    return {
+      message: `Gagal memuat siswa: ${siswaError.message}`,
+      sukses: false,
+      info: null,
+    };
+  }
+
+  const daftarBerubah = (siswaBerubah ?? []) as {
+    id: string;
+    nama_siswa: string;
+    kelas_id: string | null;
+  }[];
+
+  if (daftarBerubah.length === 0) {
+    return {
+      message: null,
+      sukses: true,
+      info: "Semua siswa terpilih sudah berada di kelas tujuan.",
+    };
+  }
+
+  const idBerubah = daftarBerubah.map((siswa) => siswa.id);
+
+  const { error: updateError } = await supabase
+    .from("students")
+    .update({ kelas_id: kelasIdTujuan })
+    .in("id", idBerubah);
+
+  if (updateError) {
+    return {
+      message: `Gagal memindahkan siswa: ${updateError.message}`,
+      sukses: false,
+      info: null,
+    };
+  }
+
+  // Absensi ikut pindah. Tanpa kelas tujuan, absensi tetap di kelas asalnya
+  // karena attendance.kelas_id wajib terisi.
+  let bentrok = 0;
+  if (kelasIdTujuan) {
+    for (const siswaId of idBerubah) {
+      const { error: absensiError } = await supabase
+        .from("attendance")
+        .update({ kelas_id: kelasIdTujuan })
+        .eq("siswa_id", siswaId);
+
+      if (absensiError) {
+        // Kode 23505 = ada absensi di kelas tujuan pada tanggal yang sama.
+        if (absensiError.code === "23505") {
+          bentrok += 1;
+          continue;
+        }
+        console.error(
+          `Gagal memindahkan absensi siswa ${siswaId}:`,
+          absensiError.message,
+        );
+      }
+    }
+  }
+
+  revalidatePath("/guru/siswa");
+  revalidatePath("/guru/absensi");
+  revalidatePath("/guru/rekap");
+  revalidatePath("/siswa", "layout");
+
+  const ringkas = `${daftarBerubah.length} siswa dipindahkan.`;
+  return {
+    message: null,
+    sukses: true,
+    info:
+      bentrok > 0
+        ? `${ringkas} Absensi lama ${bentrok} siswa tidak ikut pindah karena sudah ada catatan di kelas tujuan pada tanggal yang sama.`
+        : ringkas,
+  };
+}

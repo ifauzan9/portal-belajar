@@ -30,8 +30,123 @@ body {
   animation: nav-progress 1s ease-in-out infinite;
 }
 
+/* ---------------------------------------------------------------------------
+   Animasi sidebar (menu siswa)
+   Catatan: keyframes `nav-masuk` sengaja memakai `transform`, bukan `translate`,
+   supaya efek hover (yang memakai properti `translate`) tetap bisa menumpuk.
+   --------------------------------------------------------------------------- */
+
+@keyframes nav-masuk {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.nav-masuk {
+  animation: nav-masuk 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Batang penanda menu aktif yang tumbuh dari tengah. */
+@keyframes nav-tanda {
+  from {
+    opacity: 0;
+    transform: scaleY(0);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+.nav-tanda {
+  animation: nav-tanda 0.35s ease-out both;
+}
+
+/* Denyut pelan untuk penanda "navigasi terkunci". */
+@keyframes nav-denyut {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.nav-denyut {
+  animation: nav-denyut 2s ease-in-out infinite;
+}
+
+/* Sembunyikan scrollbar nav yang bisa digeser di layar kecil. */
+.nav-tanpa-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.nav-tanpa-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Petunjuk halus bahwa nav masih bisa digeser ke kanan (hanya di mobile). */
+.nav-mask-kanan {
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 calc(100% - 28px),
+    transparent
+  );
+}
+
+@media (min-width: 640px) {
+  .nav-mask-kanan {
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .nav-progress-bar {
     animation-duration: 2.4s;
+  }
+
+  .nav-masuk,
+  .nav-tanda,
+  .nav-denyut {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Dropdown <details> yang bisa dilipat (mis. "Tentang modul ini").
+   Animasi tinggi hanya jalan di browser yang mendukung `interpolate-size`
+   (Chrome/Edge 131+). Browser lain tetap membuka/menutup secara instan.
+   --------------------------------------------------------------------------- */
+
+@supports (interpolate-size: allow-keywords) {
+  details.panel-lipat {
+    interpolate-size: allow-keywords;
+  }
+
+  details.panel-lipat::details-content {
+    block-size: 0;
+    overflow: hidden;
+    transition:
+      block-size 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+      content-visibility 0.3s allow-discrete;
+  }
+
+  details.panel-lipat[open]::details-content {
+    block-size: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  details.panel-lipat::details-content {
+    transition: none;
   }
 }

@@ -92,7 +92,7 @@ export function NavProgress() {
           aktif ? "opacity-100" : "opacity-0"
         }`}
       >
-        <div className="nav-progress-bar h-full w-1/3 rounded-full bg-emerald-500" />
+        <div className="nav-progress-bar h-full w-1/3 rounded-full bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-500 shadow-[0_0_8px_0] shadow-emerald-400/60" />
       </div>
 
       {/* Pil kecil sebagai penanda "sedang memuat" */}
@@ -102,8 +102,8 @@ export function NavProgress() {
           aktif && mulaiPil ? "opacity-100" : "opacity-0"
         }`}
       >
-        <span className="flex items-center gap-2 rounded-full bg-slate-900/95 px-3 py-1.5 text-xs font-medium text-white shadow-lg">
-          <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+        <span className="flex items-center gap-2 rounded-full bg-slate-900/95 px-3 py-1.5 text-xs font-medium text-white shadow-lg shadow-emerald-900/20 ring-1 ring-emerald-400/30">
+          <span className="h-3 w-3 animate-spin rounded-full border-2 border-emerald-400/40 border-t-emerald-400" />
           Memuat halaman...
         </span>
       </div>

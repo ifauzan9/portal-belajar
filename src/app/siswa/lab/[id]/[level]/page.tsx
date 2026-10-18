@@ -5,7 +5,9 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { LabRunner } from "@/components/lab-runner";
 import { PetaLevel } from "@/components/peta-level";
-import { Badge } from "@/components/ui/badge";
+import { HeroSiswa } from "@/components/ui/hero-siswa";
+import { ProgresBar } from "@/components/ui/progres";
+import { IkonLab } from "@/components/ui/ikon-siswa";
 import { hitungLevelTerkunci } from "@/lib/lab";
 
 type LatihanRow = {
@@ -19,6 +21,8 @@ type LatihanRow = {
   keluaran_diharapkan: string;
   poin: number;
   jenis: string;
+  masukan: string | null;
+  masukan_uji: string | null;
   aturan: {
     variabel_wajib?: string[];
     final_boss?: boolean;
@@ -33,6 +37,14 @@ type HasilRow = {
   pernah_benar: boolean;
   percobaan: number;
 };
+
+// Input wajib disimpan satu baris per input(). Baris kosong di akhir dibuang.
+function pecahMasukan(teks: string | null): string[] {
+  if (!teks) return [];
+  const baris = teks.replace(/\r\n/g, "\n").split("\n");
+  while (baris.length > 0 && baris[baris.length - 1].trim() === "") baris.pop();
+  return baris;
+}
 
 export default async function LevelLabSiswaPage(
   props: PageProps<"/siswa/lab/[id]/[level]">,
@@ -68,14 +80,26 @@ export default async function LevelLabSiswaPage(
 
   if (!relevan) redirect("/siswa/lab");
 
-  // Ambil semua level modul sekaligus (untuk navigasi + cari level aktif).
-  const { data: latihanData } = await supabase
+  // Kolom masukan baru ada setelah SQL Tahap 29 dijalankan. Kalau belum ada,
+  // halaman tetap jalan tanpa panel input supaya modul lama tidak ikut rusak.
+  const KOLOM_LATIHAN =
+    "id, level, judul, penjelasan, contoh_kode, instruksi, kode_awal, keluaran_diharapkan, poin, jenis, aturan";
+
+  const lengkap = await supabase
     .from("coding_exercises")
-    .select(
-      "id, level, judul, penjelasan, contoh_kode, instruksi, kode_awal, keluaran_diharapkan, poin, jenis, aturan",
-    )
+    .select(`${KOLOM_LATIHAN}, masukan, masukan_uji`)
     .eq("lesson_id", id)
     .order("level", { ascending: true });
+
+  const latihanData = lengkap.error
+    ? (
+        await supabase
+          .from("coding_exercises")
+          .select(KOLOM_LATIHAN)
+          .eq("lesson_id", id)
+          .order("level", { ascending: true })
+      ).data
+    : lengkap.data;
 
   const latihan = (latihanData ?? []) as LatihanRow[];
   const exercise = latihan.find((item) => item.level === levelNum);
@@ -117,35 +141,84 @@ export default async function LevelLabSiswaPage(
   const total = latihan.length;
   const adaSebelum = levelNum > 1;
   const adaSesudah = levelNum < total;
+  const barisMasukan = pecahMasukan(exercise.masukan);
+
+  // Nama variabel yang dinilai pada tantangan ini. Untuk karya bebas
+  // (level 15) daftar wajib kosong, jadi nama diambil dari instruksi lewat
+  // pola "variabel bernama x" / "Simpan menggunakan variabel x".
+  const variabelDiminta: string[] = (() => {
+    const wajib = exercise.aturan?.variabel_wajib ?? [];
+    if (wajib.length > 0) return wajib;
+    if (exercise.jenis !== "bebas") return [];
+    const cocok = [
+      ...exercise.instruksi.matchAll(
+        /variabel\s+(?:bernama\s+)?`?([a-zA-Z_][a-zA-Z0-9_]*)`?/gi,
+      ),
+    ].map((m) => m[1]);
+    return [...new Set(cocok)];
+  })();
 
   return (
     <div className="space-y-6">
-      <header className="space-y-3">
-        <Link
-          href={`/siswa/lab/${id}`}
-          className="inline-flex min-h-10 items-center text-sm font-medium text-slate-600 underline-offset-4 transition hover:text-slate-950 hover:underline focus-visible:rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
-        >
-          ← {lesson.judul}
-        </Link>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-emerald-700">{lesson.judul}</p>
-            <h1 className="mt-1 text-balance text-2xl font-bold leading-tight text-slate-950 sm:text-3xl">
-              Tantangan {exercise.level}: {exercise.judul}
-            </h1>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
+      <HeroSiswa
+        atas={
+          <Link
+            href={`/siswa/lab/${id}`}
+            className="inline-flex items-center text-sm font-medium text-emerald-100 transition hover:text-white"
+          >
+            ← {lesson.judul}
+          </Link>
+        }
+        label={`Tantangan ${exercise.level}`}
+        judul={exercise.judul}
+        subjudul="Tulis programmu sendiri. Jalankan untuk melihat hasil, lalu cocokkan dengan target."
+        ikon={
+          exercise.aturan?.final_boss ? (
+            <span className="text-xl" aria-hidden="true">
+              ⭐
+            </span>
+          ) : (
+            <span className="text-lg font-bold tabular-nums">
+              {exercise.level}
+            </span>
+          )
+        }
+        aksi={
+          <>
             {exercise.aturan?.final_boss ? (
-              <Badge varian="peringatan">⭐ FINAL BOSS</Badge>
+              <span className="inline-flex items-center rounded-full bg-amber-300 px-3 py-1.5 text-xs font-bold text-amber-950 ring-1 ring-amber-200">
+                ⭐ FINAL BOSS
+              </span>
             ) : null}
-            <Badge varian="netral">{exercise.poin} XP</Badge>
-            {submission?.pernah_benar ? <Badge varian="sukses" titik>Sudah benar</Badge> : null}
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold text-white ring-1 ring-white/25">
+              {exercise.poin} XP
+            </span>
+            {submission?.pernah_benar ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-emerald-700">
+                ✓ Sudah benar
+              </span>
+            ) : null}
+          </>
+        }
+      >
+        <div>
+          <div className="flex items-baseline justify-between gap-3 text-sm text-emerald-50">
+            <span>
+              Level {exercise.level} dari {total}
+            </span>
+            <span className="font-semibold text-white">
+              {selesai.length}/{total} benar
+            </span>
           </div>
+          <ProgresBar
+            nilai={total > 0 ? Math.round((selesai.length / total) * 100) : 0}
+            label={`Progres modul ${selesai.length} dari ${total} level`}
+            warna="putih"
+            ukuran="sm"
+            className="mt-2"
+          />
         </div>
-        <p className="max-w-2xl text-base leading-7 text-slate-600">
-          Tulis programmu sendiri. Jalankan untuk melihat hasil, lalu cocokkan dengan target.
-        </p>
-      </header>
+      </HeroSiswa>
 
       <PetaLevel
         lessonId={id}
@@ -160,24 +233,115 @@ export default async function LevelLabSiswaPage(
       />
 
       <section className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm">
-        <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
-          <p className="text-xs font-semibold tracking-wide text-emerald-700 uppercase">Tantangan {exercise.level}</p>
-          <h2 className="mt-1 text-lg font-semibold text-slate-950">Apa yang perlu dibuat?</h2>
+        <div className="flex items-center gap-2.5 border-b border-emerald-100 bg-emerald-50/70 px-5 py-4 sm:px-6">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white">
+            <IkonLab className="h-4 w-4" />
+          </span>
+          <div>
+            <p className="text-[11px] font-semibold tracking-wider text-emerald-700 uppercase">
+              Tantangan {exercise.level}
+            </p>
+            <h2 className="text-lg font-semibold text-slate-950">
+              Apa yang perlu dibuat?
+            </h2>
+          </div>
         </div>
         <div className="space-y-5 px-5 py-5 sm:px-6">
           <div className="max-w-3xl whitespace-pre-wrap text-base leading-7 text-slate-800">
             {exercise.instruksi}
           </div>
 
-          {exercise.jenis !== "bebas" ? (
-            <div className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
+          {barisMasukan.length > 0 ? (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h3 className="text-sm font-semibold text-slate-800">Target output</h3>
-                <p className="text-xs text-slate-500">Gunakan sebagai acuan, jangan disalin.</p>
+                <h3 className="text-sm font-semibold text-slate-900">
+                  {exercise.jenis === "bebas" ? "Contoh input" : "Input wajib"}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {exercise.jenis === "bebas"
+                    ? "Pakai minimal 5 baris pertama saat modal input muncul."
+                    : "Tulis saat modal input muncul, satu per satu."}
+                </p>
               </div>
-              <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-950 p-4 font-mono text-sm leading-6 text-emerald-100 select-none">
+              <ol className="mt-3 space-y-1.5">
+                {barisMasukan.map((isi, urutan) => (
+                  <li key={urutan} className="flex items-start gap-2">
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded bg-slate-200 text-[11px] font-semibold text-slate-600">
+                      {urutan + 1}
+                    </span>
+                    <code className="font-mono text-sm break-words text-slate-900">
+                      {isi === "" ? "(kosong)" : isi}
+                    </code>
+                  </li>
+                ))}
+              </ol>
+              <p className="mt-3 text-xs leading-5 text-slate-600">
+                {exercise.jenis === "bebas" ? (
+                  <>
+                    Pakai minimal 5 baris pertama. Baris sisanya cadangan kalau
+                    programmu meminta lebih banyak masukan.
+                  </>
+                ) : (
+                  <>
+                    Saat menekan Run Python, muncul jendela input satu per
+                    satu. Ketik nilainya persis seperti daftar ini dengan
+                    urutan yang sama. Kamu boleh menulis{" "}
+                    <code className="font-mono">input(&quot;Nama: &quot;)</code>{" "}
+                    — teks pertanyaannya hanya tampil di jendela input, tidak
+                    ikut menjadi output.
+                  </>
+                )}
+              </p>
+            </div>
+          ) : null}
+
+          {exercise.jenis !== "bebas" ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h3 className="text-sm font-semibold text-emerald-900">
+                  Target output
+                </h3>
+                <p className="text-xs text-emerald-700/80">
+                  Gunakan sebagai acuan, jangan disalin.
+                </p>
+              </div>
+              <pre className="mt-3 max-h-72 overflow-auto rounded-lg bg-slate-950 p-4 font-mono text-sm leading-6 text-emerald-100 select-none whitespace-pre-wrap">
                 {exercise.keluaran_diharapkan}
               </pre>
+            </div>
+          ) : null}
+
+          {variabelDiminta.length > 0 ? (
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h3 className="text-sm font-semibold text-indigo-950">
+                  Variabel yang diminta
+                </h3>
+                <p className="text-xs text-indigo-800/70">
+                  Nama harus sama persis
+                </p>
+              </div>
+              <ul className="mt-3 flex flex-wrap gap-2">
+                {variabelDiminta.map((nama, urutan) => (
+                  <li
+                    key={nama}
+                    className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-white px-2.5 py-1.5 shadow-sm"
+                  >
+                    <span className="flex h-5 w-5 items-center justify-center rounded bg-indigo-100 text-[11px] font-semibold text-indigo-700">
+                      {urutan + 1}
+                    </span>
+                    <code className="font-mono text-sm font-semibold text-indigo-950">
+                      {nama}
+                    </code>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-3 text-xs leading-5 text-indigo-900/80">
+                Buat variabel dengan nama di atas, isi dari{" "}
+                <code className="font-mono">input()</code>, lalu tampilkan dengan{" "}
+                <code className="font-mono">print()</code>. Penilaian mengecek
+                nama, isi dari input, dan urutannya.
+              </p>
             </div>
           ) : null}
         </div>
@@ -199,13 +363,15 @@ export default async function LevelLabSiswaPage(
         finalBoss={exercise.aturan?.final_boss ?? false}
         badge={exercise.aturan?.badge ?? null}
         contoh={exercise.contoh_kode}
+        masukan={exercise.masukan ?? ""}
+        punyaUji={Boolean(exercise.masukan_uji?.trim())}
       />
 
       <div className="flex items-center justify-between gap-3">
         {adaSebelum ? (
           <Link
             href={`/siswa/lab/${id}/${levelNum - 1}`}
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+            className="inline-flex min-h-11 items-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
           >
             ← Level {levelNum - 1}
           </Link>
@@ -215,7 +381,7 @@ export default async function LevelLabSiswaPage(
         {adaSesudah && submission?.pernah_benar ? (
           <Link
             href={`/siswa/lab/${id}/${levelNum + 1}`}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+            className="inline-flex min-h-11 items-center rounded-xl bg-emerald-600 px-5 py-2 text-sm font-semibold text-white shadow-sm shadow-emerald-600/20 transition hover:bg-emerald-700"
           >
             Level {levelNum + 1} →
           </Link>

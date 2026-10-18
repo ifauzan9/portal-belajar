@@ -1,18 +1,23 @@
 import Link from "next/link";
 import { requireSiswa } from "@/lib/sesi-siswa";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { hitungRataRata, tampilkanRataRata } from "@/lib/rata-rata";
 import { ambilKelasUlangan } from "@/lib/ambil-kelas-ulangan";
 import { tenggatSudahLewat } from "@/lib/deadline";
 import { sudahTampil } from "@/lib/jadwal-pengumuman";
 import { tugasDibuka } from "@/lib/tugas";
+import { hitungProgresLab } from "@/lib/progres-lab";
 import { JamRealtime } from "@/components/jam-realtime";
 import { Kartu, KartuJudul } from "@/components/ui/kartu";
 import { KartuStat } from "@/components/ui/kartu-stat";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { HeroSiswa, TombolHero } from "@/components/ui/hero-siswa";
+import { ProgresBar } from "@/components/ui/progres";
 import {
   IkonBuku,
+  IkonDashboard,
   IkonGembok,
   IkonJam,
   IkonKomputer,
@@ -49,6 +54,7 @@ export default async function DashboardSiswaPage() {
   const { siswa, kelas } = await requireSiswa();
 
   const supabase = await createClient();
+  const admin = createAdminClient();
 
   // Jalankan semua query independen secara paralel untuk mengurangi
   // round-trip ke Supabase (login → dashboard jadi lebih cepat).
@@ -58,6 +64,9 @@ export default async function DashboardSiswaPage() {
     hasilTugas,
     hasilTugasSubmit,
     hasilPengumuman,
+    hasilLessonLab,
+    hasilLatihanLab,
+    hasilSelesaiLab,
   ] = await Promise.all([
     supabase
       .from("exams")
@@ -81,6 +90,15 @@ export default async function DashboardSiswaPage() {
       .select(
         "id, judul, isi, created_at, kelas_id, mulai_pada, announcement_classes(kelas_id)",
       ),
+    supabase
+      .from("coding_lessons")
+      .select("id, judul, urutan, coding_lesson_classes(kelas_id)"),
+    supabase.from("coding_exercises").select("id, lesson_id"),
+    admin
+      .from("coding_submissions")
+      .select("exercise_id")
+      .eq("siswa_id", siswa.id)
+      .eq("pernah_benar", true),
   ]);
 
   const mapSubmit = new Map(
@@ -221,30 +239,101 @@ export default async function DashboardSiswaPage() {
     )
     .slice(0, 3);
 
+  // Progres Lab Coding (modul relevan untuk kelas siswa).
+  const selesaiLabIds = new Set(
+    (hasilSelesaiLab.data ?? []).map(
+      (baris) => (baris as { exercise_id: string }).exercise_id,
+    ),
+  );
+
+  const progresLab = hitungProgresLab(
+    (hasilLessonLab.data ?? []) as {
+      id: string;
+      judul: string;
+      urutan: number;
+      coding_lesson_classes?: { kelas_id: string }[];
+    }[],
+    (hasilLatihanLab.data ?? []) as { id: string; lesson_id: string }[],
+    selesaiLabIds,
+    siswa.kelas_id,
+  );
+
+  // Modul yang sedang dikerjakan (sudah mulai, belum tuntas), maksimal 2.
+  const modulBerjalan = progresLab.modul
+    .filter((modul) => modul.total > 0 && modul.selesai > 0 && modul.selesai < modul.total)
+    .slice(0, 2);
+
+  const modulPertama = progresLab.modul.find((modul) => modul.total > 0) ?? null;
+
+  const inisial = siswa.nama_siswa
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((kata) => kata[0]?.toUpperCase() ?? "")
+    .join("");
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-slate-900">
-          Halo, {siswa.nama_siswa}!
-        </h1>
-        <p className="mt-1 text-sm text-slate-500">
-          {siswa.nis ? `NIS: ${siswa.nis} · ` : ""}
-          Kelas: {kelas?.nama_kelas ?? "Belum ada kelas"}
-        </p>
-        <JamRealtime className="mt-1 block text-xs text-slate-400" />
-      </div>
+      <HeroSiswa
+        label="Dashboard Siswa"
+        judul={`Halo, ${siswa.nama_siswa}!`}
+        subjudul={
+          <>
+            {siswa.nis ? `NIS ${siswa.nis} · ` : ""}
+            Kelas {kelas?.nama_kelas ?? "belum ditentukan"}
+            <JamRealtime className="mt-1 block text-xs text-emerald-100/80" />
+          </>
+        }
+        ikon={
+          <span className="text-lg font-bold tracking-tight">
+            {inisial || <IkonDashboard className="h-5 w-5" />}
+          </span>
+        }
+        aksi={
+          <>
+            <TombolHero href="/siswa/tugas">
+              <IkonTugas className="h-4 w-4" />
+              Kerjakan Tugas
+            </TombolHero>
+            <Link
+              href="/siswa/lab"
+              className="inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-emerald-800/40 px-4 py-2 text-sm font-semibold text-white ring-1 ring-white/30 transition hover:bg-emerald-800/60"
+            >
+              <IkonLab className="h-4 w-4" />
+              Lab Coding
+            </Link>
+          </>
+        }
+      >
+        <div className="flex flex-wrap gap-2 text-xs">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 font-medium text-white ring-1 ring-white/20">
+            <IkonTugas className="h-3.5 w-3.5" />
+            {tugasMenunggu.length} tugas menunggu
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 font-medium text-white ring-1 ring-white/20">
+            <IkonBuku className="h-3.5 w-3.5" />
+            {ulanganAktif.length} ulangan aktif
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 font-medium text-white ring-1 ring-white/20">
+            <IkonJam className="h-3.5 w-3.5" />
+            Rata-rata {tampilkanRataRata(rataSaya)}
+          </span>
+        </div>
+      </HeroSiswa>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <KartuStat
           label="Ulangan"
           nilai={daftarUlangan.length}
           catatan="Total ulanganmu"
+          aksen="biru"
           ikon={<IkonBuku className="h-4 w-4" />}
         />
         <KartuStat
           label="Sudah Dinilai"
           nilai={nilaiTerisi.length}
           catatan="Nilai tersedia"
+          aksen="emerald"
           ikon={<IkonNilai className="h-4 w-4" />}
         />
         <KartuStat
@@ -252,20 +341,96 @@ export default async function DashboardSiswaPage() {
           nilai={tampilkanRataRata(rataSaya)}
           warna="emerald"
           catatan="Dari nilai tersedia"
+          aksen="ungu"
           ikon={<IkonJam className="h-4 w-4" />}
         />
         <KartuStat
           label="Pengumuman"
           nilai={pengumumanRelevan.length}
           catatan="Untuk kelasmu"
+          aksen="amber"
           ikon={<IkonPengumuman className="h-4 w-4" />}
         />
       </div>
 
+      {/* Progres Lab Coding */}
+      {progresLab.modul.length > 0 ? (
+        <Kartu className="border-l-4 border-l-emerald-500">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+                <IkonLab className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900">
+                  Progres Lab Coding
+                </h2>
+                <p className="text-xs text-slate-500">
+                  {progresLab.totalSelesai} dari {progresLab.totalTantangan}{" "}
+                  tantangan benar
+                </p>
+              </div>
+            </div>
+            <p className="text-2xl font-bold tabular-nums text-emerald-600">
+              {progresLab.persen}%
+            </p>
+          </div>
+
+          <ProgresBar
+            nilai={progresLab.persen}
+            label={`Progres lab coding ${progresLab.persen} persen`}
+            className="mt-4"
+          />
+
+          <div className="mt-4 space-y-2">
+            {modulBerjalan.length > 0 ? (
+              modulBerjalan.map((modul) => (
+                <Link
+                  key={modul.id}
+                  href={`/siswa/lab/${modul.id}`}
+                  className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5 ring-1 ring-slate-200 transition hover:bg-emerald-50 hover:ring-emerald-300"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-slate-800">
+                      {modul.judul}
+                    </span>
+                    <ProgresBar
+                      nilai={modul.persen}
+                      label={`Progres ${modul.judul}`}
+                      ukuran="sm"
+                      className="mt-1.5"
+                    />
+                  </span>
+                  <span className="shrink-0 text-xs font-semibold text-emerald-700">
+                    {modul.selesai}/{modul.total} · Lanjutkan →
+                  </span>
+                </Link>
+              ))
+            ) : progresLab.persen === 100 ? (
+              <p className="rounded-xl bg-emerald-50 px-3 py-2.5 text-sm font-medium text-emerald-800 ring-1 ring-emerald-200">
+                🎉 Semua modul lab sudah tuntas. Kerja bagus!
+              </p>
+            ) : modulPertama ? (
+              <Link
+                href={`/siswa/lab/${modulPertama.id}`}
+                className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5 ring-1 ring-slate-200 transition hover:bg-emerald-50 hover:ring-emerald-300"
+              >
+                <span className="min-w-0 truncate text-sm font-medium text-slate-800">
+                  Mulai dari: {modulPertama.judul}
+                </span>
+                <span className="shrink-0 text-xs font-semibold text-emerald-700">
+                  Mulai →
+                </span>
+              </Link>
+            ) : null}
+          </div>
+        </Kartu>
+      ) : null}
+
       {/* Ulangan aktif yang belum dikerjakan */}
       {ulanganAktif.length > 0 ? (
-        <section className="rounded-2xl bg-blue-50 p-5 ring-1 ring-blue-100">
-          <div className="flex items-center gap-2">
+        <section className="overflow-hidden rounded-2xl bg-blue-50 ring-1 ring-blue-100">
+          <div className="flex items-center gap-2 border-b border-blue-100 bg-blue-100/60 px-5 py-4">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white">
               <IkonBuku className="h-4 w-4" />
             </span>
@@ -273,17 +438,17 @@ export default async function DashboardSiswaPage() {
               <h2 className="text-sm font-semibold text-blue-900">
                 Ulangan yang Menunggumu
               </h2>
-              <p className="text-xs text-blue-600">
+              <p className="text-xs text-blue-700">
                 {ulanganAktif.length} ulangan masih bisa dikerjakan.
               </p>
             </div>
           </div>
-          <div className="mt-3 space-y-2">
+          <div className="space-y-2 p-4">
             {ulanganAktif.map((u) => (
               <Link
                 key={u.id}
                 href={`/siswa/ulangan/${u.id}`}
-                className="flex items-center justify-between gap-3 rounded-xl bg-white p-3 ring-1 ring-blue-100 transition hover:ring-blue-300"
+                className="flex items-center justify-between gap-3 rounded-xl bg-white p-3 ring-1 ring-blue-100 transition hover:-translate-y-0.5 hover:shadow-sm hover:ring-blue-300"
               >
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="truncate text-sm font-medium text-slate-900">
@@ -295,7 +460,7 @@ export default async function DashboardSiswaPage() {
                     </Badge>
                   ) : null}
                 </span>
-                <span className="shrink-0 text-xs font-medium text-blue-600">
+                <span className="shrink-0 text-xs font-semibold text-blue-700">
                   Kerjakan →
                 </span>
               </Link>
@@ -306,8 +471,8 @@ export default async function DashboardSiswaPage() {
 
       {/* Tugas yang menunggu dikerjakan */}
       {tugasMenunggu.length > 0 ? (
-        <section className="rounded-2xl bg-amber-50 p-5 ring-1 ring-amber-100">
-          <div className="flex items-center gap-2">
+        <section className="overflow-hidden rounded-2xl bg-amber-50 ring-1 ring-amber-100">
+          <div className="flex items-center gap-2 border-b border-amber-100 bg-amber-100/60 px-5 py-4">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500 text-white">
               <IkonTugas className="h-4 w-4" />
             </span>
@@ -320,12 +485,12 @@ export default async function DashboardSiswaPage() {
               </p>
             </div>
           </div>
-          <div className="mt-3 space-y-2">
+          <div className="space-y-2 p-4">
             {tugasMenunggu.map((t) => (
               <Link
                 key={t.id}
                 href={`/siswa/tugas/${t.id}`}
-                className="flex items-center justify-between gap-3 rounded-xl bg-white p-3 ring-1 ring-amber-100 transition hover:ring-amber-300"
+                className="flex items-center justify-between gap-3 rounded-xl bg-white p-3 ring-1 ring-amber-100 transition hover:-translate-y-0.5 hover:shadow-sm hover:ring-amber-300"
               >
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="truncate text-sm font-medium text-slate-900">
@@ -337,7 +502,7 @@ export default async function DashboardSiswaPage() {
                     </Badge>
                   ) : null}
                 </span>
-                <span className="shrink-0 text-xs font-medium text-amber-700">
+                <span className="shrink-0 text-xs font-semibold text-amber-700">
                   Kumpulkan →
                 </span>
               </Link>
@@ -350,10 +515,11 @@ export default async function DashboardSiswaPage() {
       <Kartu>
         <KartuJudul
           judul="Nilai Ulangan"
+          subjudul="Ringkasan nilai terbaru"
           aksi={
             <Link
               href="/siswa/nilai"
-              className="text-xs font-medium text-slate-500 transition hover:text-slate-900"
+              className="text-xs font-semibold text-emerald-700 transition hover:text-emerald-800"
             >
               Lihat semua →
             </Link>
@@ -365,7 +531,7 @@ export default async function DashboardSiswaPage() {
             {daftarUlangan.slice(0, 5).map((u) => (
               <li
                 key={u.id}
-                className="flex items-center justify-between gap-3 py-2.5 text-sm"
+                className="flex items-center justify-between gap-3 rounded-lg px-2 py-2.5 text-sm transition hover:bg-emerald-50/60"
               >
                 <span className="min-w-0 truncate text-slate-700">
                   {u.judul}
@@ -401,10 +567,11 @@ export default async function DashboardSiswaPage() {
       <Kartu>
         <KartuJudul
           judul="Pengumuman Terbaru"
+          subjudul="Kabar dari guru untuk kelasmu"
           aksi={
             <Link
               href="/siswa/pengumuman"
-              className="text-xs font-medium text-slate-500 transition hover:text-slate-900"
+              className="text-xs font-semibold text-emerald-700 transition hover:text-emerald-800"
             >
               Lihat semua →
             </Link>
@@ -422,10 +589,15 @@ export default async function DashboardSiswaPage() {
               return (
                 <li
                   key={row.id}
-                  className="flex items-center justify-between gap-3 py-2.5 text-sm"
+                  className="flex items-center justify-between gap-3 rounded-lg px-2 py-2.5 text-sm transition hover:bg-emerald-50/60"
                 >
-                  <span className="min-w-0 truncate font-medium text-slate-900">
-                    {row.judul}
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-emerald-700">
+                      <IkonPengumuman className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="min-w-0 truncate font-medium text-slate-900">
+                      {row.judul}
+                    </span>
                   </span>
                   <span className="shrink-0 text-xs text-slate-400">
                     {tanggalPendek(row.created_at)}
@@ -444,79 +616,144 @@ export default async function DashboardSiswaPage() {
         )}
       </Kartu>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Link
-          href="/siswa/nilai"
-          className="group flex items-center gap-3 rounded-2xl bg-slate-900 p-5 text-white transition hover:bg-slate-700"
-        >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10">
-            <IkonNilai className="h-5 w-5" />
-          </span>
-          <span>
-            <span className="block text-sm font-semibold">Lihat Nilai</span>
-            <span className="mt-0.5 block text-xs text-slate-300">
-              Rincian nilai + grafik per ulangan.
+      {/* Tautan cepat */}
+      <div>
+        <h2 className="mb-3 text-sm font-semibold tracking-wide text-slate-500 uppercase">
+          Jelajahi
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <Link
+            href="/siswa/nilai"
+            className="group flex items-center gap-3 rounded-2xl bg-slate-900 p-5 text-white transition hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-lg hover:shadow-slate-900/20"
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10">
+              <IkonNilai className="h-5 w-5" />
             </span>
-          </span>
-        </Link>
-        <Link
-          href="/siswa/tugas"
-          className="group flex items-center gap-3 rounded-2xl bg-blue-600 p-5 text-white transition hover:bg-blue-500"
-        >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10">
-            <IkonTugas className="h-5 w-5" />
-          </span>
-          <span>
-            <span className="block text-sm font-semibold">Lihat Tugas</span>
-            <span className="mt-0.5 block text-xs text-blue-100">
-              Kumpulkan lewat link, foto, atau dokumen.
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold">Lihat Nilai</span>
+              <span className="mt-0.5 block text-xs text-slate-300">
+                Rincian nilai + grafik per ulangan.
+              </span>
             </span>
-          </span>
-        </Link>
-        <Link
-          href="/siswa/lab"
-          className="group flex items-center gap-3 rounded-2xl bg-slate-700 p-5 text-white transition hover:bg-slate-600"
-        >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10">
-            <IkonLab className="h-5 w-5" />
-          </span>
-          <span>
-            <span className="block text-sm font-semibold">Lab Coding</span>
-            <span className="mt-0.5 block text-xs text-slate-300">
-              Latihan Python bertingkat di browser.
+            <span
+              aria-hidden="true"
+              className="shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-white"
+            >
+              →
             </span>
-          </span>
-        </Link>
-        <Link
-          href="/siswa/komputer"
-          className="group flex items-center gap-3 rounded-2xl bg-emerald-600 p-5 text-white transition hover:bg-emerald-500"
-        >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10">
-            <IkonKomputer className="h-5 w-5" />
-          </span>
-          <span>
-            <span className="block text-sm font-semibold">Lab Komputer</span>
-            <span className="mt-0.5 block text-xs text-emerald-100">
-              Praktik mouse &amp; klik, dinilai otomatis.
+          </Link>
+
+          <Link
+            href="/siswa/tugas"
+            className="group flex items-center gap-3 rounded-2xl bg-blue-600 p-5 text-white transition hover:-translate-y-0.5 hover:bg-blue-500 hover:shadow-lg hover:shadow-blue-600/25"
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10">
+              <IkonTugas className="h-5 w-5" />
             </span>
-          </span>
-        </Link>
-        <Link
-          href="/siswa/ganti-password"
-          className="group flex items-center gap-3 rounded-2xl bg-white p-5 ring-1 ring-slate-200 transition hover:ring-slate-400"
-        >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
-            <IkonGembok className="h-5 w-5" />
-          </span>
-          <span>
-            <span className="block text-sm font-semibold text-slate-900">
-              Ganti Password
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold">Lihat Tugas</span>
+              <span className="mt-0.5 block text-xs text-blue-100">
+                Kumpulkan lewat link, foto, atau dokumen.
+              </span>
             </span>
-            <span className="mt-0.5 block text-xs text-slate-500">
-              Ubah password akun kamu.
+            <span
+              aria-hidden="true"
+              className="shrink-0 text-blue-200 transition group-hover:translate-x-0.5 group-hover:text-white"
+            >
+              →
             </span>
-          </span>
-        </Link>
+          </Link>
+
+          <Link
+            href="/siswa/lab"
+            className="group flex items-center gap-3 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 p-5 text-white transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-emerald-600/25"
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15">
+              <IkonLab className="h-5 w-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold">Lab Coding</span>
+              <span className="mt-0.5 block text-xs text-emerald-50">
+                Latihan Python bertingkat di browser.
+              </span>
+            </span>
+            <span
+              aria-hidden="true"
+              className="shrink-0 text-emerald-100 transition group-hover:translate-x-0.5 group-hover:text-white"
+            >
+              →
+            </span>
+          </Link>
+
+          <Link
+            href="/siswa/komputer"
+            className="group flex items-center gap-3 rounded-2xl bg-white p-5 ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:ring-emerald-300 hover:shadow-lg hover:shadow-emerald-900/5"
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+              <IkonKomputer className="h-5 w-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold text-slate-900">
+                Lab Komputer
+              </span>
+              <span className="mt-0.5 block text-xs text-slate-500">
+                Praktik mouse &amp; klik, dinilai otomatis.
+              </span>
+            </span>
+            <span
+              aria-hidden="true"
+              className="shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-emerald-600"
+            >
+              →
+            </span>
+          </Link>
+
+          <Link
+            href="/siswa/absensi"
+            className="group flex items-center gap-3 rounded-2xl bg-white p-5 ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:ring-emerald-300 hover:shadow-lg hover:shadow-emerald-900/5"
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+              <IkonJam className="h-5 w-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold text-slate-900">
+                Absensi
+              </span>
+              <span className="mt-0.5 block text-xs text-slate-500">
+                Riwayat kehadiranmu per tanggal.
+              </span>
+            </span>
+            <span
+              aria-hidden="true"
+              className="shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-emerald-600"
+            >
+              →
+            </span>
+          </Link>
+
+          <Link
+            href="/siswa/ganti-password"
+            className="group flex items-center gap-3 rounded-2xl bg-white p-5 ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:ring-emerald-300 hover:shadow-lg hover:shadow-emerald-900/5"
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+              <IkonGembok className="h-5 w-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold text-slate-900">
+                Ganti Password
+              </span>
+              <span className="mt-0.5 block text-xs text-slate-500">
+                Ubah password akun kamu.
+              </span>
+            </span>
+            <span
+              aria-hidden="true"
+              className="shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-emerald-600"
+            >
+              →
+            </span>
+          </Link>
+        </div>
       </div>
     </div>
   );

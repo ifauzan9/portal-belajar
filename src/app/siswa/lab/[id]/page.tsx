@@ -7,6 +7,8 @@ import { hitungLevelTerkunci } from "@/lib/lab";
 import { Kartu } from "@/components/ui/kartu";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { HeroSiswa, TombolHero } from "@/components/ui/hero-siswa";
+import { ProgresBar } from "@/components/ui/progres";
 import { IkonBuku } from "@/components/ui/ikon-siswa";
 
 export default async function ModulLabSiswaPage(
@@ -83,30 +85,100 @@ export default async function ModulLabSiswaPage(
     latihan.map((l) => l.level),
     new Set(levelSelesai),
   );
+  const persen =
+    latihan.length > 0 ? Math.round((selesai / latihan.length) * 100) : 0;
+
+  // Level berikutnya yang bisa dikerjakan (belum selesai & tidak terkunci).
+  const levelBerikut = latihan.find(
+    (item) =>
+      !levelSelesai.includes(item.level) &&
+      !levelTerkunci.includes(item.level),
+  );
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link
-          href="/siswa/lab"
-          className="text-sm text-slate-500 transition hover:text-slate-900"
-        >
-          ← Kembali ke daftar modul
-        </Link>
-        <h1 className="mt-1 text-2xl font-semibold text-slate-900">
-          {lesson.judul}
-        </h1>
-        <p className="mt-1 text-sm text-slate-500">
-          {selesai}/{latihan.length} level selesai
-        </p>
-      </div>
+      <HeroSiswa
+        atas={
+          <Link
+            href="/siswa/lab"
+            className="inline-flex items-center text-sm font-medium text-emerald-100 transition hover:text-white"
+          >
+            ← Kembali ke daftar modul
+          </Link>
+        }
+        label="Modul Lab Coding"
+        judul={lesson.judul}
+        subjudul={`${selesai} dari ${latihan.length} level selesai`}
+        ikon={<IkonBuku className="h-6 w-6" />}
+        aksi={
+          levelBerikut ? (
+            <TombolHero href={`/siswa/lab/${id}/${levelBerikut.level}`}>
+              Lanjut level {levelBerikut.level} →
+            </TombolHero>
+          ) : latihan.length > 0 ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold text-white ring-1 ring-white/25">
+              🎉 Semua level tuntas
+            </span>
+          ) : null
+        }
+      >
+        {latihan.length > 0 ? (
+          <div>
+            <div className="flex items-baseline justify-between gap-3 text-sm text-emerald-50">
+              <span>Progres modul</span>
+              <span className="font-semibold text-white">{persen}%</span>
+            </div>
+            <ProgresBar
+              nilai={persen}
+              label={`Progres modul ${persen} persen`}
+              warna="putih"
+              className="mt-2"
+            />
+          </div>
+        ) : null}
+      </HeroSiswa>
 
       {lesson.isi ? (
-        <Kartu>
-          <p className="text-sm whitespace-pre-wrap text-slate-700">
-            {lesson.isi}
-          </p>
-        </Kartu>
+        <details className="panel-lipat group overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200 transition duration-200 open:ring-emerald-200">
+          <summary className="flex cursor-pointer list-none items-center gap-2.5 px-5 py-4 transition hover:bg-emerald-50/60 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-emerald-700 [&::-webkit-details-marker]:hidden">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+              <IkonBuku className="h-4 w-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold text-slate-900">
+                Tentang modul ini
+              </span>
+              <span className="mt-0.5 block text-xs text-slate-500 group-open:hidden">
+                Klik untuk membaca deskripsi modul
+              </span>
+              <span className="mt-0.5 hidden text-xs text-slate-500 group-open:block">
+                Deskripsi modul
+              </span>
+            </span>
+            <span
+              aria-hidden="true"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 transition duration-200 group-hover:bg-emerald-100 group-hover:text-emerald-700 group-open:rotate-180 group-open:bg-emerald-100 group-open:text-emerald-700"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-4 w-4"
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </span>
+          </summary>
+
+          <div className="border-t border-emerald-100/70 px-5 py-4">
+            <p className="text-sm leading-7 whitespace-pre-wrap text-slate-700">
+              {lesson.isi}
+            </p>
+          </div>
+        </details>
       ) : null}
 
       <div className="space-y-3">
@@ -123,21 +195,23 @@ export default async function ModulLabSiswaPage(
                   key={item.id}
                   aria-disabled="true"
                   title={`Level ${item.level} terkunci. Selesaikan level sebelumnya dulu.`}
-                  className="flex cursor-not-allowed items-center justify-between gap-3 rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200"
+                  className="flex cursor-not-allowed items-center justify-between gap-3 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4"
                 >
                   <span className="flex min-w-0 items-center gap-3">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-200 text-sm font-semibold text-slate-400">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-200 text-slate-500">
                       🔒
                     </span>
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-medium text-slate-400">
                         {item.judul}
                       </span>
-                      <span className="text-xs text-slate-400">Terkunci</span>
+                      <span className="text-xs text-slate-400">
+                        Selesaikan level sebelumnya dulu
+                      </span>
                     </span>
                   </span>
                   <span className="shrink-0">
-                    <Badge varian="netral">🔒 Terkunci</Badge>
+                    <Badge varian="netral">Terkunci</Badge>
                   </span>
                 </div>
               );
@@ -147,34 +221,45 @@ export default async function ModulLabSiswaPage(
               <Link
                 key={item.id}
                 href={`/siswa/lab/${id}/${item.level}`}
-                className={`flex items-center justify-between gap-3 rounded-2xl bg-white p-4 ring-1 transition hover:ring-emerald-300 ${
-                  item.aturan?.final_boss
-                    ? "ring-2 ring-amber-300 shadow-sm"
-                    : "ring-slate-200"
+                className={`group flex items-center justify-between gap-3 rounded-2xl p-4 ring-1 transition hover:-translate-y-0.5 hover:shadow-md hover:shadow-emerald-900/5 ${
+                  sudah
+                    ? "bg-emerald-50 ring-emerald-200 hover:ring-emerald-400"
+                    : pernahCoba
+                      ? "bg-amber-50/70 ring-amber-200 hover:ring-amber-400"
+                      : "bg-white ring-slate-200 hover:ring-emerald-300"
                 }`}
               >
                 <span className="flex min-w-0 items-center gap-3">
                   <span
-                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold ${
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold ${
                       item.aturan?.final_boss
-                        ? "bg-amber-400 text-slate-900"
+                        ? "bg-gradient-to-br from-amber-400 to-amber-500 text-slate-900 shadow-sm shadow-amber-500/30"
                         : sudah
                           ? "bg-emerald-600 text-white"
-                          : "bg-slate-100 text-slate-600"
+                          : pernahCoba
+                            ? "bg-amber-400 text-slate-900"
+                            : "bg-slate-100 text-slate-600"
                     }`}
                   >
-                    {item.aturan?.final_boss ? "⭐" : item.level}
+                    {item.aturan?.final_boss ? "⭐" : sudah ? "✓" : item.level}
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-slate-900">
+                    <span className="block truncate text-sm font-semibold text-slate-900">
                       {item.judul}
                     </span>
-                    <span className="text-xs text-slate-400">
-                      {item.poin} XP{item.aturan?.final_boss ? " · Final Boss" : ""}
+                    <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                      <span className="rounded-md bg-slate-900/5 px-1.5 py-0.5 font-medium text-slate-600">
+                        {item.poin} XP
+                      </span>
+                      {item.aturan?.final_boss ? (
+                        <span className="font-medium text-amber-700">
+                          Final Boss
+                        </span>
+                      ) : null}
                     </span>
                   </span>
                 </span>
-                <span className="shrink-0">
+                <span className="flex shrink-0 items-center gap-2">
                   {sudah ? (
                     <Badge varian="sukses" titik>
                       Selesai
@@ -184,8 +269,14 @@ export default async function ModulLabSiswaPage(
                   ) : item.aturan?.final_boss ? (
                     <Badge varian="peringatan">⭐ Final Boss</Badge>
                   ) : (
-                    <Badge varian="netral">Belum</Badge>
+                    <Badge varian="info">Belum</Badge>
                   )}
+                  <span
+                    aria-hidden="true"
+                    className="text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-emerald-600"
+                  >
+                    →
+                  </span>
                 </span>
               </Link>
             );
