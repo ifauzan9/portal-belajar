@@ -202,7 +202,36 @@ export type AturanBebas = {
   final_boss?: boolean;
   // Badge yang diberikan saat tantangan puncak berhasil (mis. "PRINT MASTER").
   badge?: string;
+
+  // --- Pesan khusus tugas praktik (opsional) ---
+  // Kalau diisi, teks ini dipakai apa adanya sebagai pesan hasil, menggantikan
+  // pesan bawaan. Dibiarkan kosong untuk modul lama supaya pesannya tidak
+  // berubah.
+  pesan_benar?: string;
+  pesan_salah?: string;
+  // Ditampilkan saat input yang dipakai bukan input wajib.
+  pesan_input_salah?: string;
+  // Soal yang menganjurkan input("Teks: "). Kalau true, petunjuk "jangan
+  // menulis teks di dalam input()" dimatikan karena justru menyesatkan.
+  izinkan_prompt?: boolean;
 };
+
+// Pesan baku untuk tugas praktik. Dipakai sebagai nilai bawaan kalau `aturan`
+// tidak menyebutkan pesan sendiri.
+export const PESAN_TUGAS_BENAR =
+  "Selamat! Program berhasil dan seluruh ketentuan tugas telah terpenuhi.";
+export const PESAN_TUGAS_SALAH =
+  "Program belum sesuai. Periksa kembali penggunaan input(), variabel, dan print().";
+export const PESAN_INPUT_SALAH =
+  "Input belum sesuai. Gunakan data yang diminta pada soal.";
+
+// Gabungkan pesan pokok dengan petunjuk spesifik, tanpa mengulang titik.
+export function gabungPesan(pokok: string, petunjuk: string | null): string {
+  if (!petunjuk) return pokok;
+  const bersih = petunjuk.trim();
+  if (!bersih) return pokok;
+  return `${pokok} ${bersih}`;
+}
 
 // Apakah output punya minimal satu baris garis/bingkai, mis. "========".
 export function adaGarisBingkai(teks: string): boolean {
@@ -296,10 +325,22 @@ export function cekVariabelWajib(
   };
 }
 
-export function cekKaryaBebas(
+// ============================================================================
+// Ketentuan jumlah perintah/variabel yang berlaku untuk KEDUA jenis latihan.
+//
+// Sebelumnya hanya dipakai "karya bebas". Sekarang tugas praktik bertarget
+// output juga perlu memastikan siswa benar-benar memakai variabel dan
+// memanggil input()/print() sesuai ketentuan soal.
+//
+// Sengaja TIDAK memeriksa variabel yang tidak terpakai secara bawaan, supaya
+// latihan lama (jenis "output") tidak berubah penilaiannya hanya karena
+// variabel bantu yang tidak dicetak.
+// ============================================================================
+export function cekKetentuanKode(
   analisis: AnalisisBebas | null | undefined,
   keluaran: string,
   aturan: AturanBebas,
+  opsi?: { wajibSemuaDipakai?: boolean },
 ): { benar: boolean; petunjuk: string | null } {
   if (!analisis || !analisis.ok) {
     return {
@@ -339,7 +380,7 @@ export function cekKaryaBebas(
   if (analisis.jumlah_print < minPrint) {
     gagal.push(`minimal ${minPrint} perintah print()`);
   }
-  if (analisis.variabel_tak_dipakai.length > 0) {
+  if (opsi?.wajibSemuaDipakai && analisis.variabel_tak_dipakai.length > 0) {
     gagal.push(
       `tampilkan variabel ini dengan print(): ${analisis.variabel_tak_dipakai.join(", ")}`,
     );
@@ -356,4 +397,15 @@ export function cekKaryaBebas(
 
   if (gagal.length === 0) return { benar: true, petunjuk: null };
   return { benar: false, petunjuk: `Belum lengkap: ${gagal.join("; ")}.` };
+}
+
+export function cekKaryaBebas(
+  analisis: AnalisisBebas | null | undefined,
+  keluaran: string,
+  aturan: AturanBebas,
+): { benar: boolean; petunjuk: string | null } {
+  // Karya bebas tetap menuntut semua variabel ditampilkan (perilaku lama).
+  return cekKetentuanKode(analisis, keluaran, aturan, {
+    wajibSemuaDipakai: true,
+  });
 }

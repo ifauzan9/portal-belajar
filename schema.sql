@@ -3101,3 +3101,472 @@ alter table public.student_accounts
 -- Selesai Tahap 31. Kolom baru di "student_accounts":
 -- password_kuota_tanggal, password_kuota_terpakai.
 -- ============================================================
+
+-- ============================================================
+-- TAHAP 32: DUA TUGAS PRAKTIK PERSIAPAN UJIAN PRAKTIK PYTHON
+-- ============================================================
+-- Satu modul berisi dua tugas (level 1 dan level 2) yang hanya memakai
+-- print(), variabel, dan input(). Tidak ada kode solusi yang disimpan.
+--
+-- Penilaian tiap tugas:
+--  1. Input wajib harus dipakai persis dan berurutan.
+--  2. Output harus sama dengan target (spasi di awal baris ikut dinilai).
+--  3. Jumlah variabel, input(), dan print() memenuhi ketentuan.
+--  4. Variabel wajib dibuat, berasal dari input(), dan ditampilkan.
+--  5. Kode yang sama dijalankan lagi dengan data berbeda (masukan_uji).
+--     Ini yang menggugurkan jawaban yang menulis data langsung di print().
+--
+-- Semua langkah idempoten: aman dijalankan berulang kali.
+-- Catatan: kedua tugas berada di satu modul sehingga level 2 terkunci
+-- sampai level 1 benar, sama seperti modul lainnya.
+
+-- 97. Modul baru (idempoten).
+insert into public.coding_lessons (judul, urutan, isi)
+select
+  $j$Tugas Praktik — Persiapan Ujian Praktik Python$j$,
+  4,
+  $i$PERSIAPAN UJIAN PRAKTIK PYTHON
+
+Dua tugas di modul ini melatih materi yang sudah dipelajari:
+print(), variabel, dan input(). Kerjakan mandiri dan teliti.
+
+Yang boleh dipakai
+- print() untuk menampilkan teks dan isi variabel.
+- Variabel untuk menyimpan setiap data.
+- input() untuk menerima data dari pengguna.
+
+Yang belum perlu dipakai
+- int(), float(), if/else, perulangan, dan operasi matematika.
+
+Pengingat singkat
+- Satu input() mengambil satu baris masukan. Empat data berarti empat
+  input(), enam data berarti enam input().
+- Tanda koma di dalam print() menambah satu spasi otomatis:
+    print("Nama:", nama)   ->   Nama: Randi
+- Spasi di awal baris ikut dinilai. Judul yang menjorok ke kanan harus
+  ditulis dengan spasi di dalam tanda kutip.
+- Baris kosong juga bagian dari output. Pakai print() tanpa isi.
+
+Cara mengerjakan
+1. Baca instruksi dan target output sampai paham.
+2. Tulis program di editor.
+3. Tekan Run Python, lalu isi jendela input sesuai daftar "Input wajib"
+   dengan urutan yang sama.
+4. Baca pesan hasil. Kalau belum sesuai, perbaiki lalu jalankan lagi.
+5. Kode tersimpan setiap kali kamu menekan Run Python, jadi aman saat
+   berpindah halaman atau memuat ulang.
+
+Tugas 2 terbuka setelah Tugas 1 dinyatakan benar.$i$
+where not exists (
+  select 1 from public.coding_lessons where judul = $j$Tugas Praktik — Persiapan Ujian Praktik Python$j$
+);
+
+-- 97b. Segarkan materi modul kalau sudah pernah dibuat.
+update public.coding_lessons
+set isi = $i$PERSIAPAN UJIAN PRAKTIK PYTHON
+
+Dua tugas di modul ini melatih materi yang sudah dipelajari:
+print(), variabel, dan input(). Kerjakan mandiri dan teliti.
+
+Yang boleh dipakai
+- print() untuk menampilkan teks dan isi variabel.
+- Variabel untuk menyimpan setiap data.
+- input() untuk menerima data dari pengguna.
+
+Yang belum perlu dipakai
+- int(), float(), if/else, perulangan, dan operasi matematika.
+
+Pengingat singkat
+- Satu input() mengambil satu baris masukan. Empat data berarti empat
+  input(), enam data berarti enam input().
+- Tanda koma di dalam print() menambah satu spasi otomatis:
+    print("Nama:", nama)   ->   Nama: Randi
+- Spasi di awal baris ikut dinilai. Judul yang menjorok ke kanan harus
+  ditulis dengan spasi di dalam tanda kutip.
+- Baris kosong juga bagian dari output. Pakai print() tanpa isi.
+
+Cara mengerjakan
+1. Baca instruksi dan target output sampai paham.
+2. Tulis program di editor.
+3. Tekan Run Python, lalu isi jendela input sesuai daftar "Input wajib"
+   dengan urutan yang sama.
+4. Baca pesan hasil. Kalau belum sesuai, perbaiki lalu jalankan lagi.
+5. Kode tersimpan setiap kali kamu menekan Run Python, jadi aman saat
+   berpindah halaman atau memuat ulang.
+
+Tugas 2 terbuka setelah Tugas 1 dinyatakan benar.$i$
+where judul = $j$Tugas Praktik — Persiapan Ujian Praktik Python$j$;
+
+-- 98. Dua tugas praktik (idempoten per level).
+insert into public.coding_exercises
+  (lesson_id, level, judul, penjelasan, instruksi, keluaran_diharapkan, poin,
+   jenis, aturan, masukan, masukan_uji, keluaran_uji)
+select
+  l.id, v.level, v.judul, v.penjelasan, v.instruksi, v.keluaran_diharapkan,
+  v.poin, v.jenis, v.aturan, v.masukan, v.masukan_uji, v.keluaran_uji
+from public.coding_lessons l
+cross join (values
+  (1,
+   $j$Membuat Program Pendaftaran Ekstrakurikuler$j$,
+   $p$Tugas praktik dasar: meminta empat data dengan input(), menyimpannya di variabel, lalu menampilkan formulir dengan print().$p$,
+   $t$Membuat Program Pendaftaran Ekstrakurikuler
+Tingkat kesulitan: Dasar
+
+Buat sebuah program Python untuk menerima informasi pendaftaran
+ekstrakurikuler sekolah. Program meminta pengguna memasukkan empat data,
+menyimpannya di variabel, lalu menampilkan formulir pendaftaran dengan
+print().
+
+DATA YANG DIMINTA (berurutan)
+1. Nama siswa
+2. Kelas
+3. Ekstrakurikuler pilihan
+4. Alasan mengikuti ekstrakurikuler
+
+KETENTUAN PENGERJAAN
+- Minimal 4 variabel.
+- Minimal 4 perintah input().
+- Minimal 8 perintah print().
+- Seluruh data input disimpan dalam variabel.
+- Semua data ditampilkan kembali.
+- Gunakan print() untuk menampilkan label dan isi variabel.
+- Memiliki judul program.
+- Memiliki garis pembatas.
+- Memiliki pesan penutup.
+- Program berjalan tanpa error.
+
+NAMA VARIABEL YANG DINILAI
+nama, kelas, ekskul, alasan
+Isi tiap variabel dari input(), lalu tampilkan dengan print().
+
+CATATAN
+- input("Teks: ") boleh dipakai; teks pertanyaannya hanya tampil di
+  jendela input dan tidak ikut menjadi output.
+- Spasi di dalam tanda kutip ikut dinilai. Samakan dengan target output,
+  termasuk spasi di awal baris.
+- Jangan menulis jawaban langsung di print(). Penilaian menjalankan
+  programmu sekali lagi dengan data berbeda.$t$,
+   $o$================================
+   PENDAFTARAN EKSTRAKURIKULER
+================================
+
+Nama    : Randi
+Kelas   : IX A
+Ekskul  : Pramuka
+Alasan  : Melatih kedisiplinan
+
+================================
+        TERIMA KASIH!
+================================$o$, 100, 'output',
+   $a${"variabel_wajib": ["nama", "kelas", "ekskul", "alasan"], "dari_input": true, "min_variabel": 4, "min_input": 4, "min_print": 8, "wajib_garis": true, "izinkan_prompt": true, "pesan_benar": "Selamat! Program berhasil dan seluruh ketentuan tugas telah terpenuhi.", "pesan_salah": "Program belum sesuai. Periksa kembali penggunaan input(), variabel, dan print().", "pesan_input_salah": "Input belum sesuai. Gunakan data yang diminta pada soal."}$a$::jsonb,
+   $m$Randi
+IX A
+Pramuka
+Melatih kedisiplinan$m$, $m$Alya
+IX B
+Paskibra
+Melatih kepemimpinan$m$, $o$================================
+   PENDAFTARAN EKSTRAKURIKULER
+================================
+
+Nama    : Alya
+Kelas   : IX B
+Ekskul  : Paskibra
+Alasan  : Melatih kepemimpinan
+
+================================
+        TERIMA KASIH!
+================================$o$),
+
+  (2,
+   $j$Membuat Program Pendataan Buku Perpustakaan$j$,
+   $p$Tugas praktik menengah: meminta enam data dengan input(), menyimpannya di variabel, lalu menampilkan bukti peminjaman dengan print().$p$,
+   $t$Membuat Program Pendataan Buku Perpustakaan
+Tingkat kesulitan: Menengah
+
+Buat sebuah program Python untuk mencatat peminjaman buku di
+perpustakaan sekolah. Program meminta pengguna memasukkan enam data,
+menyimpannya di variabel, lalu menampilkan bukti peminjaman dengan
+print().
+
+DATA YANG DIMINTA (berurutan)
+1. Nama peminjam
+2. Kelas
+3. Judul buku
+4. Nama penulis
+5. Tanggal peminjaman
+6. Tanggal pengembalian
+
+KETENTUAN PENGERJAAN
+- Minimal 6 variabel.
+- Minimal 6 perintah input().
+- Minimal 12 perintah print().
+- Seluruh data input disimpan dalam variabel.
+- Semua data ditampilkan kembali.
+- Gunakan print() untuk menampilkan label dan isi variabel.
+- Memiliki judul program.
+- Memiliki subjudul bukti peminjaman.
+- Memiliki garis pembatas.
+- Memiliki pesan penutup.
+- Program berjalan tanpa error.
+
+NAMA VARIABEL YANG DINILAI
+nama, kelas, judul, penulis, tgl_pinjam, tgl_kembali
+Isi tiap variabel dari input(), lalu tampilkan dengan print().
+
+CATATAN
+- tgl_pinjam dan tgl_kembali memakai garis bawah, bukan spasi.
+- input("Teks: ") boleh dipakai; teks pertanyaannya hanya tampil di
+  jendela input dan tidak ikut menjadi output.
+- Spasi di dalam tanda kutip ikut dinilai. Samakan dengan target output,
+  termasuk spasi di awal baris.
+- Jangan menulis jawaban langsung di print(). Penilaian menjalankan
+  programmu sekali lagi dengan data berbeda.$t$,
+   $o$================================
+       PERPUSTAKAAN SEKOLAH
+================================
+       BUKTI PEMINJAMAN
+================================
+
+Nama       : Alya
+Kelas      : IX B
+Judul Buku : Laskar Pelangi
+Penulis    : Andrea Hirata
+Tgl Pinjam : 10 November 2026
+Tgl Kembali: 17 November 2026
+
+================================
+       SELAMAT MEMBACA!
+================================$o$, 150, 'output',
+   $a${"variabel_wajib": ["nama", "kelas", "judul", "penulis", "tgl_pinjam", "tgl_kembali"], "dari_input": true, "min_variabel": 6, "min_input": 6, "min_print": 12, "wajib_garis": true, "izinkan_prompt": true, "pesan_benar": "Selamat! Program berhasil dan seluruh ketentuan tugas telah terpenuhi.", "pesan_salah": "Program belum sesuai. Periksa kembali penggunaan input(), variabel, dan print().", "pesan_input_salah": "Input belum sesuai. Gunakan data yang diminta pada soal."}$a$::jsonb,
+   $m$Alya
+IX B
+Laskar Pelangi
+Andrea Hirata
+10 November 2026
+17 November 2026$m$, $m$Rafa
+IX C
+Bumi Manusia
+Pramoedya Ananta Toer
+12 November 2026
+19 November 2026$m$, $o$================================
+       PERPUSTAKAAN SEKOLAH
+================================
+       BUKTI PEMINJAMAN
+================================
+
+Nama       : Rafa
+Kelas      : IX C
+Judul Buku : Bumi Manusia
+Penulis    : Pramoedya Ananta Toer
+Tgl Pinjam : 12 November 2026
+Tgl Kembali: 19 November 2026
+
+================================
+       SELAMAT MEMBACA!
+================================$o$)
+) as v(level, judul, penjelasan, instruksi, keluaran_diharapkan, poin, jenis,
+        aturan, masukan, masukan_uji, keluaran_uji)
+where l.judul = $j$Tugas Praktik — Persiapan Ujian Praktik Python$j$
+  and not exists (
+    select 1 from public.coding_exercises e
+    where e.lesson_id = l.id and e.level = v.level
+  );
+
+-- 98b. Samakan isi tugas yang sudah tersimpan (hasil siswa tidak dihapus).
+--      contoh_kode dan kode_awal dikosongkan supaya tidak ada kode solusi
+--      yang tampil ke siswa.
+update public.coding_exercises e
+set judul = v.judul,
+    penjelasan = v.penjelasan,
+    instruksi = v.instruksi,
+    keluaran_diharapkan = v.keluaran_diharapkan,
+    poin = v.poin,
+    jenis = v.jenis,
+    aturan = v.aturan,
+    masukan = v.masukan,
+    masukan_uji = v.masukan_uji,
+    keluaran_uji = v.keluaran_uji,
+    contoh_kode = null,
+    kode_awal = null
+from public.coding_lessons l
+cross join (values
+  (1,
+   $j$Membuat Program Pendaftaran Ekstrakurikuler$j$,
+   $p$Tugas praktik dasar: meminta empat data dengan input(), menyimpannya di variabel, lalu menampilkan formulir dengan print().$p$,
+   $t$Membuat Program Pendaftaran Ekstrakurikuler
+Tingkat kesulitan: Dasar
+
+Buat sebuah program Python untuk menerima informasi pendaftaran
+ekstrakurikuler sekolah. Program meminta pengguna memasukkan empat data,
+menyimpannya di variabel, lalu menampilkan formulir pendaftaran dengan
+print().
+
+DATA YANG DIMINTA (berurutan)
+1. Nama siswa
+2. Kelas
+3. Ekstrakurikuler pilihan
+4. Alasan mengikuti ekstrakurikuler
+
+KETENTUAN PENGERJAAN
+- Minimal 4 variabel.
+- Minimal 4 perintah input().
+- Minimal 8 perintah print().
+- Seluruh data input disimpan dalam variabel.
+- Semua data ditampilkan kembali.
+- Gunakan print() untuk menampilkan label dan isi variabel.
+- Memiliki judul program.
+- Memiliki garis pembatas.
+- Memiliki pesan penutup.
+- Program berjalan tanpa error.
+
+NAMA VARIABEL YANG DINILAI
+nama, kelas, ekskul, alasan
+Isi tiap variabel dari input(), lalu tampilkan dengan print().
+
+CATATAN
+- input("Teks: ") boleh dipakai; teks pertanyaannya hanya tampil di
+  jendela input dan tidak ikut menjadi output.
+- Spasi di dalam tanda kutip ikut dinilai. Samakan dengan target output,
+  termasuk spasi di awal baris.
+- Jangan menulis jawaban langsung di print(). Penilaian menjalankan
+  programmu sekali lagi dengan data berbeda.$t$,
+   $o$================================
+   PENDAFTARAN EKSTRAKURIKULER
+================================
+
+Nama    : Randi
+Kelas   : IX A
+Ekskul  : Pramuka
+Alasan  : Melatih kedisiplinan
+
+================================
+        TERIMA KASIH!
+================================$o$, 100, 'output',
+   $a${"variabel_wajib": ["nama", "kelas", "ekskul", "alasan"], "dari_input": true, "min_variabel": 4, "min_input": 4, "min_print": 8, "wajib_garis": true, "izinkan_prompt": true, "pesan_benar": "Selamat! Program berhasil dan seluruh ketentuan tugas telah terpenuhi.", "pesan_salah": "Program belum sesuai. Periksa kembali penggunaan input(), variabel, dan print().", "pesan_input_salah": "Input belum sesuai. Gunakan data yang diminta pada soal."}$a$::jsonb,
+   $m$Randi
+IX A
+Pramuka
+Melatih kedisiplinan$m$, $m$Alya
+IX B
+Paskibra
+Melatih kepemimpinan$m$, $o$================================
+   PENDAFTARAN EKSTRAKURIKULER
+================================
+
+Nama    : Alya
+Kelas   : IX B
+Ekskul  : Paskibra
+Alasan  : Melatih kepemimpinan
+
+================================
+        TERIMA KASIH!
+================================$o$),
+
+  (2,
+   $j$Membuat Program Pendataan Buku Perpustakaan$j$,
+   $p$Tugas praktik menengah: meminta enam data dengan input(), menyimpannya di variabel, lalu menampilkan bukti peminjaman dengan print().$p$,
+   $t$Membuat Program Pendataan Buku Perpustakaan
+Tingkat kesulitan: Menengah
+
+Buat sebuah program Python untuk mencatat peminjaman buku di
+perpustakaan sekolah. Program meminta pengguna memasukkan enam data,
+menyimpannya di variabel, lalu menampilkan bukti peminjaman dengan
+print().
+
+DATA YANG DIMINTA (berurutan)
+1. Nama peminjam
+2. Kelas
+3. Judul buku
+4. Nama penulis
+5. Tanggal peminjaman
+6. Tanggal pengembalian
+
+KETENTUAN PENGERJAAN
+- Minimal 6 variabel.
+- Minimal 6 perintah input().
+- Minimal 12 perintah print().
+- Seluruh data input disimpan dalam variabel.
+- Semua data ditampilkan kembali.
+- Gunakan print() untuk menampilkan label dan isi variabel.
+- Memiliki judul program.
+- Memiliki subjudul bukti peminjaman.
+- Memiliki garis pembatas.
+- Memiliki pesan penutup.
+- Program berjalan tanpa error.
+
+NAMA VARIABEL YANG DINILAI
+nama, kelas, judul, penulis, tgl_pinjam, tgl_kembali
+Isi tiap variabel dari input(), lalu tampilkan dengan print().
+
+CATATAN
+- tgl_pinjam dan tgl_kembali memakai garis bawah, bukan spasi.
+- input("Teks: ") boleh dipakai; teks pertanyaannya hanya tampil di
+  jendela input dan tidak ikut menjadi output.
+- Spasi di dalam tanda kutip ikut dinilai. Samakan dengan target output,
+  termasuk spasi di awal baris.
+- Jangan menulis jawaban langsung di print(). Penilaian menjalankan
+  programmu sekali lagi dengan data berbeda.$t$,
+   $o$================================
+       PERPUSTAKAAN SEKOLAH
+================================
+       BUKTI PEMINJAMAN
+================================
+
+Nama       : Alya
+Kelas      : IX B
+Judul Buku : Laskar Pelangi
+Penulis    : Andrea Hirata
+Tgl Pinjam : 10 November 2026
+Tgl Kembali: 17 November 2026
+
+================================
+       SELAMAT MEMBACA!
+================================$o$, 150, 'output',
+   $a${"variabel_wajib": ["nama", "kelas", "judul", "penulis", "tgl_pinjam", "tgl_kembali"], "dari_input": true, "min_variabel": 6, "min_input": 6, "min_print": 12, "wajib_garis": true, "izinkan_prompt": true, "pesan_benar": "Selamat! Program berhasil dan seluruh ketentuan tugas telah terpenuhi.", "pesan_salah": "Program belum sesuai. Periksa kembali penggunaan input(), variabel, dan print().", "pesan_input_salah": "Input belum sesuai. Gunakan data yang diminta pada soal."}$a$::jsonb,
+   $m$Alya
+IX B
+Laskar Pelangi
+Andrea Hirata
+10 November 2026
+17 November 2026$m$, $m$Rafa
+IX C
+Bumi Manusia
+Pramoedya Ananta Toer
+12 November 2026
+19 November 2026$m$, $o$================================
+       PERPUSTAKAAN SEKOLAH
+================================
+       BUKTI PEMINJAMAN
+================================
+
+Nama       : Rafa
+Kelas      : IX C
+Judul Buku : Bumi Manusia
+Penulis    : Pramoedya Ananta Toer
+Tgl Pinjam : 12 November 2026
+Tgl Kembali: 19 November 2026
+
+================================
+       SELAMAT MEMBACA!
+================================$o$)
+) as v(level, judul, penjelasan, instruksi, keluaran_diharapkan, poin, jenis,
+        aturan, masukan, masukan_uji, keluaran_uji)
+where l.id = e.lesson_id
+  and l.judul = $j$Tugas Praktik — Persiapan Ujian Praktik Python$j$
+  and e.level = v.level;
+
+-- 99. Target kelas: kelas IX (kalau ada). Kalau tidak ada yang cocok,
+--     modul berlaku untuk semua kelas.
+insert into public.coding_lesson_classes (lesson_id, kelas_id)
+select l.id, c.id
+from public.coding_lessons l
+join public.classes c
+  on (c.nama_kelas ilike '9%' or c.nama_kelas ilike 'kelas 9%' or c.nama_kelas ilike 'ix%')
+where l.judul = $j$Tugas Praktik — Persiapan Ujian Praktik Python$j$
+on conflict do nothing;
+
+-- ============================================================
+-- Selesai Tahap 32. Modul baru: "Tugas Praktik — Persiapan Ujian Praktik Python"
+-- dengan 2 tugas praktik berurutan (level 1 dan level 2).
+-- ============================================================

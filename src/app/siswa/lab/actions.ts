@@ -6,12 +6,17 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   cekKaryaBebas,
+  cekKetentuanKode,
   cekVariabelWajib,
+  gabungPesan,
   inputSesuaiWajib,
   keluaranCocok,
   bandingkanPerBaris,
   pesanBanding,
   pecahInput,
+  PESAN_TUGAS_BENAR,
+  PESAN_TUGAS_SALAH,
+  PESAN_INPUT_SALAH,
   type AnalisisBebas,
   type AturanBebas,
 } from "@/lib/lab";
@@ -54,8 +59,11 @@ function petunjukOutputSalah(
   keluaran: string,
   diharapkan: string,
   analisis: AnalisisBebas | null | undefined,
+  opsi?: { izinkanPrompt?: boolean },
 ): string {
-  if ((analisis?.input_berprompt ?? 0) > 0) {
+  // Sebagian soal (mis. tugas praktik) justru menganjurkan input("Teks: ").
+  // Untuk soal itu, jangan salahkan teks prompt saat output belum cocok.
+  if ((analisis?.input_berprompt ?? 0) > 0 && !opsi?.izinkanPrompt) {
     return 'Output belum sesuai. Kamu menulis teks di dalam input("..."). Teks itu hanya tampil di modal, bukan bagian output, jadi jangan di-print ulang.';
   }
   const banding = bandingkanPerBaris(keluaran, diharapkan);
@@ -185,6 +193,24 @@ export async function simpanHasilLab(input: {
   // Penilaian di server.
   let benarBaru: boolean;
   let petunjuk: string | null = null;
+  // true = yang salah adalah input yang diketik siswa (bukan kodenya).
+  // Pesannya harus tampil apa adanya, tanpa awalan pesan umum.
+  let inputSalah = false;
+
+  // Pesan khusus tugas praktik (kalau ada). Modul lama tidak mengisinya,
+  // sehingga pesan bawaannya tetap seperti sebelumnya. Cukup salah satu kunci
+  // diisi untuk mengaktifkan mode pesan tugas; kunci lainnya memakai teks baku.
+  const pakaiPesanTugas =
+    aturan.pesan_benar !== undefined || aturan.pesan_salah !== undefined;
+  const pesanBenarKhusus = pakaiPesanTugas
+    ? aturan.pesan_benar?.trim() || PESAN_TUGAS_BENAR
+    : null;
+  const pesanSalahKhusus = pakaiPesanTugas
+    ? aturan.pesan_salah?.trim() || PESAN_TUGAS_SALAH
+    : null;
+  const pesanInputKhusus = pakaiPesanTugas
+    ? aturan.pesan_input_salah?.trim() || PESAN_INPUT_SALAH
+    : aturan.pesan_input_salah?.trim() || null;
 
   if (exerciseRow.jenis === "bebas") {
     const hasilCek = cekKaryaBebas(input.analisis, keluaranTeks, aturan);
@@ -212,8 +238,10 @@ export async function simpanHasilLab(input: {
     // Dicek lebih dulu supaya pesan "input berbeda" tidak menutupi pesan
     // bahwa program tidak memakai input sama sekali (hardcode).
     benarBaru = !inputDiubah;
+    inputSalah = inputDiubah;
     petunjuk = inputDiubah
-      ? "Input yang kamu pakai berbeda dari input wajib. Ketik ulang input wajib persis seperti yang tertulis, lalu tekan Run Python lagi."
+      ? (pesanInputKhusus ||
+        "Input yang kamu pakai berbeda dari input wajib. Ketik ulang input wajib persis seperti yang tertulis, lalu tekan Run Python lagi.")
       : null;
 
     if (benarBaru && !keluaranCocok(keluaranTeks, exerciseRow.keluaran_diharapkan)) {
@@ -222,7 +250,24 @@ export async function simpanHasilLab(input: {
         keluaranTeks,
         exerciseRow.keluaran_diharapkan,
         input.analisis,
+        { izinkanPrompt: aturan.izinkan_prompt === true },
       );
+    }
+
+    // Ketentuan jumlah variabel/input()/print() dan garis pembatas. Hanya
+    // berlaku kalau soalnya memang mengisi angka minimalnya, jadi modul lama
+    // tidak ikut berubah.
+    const adaKetentuanJumlah =
+      (aturan.min_variabel ?? 0) > 0 ||
+      (aturan.min_input ?? 0) > 0 ||
+      (aturan.min_print ?? 0) > 0 ||
+      (aturan.min_baris ?? 0) > 0 ||
+      aturan.wajib_garis === true;
+
+    if (benarBaru && adaKetentuanJumlah) {
+      const cekJumlah = cekKetentuanKode(input.analisis, keluaranTeks, aturan);
+      benarBaru = cekJumlah.benar;
+      petunjuk = cekJumlah.petunjuk;
     }
 
     // Pastikan variabel wajib benar-benar dibuat, diisi dari input(), dan
@@ -329,7 +374,15 @@ export async function simpanHasilLab(input: {
     percobaan: percobaanBaru,
     pernahBenar: pernahBenarBaru,
     benar: benarBaru,
-    petunjuk,
+    // Modul lama: petunjuk apa adanya (perilaku sebelumnya). Tugas praktik:
+    // kalimat baku + petunjuk spesifik, tanpa membocorkan kode solusi.
+    petunjuk: benarBaru
+      ? pesanBenarKhusus
+      : inputSalah
+        ? petunjuk
+        : pesanSalahKhusus
+          ? gabungPesan(pesanSalahKhusus, petunjuk)
+          : petunjuk,
   };
 }
 

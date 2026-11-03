@@ -162,7 +162,9 @@ export function LabRunner({
         setPernahBenar(jawab.pernahBenar);
         setTersimpan(true);
         setBenar(jawab.benar);
-        setPesan(jawab.benar ? PESAN_BENAR : jawab.petunjuk);
+        // Server bisa mengirim pesan resmi (tugas praktik). Kalau tidak,
+        // pakai pesan bawaan seperti modul lama.
+        setPesan(jawab.petunjuk ?? (jawab.benar ? PESAN_BENAR : null));
         if (!jawab.benar) setSalahCount((n) => n + 1);
         if (jawab.benar) router.refresh();
       } else if (jawab.message) {
