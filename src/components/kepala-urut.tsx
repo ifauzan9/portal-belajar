@@ -11,6 +11,7 @@ export function KepalaUrut({
   aktif,
   arah,
   align = "left",
+  padat = false,
 }: {
   label: string;
   href: string;
@@ -18,6 +19,8 @@ export function KepalaUrut({
   arah: Arah;
   // Perataan tombol urut ke header (default kiri).
   align?: "left" | "right";
+  // Padding lebih rapat, untuk tabel yang selnya memakai px-3 py-2.
+  padat?: boolean;
 }) {
   const alignClass =
     align === "right"
@@ -27,7 +30,7 @@ export function KepalaUrut({
   return (
     <th
       scope="col"
-      className={`px-4 py-3 font-medium sm:px-5 ${alignClass}`}
+      className={`font-medium ${padat ? "px-3 py-2" : "px-4 py-3 sm:px-5"} ${alignClass}`}
     >
       <Link
         href={href}

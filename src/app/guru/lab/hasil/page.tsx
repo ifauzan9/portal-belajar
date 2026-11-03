@@ -5,10 +5,55 @@ import { Kartu, KartuJudul } from "@/components/ui/kartu";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { IkonBuku } from "@/components/ui/ikon-siswa";
+import { KepalaUrut } from "@/components/kepala-urut";
 import { formatWaktuWib } from "@/lib/waktu";
+import { bacaArah, type Arah } from "@/lib/urutkan-siswa";
+import {
+  bacaUrutHasilLab,
+  urutkanHasilLab,
+  type UrutHasilLab,
+} from "@/lib/urutkan-hasil-lab";
 
 function tampilWaktu(iso: string | null): string {
   return formatWaktuWib(iso);
+}
+
+// Pilihan pengurutan untuk form filter (dipakai juga di layar kecil yang
+// tidak punya judul kolom tabel).
+const PILIHAN_URUT: { nilai: UrutHasilLab; label: string }[] = [
+  { nilai: "selesai", label: "Level selesai" },
+  { nilai: "nama", label: "Nama" },
+  { nilai: "nis", label: "NIS" },
+  { nilai: "kelas", label: "Kelas" },
+  { nilai: "percobaan", label: "Total percobaan" },
+];
+
+// URL halaman ini dengan filter + pengurutan yang sedang aktif. Modul dan
+// kelas harus selalu ikut, supaya mengurutkan tidak menghapus filter.
+function buatUrl(
+  lesson: string,
+  kelas: string,
+  urut: UrutHasilLab,
+  arah: Arah,
+) {
+  const params = new URLSearchParams();
+  params.set("lesson", lesson);
+  if (kelas) params.set("kelas", kelas);
+  params.set("urut", urut);
+  params.set("arah", arah);
+  return `/guru/lab/hasil?${params.toString()}`;
+}
+
+// Klik kolom yang sama membalik arah; kolom baru mulai dari naik.
+function urlKlik(
+  lesson: string,
+  kelas: string,
+  kolom: UrutHasilLab,
+  urut: UrutHasilLab,
+  arah: Arah,
+) {
+  const arahBaru: Arah = urut === kolom && arah === "asc" ? "desc" : "asc";
+  return buatUrl(lesson, kelas, kolom, arahBaru);
 }
 
 type SubmissionRow = {
@@ -55,6 +100,10 @@ export default async function HasilLabPage(
     typeof searchParams.lesson === "string" ? searchParams.lesson : "";
   const kelasParam =
     typeof searchParams.kelas === "string" ? searchParams.kelas : "";
+  // Tanpa parameter: tetap seperti sebelumnya (level selesai terbanyak dulu).
+  const urut = bacaUrutHasilLab(searchParams.urut);
+  const arah: Arah =
+    searchParams.arah === undefined ? "desc" : bacaArah(searchParams.arah);
 
   const [hasilLesson, hasilKelas, hasilSiswa] = await Promise.all([
     supabase
@@ -152,8 +201,8 @@ export default async function HasilLabPage(
   );
 
   // Ringkasan per siswa: berapa level pernah benar.
-  const ringkasan = siswaTampil
-    .map((siswa) => {
+  const ringkasan = urutkanHasilLab(
+    siswaTampil.map((siswa) => {
       const subsSiswa = submissions.filter((s) => s.siswa_id === siswa.id);
       const selesai = new Set(
         subsSiswa.filter((s) => s.pernah_benar).map((s) => s.exercise_id),
@@ -168,8 +217,11 @@ export default async function HasilLabPage(
         total: latihan.length,
         totalPercobaan,
       };
-    })
-    .sort((a, b) => b.selesai - a.selesai);
+    }),
+    namaKelas,
+    urut,
+    arah,
+  );
 
   return (
     <div className="space-y-6">
@@ -234,6 +286,43 @@ export default async function HasilLabPage(
             ))}
           </select>
         </div>
+        <div>
+          <label
+            htmlFor="urut"
+            className="block text-xs font-medium text-slate-500"
+          >
+            Urutkan
+          </label>
+          <select
+            id="urut"
+            name="urut"
+            defaultValue={urut}
+            className="mt-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+          >
+            {PILIHAN_URUT.map((pilihan) => (
+              <option key={pilihan.nilai} value={pilihan.nilai}>
+                {pilihan.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label
+            htmlFor="arah"
+            className="block text-xs font-medium text-slate-500"
+          >
+            Arah
+          </label>
+          <select
+            id="arah"
+            name="arah"
+            defaultValue={arah}
+            className="mt-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+          >
+            <option value="asc">Naik</option>
+            <option value="desc">Turun</option>
+          </select>
+        </div>
         <button
           type="submit"
           className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
@@ -251,13 +340,16 @@ export default async function HasilLabPage(
         {ringkasan.length > 0 ? (
           <>
             <ul className="mt-3 space-y-2 lg:hidden">
-              {ringkasan.map((baris) => (
+              {ringkasan.map((baris, index) => (
                 <li
                   key={baris.siswa.id}
                   className="rounded-xl border border-slate-200 p-3"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <span className="min-w-0 text-sm font-medium text-slate-900">
+                      <span className="mr-2 tabular-nums text-slate-400">
+                        {index + 1}.
+                      </span>
                       {baris.siswa.nama_siswa}
                       {baris.siswa.nis ? (
                         <span className="ml-1 text-xs text-slate-400">
@@ -290,23 +382,73 @@ export default async function HasilLabPage(
             <table className="w-full text-sm">
               <thead className="border-b border-slate-200 bg-slate-50">
                 <tr>
-                  <th className="px-3 py-2 text-left font-medium text-slate-500">
-                    Nama
+                  <th
+                    scope="col"
+                    className="w-12 px-3 py-2 text-left font-medium text-slate-500"
+                  >
+                    No
                   </th>
-                  <th className="px-3 py-2 text-left font-medium text-slate-500">
-                    Kelas
-                  </th>
-                  <th className="px-3 py-2 text-left font-medium text-slate-500">
-                    Level selesai
-                  </th>
-                  <th className="px-3 py-2 text-right font-medium text-slate-500">
-                    Total percobaan
-                  </th>
+                  <KepalaUrut
+                    label="Nama"
+                    href={urlKlik(
+                      lessonTerpilih.id,
+                      kelasParam,
+                      "nama",
+                      urut,
+                      arah,
+                    )}
+                    aktif={urut === "nama"}
+                    arah={arah}
+                    padat
+                  />
+                  <KepalaUrut
+                    label="Kelas"
+                    href={urlKlik(
+                      lessonTerpilih.id,
+                      kelasParam,
+                      "kelas",
+                      urut,
+                      arah,
+                    )}
+                    aktif={urut === "kelas"}
+                    arah={arah}
+                    padat
+                  />
+                  <KepalaUrut
+                    label="Level selesai"
+                    href={urlKlik(
+                      lessonTerpilih.id,
+                      kelasParam,
+                      "selesai",
+                      urut,
+                      arah,
+                    )}
+                    aktif={urut === "selesai"}
+                    arah={arah}
+                    padat
+                  />
+                  <KepalaUrut
+                    label="Total percobaan"
+                    href={urlKlik(
+                      lessonTerpilih.id,
+                      kelasParam,
+                      "percobaan",
+                      urut,
+                      arah,
+                    )}
+                    aktif={urut === "percobaan"}
+                    arah={arah}
+                    align="right"
+                    padat
+                  />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {ringkasan.map((baris) => (
+                {ringkasan.map((baris, index) => (
                   <tr key={baris.siswa.id} className="hover:bg-slate-50">
+                    <td className="px-3 py-2 tabular-nums text-slate-400">
+                      {index + 1}
+                    </td>
                     <td className="px-3 py-2 text-slate-900">
                       {baris.siswa.nama_siswa}
                       {baris.siswa.nis ? (
