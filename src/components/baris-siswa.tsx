@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { HapusSiswaButton } from "@/components/hapus-siswa-button";
-import { AturKredensialSiswa, ToggleAkunSiswa } from "@/components/atur-kredensial-siswa";
+import { AturKredensialSiswa, ResetKuotaSiswa, ToggleAkunSiswa } from "@/components/atur-kredensial-siswa";
 import { KotakPilihSiswa } from "@/components/pilihan-siswa";
 import { PindahKelasSiswa } from "@/components/pindah-kelas";
 import { updateSiswa } from "@/app/guru/siswa/actions";
@@ -21,6 +21,11 @@ export function BarisSiswa({
   usernameAkun,
   // Status akun (aktif/nonaktif). Hanya relevan kalau usernameAkun ada.
   akunAktif,
+  // Berapa kali kuota ganti password dipakai HARI INI (WIB).
+  kuotaTerpakai,
+  // false = kolom Tahap 31 belum ada → tombol reset dinonaktifkan.
+  kuotaSiap,
+  maksKuota,
   // "baris" = tabel (desktop), "kartu" = daftar untuk mobile.
   tampilan = "baris",
 }: {
@@ -33,6 +38,9 @@ export function BarisSiswa({
   kelasList: Kelas[];
   usernameAkun: string | null;
   akunAktif: boolean;
+  kuotaTerpakai: number;
+  kuotaSiap: boolean;
+  maksKuota: number;
   tampilan?: "baris" | "kartu";
 }) {
   const [editing, setEditing] = useState(false);
@@ -60,10 +68,21 @@ export function BarisSiswa({
     </span>
   );
 
+  const sisaKuota = Math.max(0, maksKuota - kuotaTerpakai);
+
   const infoAkun = usernameAkun ? (
     <div className="flex flex-col gap-1.5">
       <span className="font-mono text-sm text-slate-700">{usernameAkun}</span>
       {badgeAkun}
+      {kuotaSiap ? (
+        <span
+          className={`w-fit text-[11px] ${
+            sisaKuota === 0 ? "font-medium text-amber-600" : "text-slate-500"
+          }`}
+        >
+          Kuota password: {sisaKuota}/{maksKuota} hari ini
+        </span>
+      ) : null}
     </div>
   ) : (
     <span className="text-sm text-amber-600">Belum ada akun</span>
@@ -98,6 +117,14 @@ export function BarisSiswa({
             siswaId={id}
             akunAktif={akunAktif}
             namaSiswa={nama}
+          />
+        ) : null}
+        {usernameAkun && kuotaSiap ? (
+          <ResetKuotaSiswa
+            siswaId={id}
+            namaSiswa={nama}
+            terpakaiHariIni={kuotaTerpakai}
+            maksKuota={maksKuota}
           />
         ) : null}
       </div>

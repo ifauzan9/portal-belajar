@@ -9,6 +9,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { hashPassword, verifikasiPassword } from "@/lib/hash-password";
 import { hapusSesiSesi, simpanSesiSesi, ambilSesiSiswa } from "@/lib/sesi-siswa";
 import { koordinatValid, statusLokasiValid } from "@/lib/lokasi";
+import { kembalikanKuota, pakaiKuota } from "@/lib/kuota-harian";
+import {
+  MAKS_GANTI_PASSWORD_HARIAN,
+  PESAN_KUOTA_HABIS,
+  pesanKuotaTidakSiap,
+  sisaKuotaPassword,
+} from "@/lib/kuota-password";
 import {
   ambilIp,
   catatGagal,
@@ -379,6 +386,34 @@ export async function gantiPassword(
     return { message: "Konfirmasi password tidak cocok.", sukses: false };
   }
 
+  // Kuota harian dihitung di database (Tahap 31), sama seperti halaman profil.
+  // Jalur ini tidak dipakai UI lagi, tetapi tetap dijaga supaya tidak menjadi
+  // celah untuk melewati batas 3x/hari.
+  const kuota = await sisaKuotaPassword(admin, account.id);
+
+  if (!kuota.siap) {
+    return { message: pesanKuotaTidakSiap(kuota.alasan), sukses: false };
+  }
+
+  if (!kuota.boleh) {
+    return { message: PESAN_KUOTA_HABIS, sukses: false };
+  }
+
+  const setelahPakai = await pakaiKuota(
+    admin,
+    account.id,
+    MAKS_GANTI_PASSWORD_HARIAN,
+  );
+
+  if (!setelahPakai.siap || !setelahPakai.boleh) {
+    return {
+      message: !setelahPakai.siap
+        ? pesanKuotaTidakSiap(setelahPakai.alasan)
+        : PESAN_KUOTA_HABIS,
+      sukses: false,
+    };
+  }
+
   const hashBaru = hashPassword(passwordBaru);
   const { error } = await admin
     .from("student_accounts")
@@ -386,6 +421,8 @@ export async function gantiPassword(
     .eq("id", account.id);
 
   if (error) {
+    // Gagal simpan → jatah jangan hangus.
+    await kembalikanKuota(admin, account.id, setelahPakai.terpakai);
     return { message: `Gagal menyimpan: ${error.message}`, sukses: false };
   }
 

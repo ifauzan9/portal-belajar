@@ -140,6 +140,24 @@ export function PilihanSiswa({
             <button
               type="submit"
               name="aksi"
+              value="reset-kuota"
+              disabled={pending}
+              onClick={(event) => {
+                if (
+                  !confirm(
+                    `Reset batas ganti password ${dipilih.length} siswa terpilih? Mereka mendapat jatah baru hari ini.`,
+                  )
+                ) {
+                  event.preventDefault();
+                }
+              }}
+              className="rounded-lg border border-amber-400/50 px-3 py-1.5 text-xs font-semibold text-amber-100 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Reset kuota password
+            </button>
+            <button
+              type="submit"
+              name="aksi"
               value="hapus-siswa"
               disabled={pending}
               onClick={(event) => {

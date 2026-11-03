@@ -3073,3 +3073,31 @@ create policy "Guru baca lokasi siswa"
 -- ============================================================
 -- Selesai Tahap 30. Tabel baru: "lokasi_terakhir_siswa".
 -- ============================================================
+
+
+-- ============================================================
+-- TAHAP 31: KUOTA GANTI PASSWORD SISWA DISIMPAN DI DATABASE
+-- ============================================================
+-- Sebelumnya kuota 3x/hari disimpan di memori proses server (Map). Di Vercel
+-- (serverless) setiap instance punya Map sendiri yang selalu mulai dari nol,
+-- sehingga siswa bisa mengganti password berkali-kali padahal halaman profil
+-- tetap menampilkan "3 dari 3".
+--
+-- Sekarang penghitung menempel pada baris akun siswa:
+--   password_kuota_tanggal  = tanggal WIB (Asia/Jakarta) saat kuota dipakai
+--   password_kuota_terpakai = berapa kali dipakai pada tanggal tersebut
+--
+-- Reset terjadi otomatis saat tanggal WIB berganti (tengah malam WIB):
+-- kalau tanggal tersimpan != hari ini, hitungan dianggap 0.
+--
+-- Akun lama tidak perlu diisi: kolom baru bernilai NULL / 0, yang berarti
+-- "belum pernah ganti password hari ini".
+alter table public.student_accounts
+  add column if not exists password_kuota_tanggal date;
+alter table public.student_accounts
+  add column if not exists password_kuota_terpakai int not null default 0;
+
+-- ============================================================
+-- Selesai Tahap 31. Kolom baru di "student_accounts":
+-- password_kuota_tanggal, password_kuota_terpakai.
+-- ============================================================

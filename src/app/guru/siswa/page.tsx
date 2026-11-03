@@ -7,6 +7,8 @@ import { PilihSemuaCheckbox, PilihanSiswa } from "@/components/pilihan-siswa";
 import { TambahSiswaForm } from "@/components/tambah-siswa-form";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { terpakaiKuotaHariIni } from "@/lib/kuota-harian";
+import { MAKS_GANTI_PASSWORD_HARIAN } from "@/lib/kuota-password";
 import {
   bacaArah,
   bacaUrut,
@@ -94,34 +96,83 @@ export default async function SiswaPage(props: PageProps<"/guru/siswa">) {
   const semuaSiswa: SiswaRow[] = siswaData ?? [];
 
   // Map username akun login per siswa (untuk kolom "Akun Login").
-  // Jika kolom `is_active` belum ada di DB (migration belum dijalankan),
-  // query akan gagal → fallback ke semua akun dianggap aktif.
+  //
+  // Query dicoba bertingkat supaya halaman tetap jalan walau sebagian kolom
+  // belum ada di DB (mis. Tahap 31 belum dijalankan):
+  //   1) lengkap: is_active + kolom kuota
+  //   2) tanpa kolom kuota      → kuotaSiap = false
+  //   3) tanpa is_active juga   → semua akun dianggap aktif
   const admin = createAdminClient();
-  const { data: akunData, error: akunError } = await admin
-    .from("student_accounts")
-    .select("siswa_id, username, is_active");
-  const akunPerSiswa = akunError ? new Map<string, { username: string; isActive: boolean }>() : new Map(
-    (akunData ?? []).map((a) => [
-      (a as { siswa_id: string }).siswa_id,
+
+  type BarisAkun = {
+    username: string;
+    isActive: boolean;
+    terpakaiHariIni: number;
+  };
+
+  async function muatAkun(): Promise<{
+    peta: Map<string, BarisAkun>;
+    kuotaSiap: boolean;
+  }> {
+    const percobaan = [
       {
-        username: (a as { username: string }).username,
-        isActive: (a as { is_active: boolean }).is_active,
+        kolom:
+          "siswa_id, username, is_active, password_kuota_tanggal, password_kuota_terpakai",
+        adaKuota: true,
+        adaAktif: true,
       },
-    ]),
-  );
-  if (akunError) {
-    console.error("Gagal memuat student_accounts dengan is_active, mencoba fallback:", akunError.message);
-    const { data: akunDataLama } = await admin
-      .from("student_accounts")
-      .select("siswa_id, username");
-    akunPerSiswa.clear();
-    for (const a of akunDataLama ?? []) {
-      akunPerSiswa.set((a as { siswa_id: string }).siswa_id, {
-        username: (a as { username: string }).username,
-        isActive: true,
-      });
+      {
+        kolom: "siswa_id, username, is_active",
+        adaKuota: false,
+        adaAktif: true,
+      },
+      {
+        kolom: "siswa_id, username",
+        adaKuota: false,
+        adaAktif: false,
+      },
+    ];
+
+    for (const coba of percobaan) {
+      const { data, error } = await admin
+        .from("student_accounts")
+        .select(coba.kolom);
+
+      if (error) {
+        console.error(
+          `Gagal memuat student_accounts (${coba.kolom}), mencoba fallback:`,
+          error.message,
+        );
+        continue;
+      }
+
+      const peta = new Map<string, BarisAkun>();
+      for (const a of data ?? []) {
+        const baris = a as unknown as {
+          siswa_id: string;
+          username: string;
+          is_active?: boolean;
+          password_kuota_tanggal?: string | null;
+          password_kuota_terpakai?: number | null;
+        };
+        peta.set(baris.siswa_id, {
+          username: baris.username,
+          isActive: coba.adaAktif ? (baris.is_active ?? true) : true,
+          terpakaiHariIni: coba.adaKuota
+            ? terpakaiKuotaHariIni(
+                baris.password_kuota_tanggal ?? null,
+                baris.password_kuota_terpakai ?? null,
+              )
+            : 0,
+        });
+      }
+      return { peta, kuotaSiap: coba.adaKuota };
     }
+
+    return { peta: new Map<string, BarisAkun>(), kuotaSiap: false };
   }
+
+  const { peta: akunPerSiswa, kuotaSiap } = await muatAkun();
 
   const hasil = urutkanSiswa<SiswaRow>(
     filterSiswa(semuaSiswa, cari),
@@ -237,6 +288,9 @@ export default async function SiswaPage(props: PageProps<"/guru/siswa">) {
               kelasList={kelasList}
               usernameAkun={akunPerSiswa.get(item.id)?.username ?? null}
               akunAktif={akunPerSiswa.get(item.id)?.isActive ?? false}
+              kuotaTerpakai={akunPerSiswa.get(item.id)?.terpakaiHariIni ?? 0}
+              kuotaSiap={kuotaSiap}
+              maksKuota={MAKS_GANTI_PASSWORD_HARIAN}
             />
           ))}
         </ul>
@@ -310,6 +364,11 @@ export default async function SiswaPage(props: PageProps<"/guru/siswa">) {
                       akunPerSiswa.get(item.id)?.username ?? null
                     }
                     akunAktif={akunPerSiswa.get(item.id)?.isActive ?? false}
+                    kuotaTerpakai={
+                      akunPerSiswa.get(item.id)?.terpakaiHariIni ?? 0
+                    }
+                    kuotaSiap={kuotaSiap}
+                    maksKuota={MAKS_GANTI_PASSWORD_HARIAN}
                   />
                 ))}
               </tbody>

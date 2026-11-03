@@ -2,7 +2,10 @@ import { cookies } from "next/headers";
 import { requireSiswa } from "@/lib/sesi-siswa";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sisaKuotaPassword, MAKS_GANTI_PASSWORD_HARIAN } from "@/lib/kuota-password";
+import {
+  sisaKuotaPassword,
+  MAKS_GANTI_PASSWORD_HARIAN,
+} from "@/lib/kuota-password";
 import {
   NAMA_COOKIE_TAMPILAN,
   uraiCookieTampilan,
@@ -38,11 +41,15 @@ export default async function ProfilSiswaPage() {
   // Username sesi bisa beda kapitalisasi, jadi pakai nilai dari database.
   const { data: akun } = await admin
     .from("student_accounts")
-    .select("username, is_active")
+    .select("id, username, is_active")
     .eq("siswa_id", siswa.id)
     .maybeSingle();
 
-  const akunRow = akun as { username: string; is_active: boolean } | null;
+  const akunRow = akun as {
+    id: string;
+    username: string;
+    is_active: boolean;
+  } | null;
   const username = akunRow?.username ?? null;
   const akunNonaktif = akunRow?.is_active === false;
 
@@ -57,9 +64,17 @@ export default async function ProfilSiswaPage() {
     jumlahKelas = count ?? null;
   }
 
-  const kuota = username
-    ? sisaKuotaPassword(username)
-    : { sisa: 0, maks: MAKS_GANTI_PASSWORD_HARIAN, terpakai: 0, boleh: false };
+  // Kuota dibaca dari DATABASE (Tahap 31), bukan dari memori server, supaya
+  // angka yang tampil sama dari instance mana pun dan tidak reset saat deploy.
+  const kuota = akunRow
+    ? await sisaKuotaPassword(admin, akunRow.id)
+    : {
+        sisa: 0,
+        maks: MAKS_GANTI_PASSWORD_HARIAN,
+        terpakai: 0,
+        boleh: false,
+        siap: true,
+      };
 
   // Preferensi tampilan dibaca dari cookie (bukan database).
   const store = await cookies();
@@ -173,11 +188,20 @@ export default async function ProfilSiswaPage() {
         />
 
         {username && !akunNonaktif ? (
-          <div className="mt-4">
+          <div className="mt-4 space-y-4">
+            {!kuota.siap ? (
+              <Notifikasi varian="peringatan" judul="Kuota belum bisa dihitung">
+                {kuota.alasan === "skema"
+                  ? "Pembaruan database (schema Tahap 31) belum dijalankan, jadi kuota ganti password belum bisa dihitung. Hubungi guru sebelum mengganti password."
+                  : "Kuota ganti password sedang tidak bisa dibaca. Muat ulang halaman ini beberapa saat lagi."}
+              </Notifikasi>
+            ) : null}
+
             <FormGantiPassword
               username={username}
-              sisaKuota={kuota.sisa}
+              sisaKuota={kuota.siap ? kuota.sisa : kuota.maks}
               maksKuota={kuota.maks}
+              statusKuota={kuota.siap ? "siap" : (kuota.alasan ?? "galat")}
             />
           </div>
         ) : (

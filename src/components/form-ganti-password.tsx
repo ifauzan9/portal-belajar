@@ -24,10 +24,15 @@ export function FormGantiPassword({
   username,
   sisaKuota,
   maksKuota,
+  statusKuota = "siap",
 }: {
   username: string;
   sisaKuota: number;
   maksKuota: number;
+  // "skema" = kolom Tahap 31 belum ada → form dinonaktifkan.
+  // "galat" = kuota gagal dibaca sementara → form tetap aktif, tapi angka
+  //           sisa TIDAK ditampilkan supaya tidak menyesatkan.
+  statusKuota?: "siap" | "skema" | "galat";
 }) {
   const [state, formAction, pending] = useActionState<
     HasilGantiPasswordProfil,
@@ -40,7 +45,16 @@ export function FormGantiPassword({
   });
 
   const [lihat, setLihat] = useState(false);
-  const habis = state.sisaKuota <= 0;
+  const skemaBelumAda = statusKuota === "skema";
+  const habis = statusKuota === "siap" && state.sisaKuota <= 0;
+  const terkunci = habis || skemaBelumAda;
+
+  let labelKuota = `${state.sisaKuota} dari ${state.maksKuota}`;
+  if (skemaBelumAda) {
+    labelKuota = "belum aktif";
+  } else if (statusKuota === "galat") {
+    labelKuota = "tidak bisa dibaca";
+  }
 
   return (
     <form action={formAction} className="mt-4 space-y-4" autoComplete="off">
@@ -65,14 +79,12 @@ export function FormGantiPassword({
       <div className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2 ring-1 ring-slate-200">
         <p className="text-xs text-slate-600">
           Kuota ganti password hari ini:{" "}
-          <strong className="font-semibold text-slate-900">
-            {state.sisaKuota} dari {state.maksKuota}
-          </strong>
+          <strong className="font-semibold text-slate-900">{labelKuota}</strong>
         </p>
         <span
           aria-hidden="true"
           className={`h-2 w-2 shrink-0 rounded-full ${
-            habis ? "bg-red-500" : "bg-emerald-500"
+            terkunci ? "bg-red-500" : "bg-emerald-500"
           }`}
         />
       </div>
@@ -92,7 +104,7 @@ export function FormGantiPassword({
           minLength={6}
           autoComplete="new-password"
           placeholder="Minimal 6 karakter"
-          disabled={habis}
+          disabled={terkunci}
           className={GAYA_INPUT}
         />
       </div>
@@ -112,7 +124,7 @@ export function FormGantiPassword({
           minLength={6}
           autoComplete="new-password"
           placeholder="Ketik ulang password baru"
-          disabled={habis}
+          disabled={terkunci}
           className={GAYA_INPUT}
         />
         <p className="mt-1.5 text-xs text-slate-500">
@@ -146,17 +158,23 @@ export function FormGantiPassword({
       ) : null}
 
       {state.message && !state.sukses ? (
-        <Notifikasi varian={habis ? "peringatan" : "gagal"}>
+        <Notifikasi varian={terkunci ? "peringatan" : "gagal"}>
           {state.message}
         </Notifikasi>
       ) : null}
 
       <button
         type="submit"
-        disabled={pending || habis}
+        disabled={pending || terkunci}
         className="w-full rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {pending ? "Menyimpan..." : habis ? "Kuota habis" : "Simpan Password Baru"}
+        {pending
+          ? "Menyimpan..."
+          : skemaBelumAda
+            ? "Belum aktif"
+            : habis
+              ? "Kuota habis"
+              : "Simpan Password Baru"}
       </button>
     </form>
   );

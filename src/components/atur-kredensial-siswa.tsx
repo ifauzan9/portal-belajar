@@ -8,6 +8,10 @@ import {
   type HasilAturKredensial,
   type HasilToggleAkun,
 } from "@/app/guru/siswa/atur-kredensial-actions";
+import {
+  resetKuotaPasswordSiswa,
+  type HasilResetKuota,
+} from "@/app/guru/siswa/reset-kuota-actions";
 
 // Form atur kredensial (username + password) siswa oleh guru.
 // Dipakai di baris siswa: satu form untuk tiap siswa.
@@ -169,6 +173,73 @@ export function ToggleAkunSiswa({
       </button>
       {state.message ? (
         <p className="mt-1 text-xs text-red-600">{state.message}</p>
+      ) : null}
+    </form>
+  );
+}
+
+// ============================================================================
+// Tombol reset batas ganti password siswa.
+// Berguna saat siswa sudah memakai jatah hari ini lalu lupa passwordnya —
+// guru tidak perlu menunggu besok.
+// ============================================================================
+export function ResetKuotaSiswa({
+  siswaId,
+  namaSiswa,
+  terpakaiHariIni,
+  maksKuota,
+}: {
+  siswaId: string;
+  namaSiswa: string;
+  terpakaiHariIni: number;
+  maksKuota: number;
+}) {
+  const [state, formAction, pending] = useActionState<
+    HasilResetKuota,
+    FormData
+  >(resetKuotaPasswordSiswa, { message: null, sukses: false });
+
+  const habis = terpakaiHariIni >= maksKuota;
+  const belumTerpakai = terpakaiHariIni <= 0;
+
+  return (
+    <form
+      action={formAction}
+      onSubmit={(event) => {
+        if (
+          !confirm(
+            `Reset batas ganti password milik ${namaSiswa}?\n\nSiswa akan mendapat ${maksKuota} jatah baru hari ini.`,
+          )
+        ) {
+          event.preventDefault();
+        }
+      }}
+    >
+      <input type="hidden" name="siswa_id" value={siswaId} />
+      <button
+        type="submit"
+        disabled={pending || belumTerpakai}
+        title={
+          belumTerpakai
+            ? "Belum ada jatah yang terpakai hari ini"
+            : "Kembalikan jatah ganti password hari ini"
+        }
+        className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${
+          habis
+            ? "border-amber-300 text-amber-700 hover:bg-amber-50"
+            : "border-slate-300 text-slate-600 hover:bg-slate-100"
+        }`}
+      >
+        {pending ? "Mereset..." : "Reset Kuota Password"}
+      </button>
+      {state.message ? (
+        <p
+          className={`mt-1 text-xs ${
+            state.sukses ? "text-emerald-600" : "text-red-600"
+          }`}
+        >
+          {state.message}
+        </p>
       ) : null}
     </form>
   );

@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { requireGuru } from "@/lib/require-guru";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { galatKolomKuotaBelumAda } from "@/lib/kuota-harian";
+import { tanggalWibHariIni } from "@/lib/waktu";
 
 const MAX_NIS = 50;
 const MAX_NAMA = 200;
@@ -196,6 +198,47 @@ export async function aksiSiswaBanyak(
       message: null,
       sukses: true,
       info: `${count ?? 0} akun login dihapus (siswa tetap ada).`,
+    };
+  }
+
+  if (aksi === "reset-kuota") {
+    // Reset batas ganti password untuk banyak siswa sekaligus.
+    // Kolom Tahap 31 mungkin belum ada → tangani secara eksplisit.
+    //
+    // Tanggal diisi hari ini (WIB) dan terpakai = 0 — sama seperti reset
+    // tunggal, supaya hasilnya konsisten di semua jalur.
+    const { error, count } = await admin
+      .from("student_accounts")
+      .update(
+        {
+          password_kuota_tanggal: tanggalWibHariIni(),
+          password_kuota_terpakai: 0,
+        },
+        { count: "exact" },
+      )
+      .in("siswa_id", ids);
+
+    if (error) {
+      if (galatKolomKuotaBelumAda(error)) {
+        return {
+          message:
+            "Fitur kuota belum aktif: jalankan schema Tahap 31 di Supabase terlebih dahulu.",
+          sukses: false,
+          info: null,
+        };
+      }
+      return {
+        message: `Gagal mereset kuota: ${error.message}`,
+        sukses: false,
+        info: null,
+      };
+    }
+
+    revalidatePath("/guru/siswa");
+    return {
+      message: null,
+      sukses: true,
+      info: `Batas ganti password ${count ?? 0} siswa telah direset.`,
     };
   }
 

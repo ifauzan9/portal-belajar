@@ -118,6 +118,9 @@ Setelah itu (opsional) samakan **Supabase → Authentication → URL Configurati
 | Halaman tampil "Sedang Maintenance" terus | `MAINTENANCE_MODE` masih `1` → ubah ke `0` + Redeploy. |
 | Kolom Lokasi di Log Login selalu "Belum dilacak" | Siswa belum membuka dashboard sejak fitur ini dipasang, atau DDL Tahap 30 belum dijalankan. |
 | Lokasi selalu "Tidak didukung" | Halaman dibuka lewat HTTP (bukan HTTPS/localhost). |
+| Kuota ganti password siswa selalu "3 dari 3" / tidak berkurang | Schema Tahap 31 belum dijalankan di Supabase (kolom `password_kuota_tanggal` & `password_kuota_terpakai` belum ada). |
+| Muncul "Kuota ganti password belum aktif" di profil siswa | Sama seperti di atas — jalankan Tahap 31 di SQL Editor. |
+| Siswa lupa password & sudah habis kuota hari ini | Guru membuka **Data Siswa** → tombol **Reset Kuota Password** pada baris siswa (atau centang beberapa siswa → **Reset kuota password**). Jatah 3x hari ini kembali. |
 
 ## Checklist Cepat
 
@@ -128,4 +131,5 @@ Setelah itu (opsional) samakan **Supabase → Authentication → URL Configurati
 - [ ] `schema.sql` sudah dijalankan di Supabase
 - [ ] Bucket Storage `tugas` sudah ada
 - [ ] Tabel `lokasi_terakhir_siswa` sudah ada (Tahap 30)
+- [ ] Kolom `password_kuota_tanggal` & `password_kuota_terpakai` sudah ada (Tahap 31)
 - [ ] Login guru & siswa sudah dicoba di URL produksi
