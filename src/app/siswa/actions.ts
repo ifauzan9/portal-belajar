@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hashPassword, verifikasiPassword } from "@/lib/hash-password";
 import { hapusSesiSesi, simpanSesiSesi, ambilSesiSiswa } from "@/lib/sesi-siswa";
+import { koordinatValid, statusLokasiValid } from "@/lib/lokasi";
 import {
   ambilIp,
   catatGagal,
@@ -267,16 +268,55 @@ export async function loginSiswaToken(
     return { message: "Token kelas salah. Cek lagi dengan gurumu." };
   }
 
-  // Token benar → reset penghitung gagal, catat log, buat sesi.
+  // Token benar. Sekarang wajib punya akun AKTIF: token kelas hanya boleh
+  // dipakai siswa yang memang punya akun login (sama seperti login password).
+  // Pengecekan dilakukan SETELAH token terbukti benar, supaya status akun
+  // tidak bocor ke orang yang cuma menebak-nebak token.
+  const { data: akun } = await admin
+    .from("student_accounts")
+    .select("username, is_active")
+    .eq("siswa_id", dataSiswa.id)
+    .maybeSingle();
+
+  const akunRow = akun as { username: string; is_active: boolean } | null;
+
+  if (!akunRow) {
+    catatGagal(kunci);
+    await catatLogLogin(supabase, {
+      siswaId: dataSiswa.id,
+      username: `token:${kelasId}`,
+      berhasil: false,
+      alasan: "akun_belum_dibuat",
+    });
+    return {
+      message:
+        "Namamu belum punya akun login. Minta gurumu membuatkan akun dulu.",
+    };
+  }
+
+  if (!akunRow.is_active) {
+    catatGagal(kunci);
+    await catatLogLogin(supabase, {
+      siswaId: dataSiswa.id,
+      username: akunRow.username,
+      berhasil: false,
+      alasan: "akun_nonaktif",
+    });
+    return { message: "Akun kamu dinonaktifkan. Hubungi gurumu." };
+  }
+
+  // Akun aktif → reset penghitung gagal, catat log, buat sesi.
   resetGagal(kunci);
   await catatLogLogin(supabase, {
     siswaId: siswaId,
-    username: `token:${kelasId}`,
+    username: akunRow.username,
     berhasil: true,
     alasan: null,
   });
 
-  await simpanSesiSesi({ siswaId: dataSiswa.id, username: `token:${kelasId}` });
+  // Sesi memakai username ASLI (bukan "token:<kelasId>"), supaya semua
+  // halaman siswa memperlakukan login token sama seperti login password.
+  await simpanSesiSesi({ siswaId: dataSiswa.id, username: akunRow.username });
   redirect("/siswa");
 }
 
@@ -664,4 +704,61 @@ export async function verifikasiKodeUlangan(
   }
 
   redirect(`/siswa/nilai/${examId}?kode=1`);
+}
+
+// ============================================================================
+// Simpan lokasi terakhir siswa (GPS perangkat) untuk PEMANTAUAN guru.
+//
+// Dipanggil dari browser setelah siswa login (halaman dashboard), bukan saat
+// login — browser hanya memberi lokasi setelah izin dikabulkan, dan itu butuh
+// interaksi di halaman. Sifatnya best-effort: kegagalan TIDAK pernah
+// menghalangi siswa memakai aplikasi.
+//
+// Data dari browser tidak dipercaya: koordinat divalidasi rentangnya, dan
+// penulisan dilakukan dengan service-role (siswa tidak bisa mengubah lokasi
+// siswa lain).
+// ============================================================================
+
+export type HasilSimpanLokasi = { ok: boolean };
+
+export async function simpanLokasiSiswa(
+  status: string,
+  lat: number | null,
+  lng: number | null,
+  akurasi: number | null,
+): Promise<HasilSimpanLokasi> {
+  const sesi = await ambilSesiSiswa();
+  if (!sesi) return { ok: false };
+
+  // Hanya status yang dikenal yang boleh disimpan.
+  if (!statusLokasiValid(status)) return { ok: false };
+
+  // Status "diizinkan" wajib disertai koordinat yang wajar.
+  let latSimpan: number | null = null;
+  let lngSimpan: number | null = null;
+  let akurasiSimpan: number | null = null;
+
+  if (status === "diizinkan") {
+    if (lat === null || lng === null) return { ok: false };
+    akurasiSimpan =
+      akurasi !== null && Number.isFinite(akurasi) ? Math.round(akurasi) : null;
+    if (!koordinatValid(lat, lng, akurasiSimpan)) return { ok: false };
+    latSimpan = lat;
+    lngSimpan = lng;
+  }
+
+  const admin = createAdminClient();
+  await admin.from("lokasi_terakhir_siswa").upsert(
+    {
+      siswa_id: sesi.siswaId,
+      lat: latSimpan,
+      lng: lngSimpan,
+      akurasi_m: akurasiSimpan,
+      status,
+      diperbarui_at: new Date().toISOString(),
+    },
+    { onConflict: "siswa_id" },
+  );
+
+  return { ok: true };
 }

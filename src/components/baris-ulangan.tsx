@@ -8,6 +8,10 @@ import {
   updateUlangan,
 } from "@/app/guru/ulangan/actions";
 import { PilihKelasMulti } from "@/components/pilih-kelas-multi";
+import {
+  formatTanggalJamPendekWib,
+  isoKeInputLokalWib,
+} from "@/lib/waktu";
 
 type Kelas = { id: string; nama_kelas: string };
 
@@ -170,16 +174,7 @@ export function BarisUlangan({
   // Teks tenggat singkat (untuk status "akan" yang belum lewat).
   const teksTenggat =
     status === "akan" && tenggat && !deadlineLewat
-      ? (() => {
-          const d = new Date(tenggat);
-          if (Number.isNaN(d.getTime())) return null;
-          return new Intl.DateTimeFormat("id-ID", {
-            day: "2-digit",
-            month: "short",
-            hour: "2-digit",
-            minute: "2-digit",
-          }).format(d);
-        })()
+      ? formatTanggalJamPendekWib(tenggat)
       : null;
 
   if (!editing) {
@@ -344,14 +339,7 @@ export function BarisUlangan({
 
   // Tenggat default untuk form ubah (konversi ISO ke format
   // datetime-local: "YYYY-MM-DDTHH:MM")
-  const tenggatDefault = tenggat
-    ? (() => {
-        const d = new Date(tenggat);
-        if (Number.isNaN(d.getTime())) return "";
-        const pad = (n: number) => String(n).padStart(2, "0");
-        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-      })()
-    : "";
+  const tenggatDefault = isoKeInputLokalWib(tenggat);
 
   return (
     <tr className="bg-slate-50/60">

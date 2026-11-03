@@ -7,18 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { IkonBuku } from "@/components/ui/ikon-siswa";
 import { LABEL_METODE, ambilKelasTugas, bacaMetode, tugasDibuka } from "@/lib/tugas";
+import { formatWaktuWib } from "@/lib/waktu";
 
 function tanggalPendek(iso: string | null): string {
-  if (!iso) return "-";
-  const t = new Date(iso);
-  if (Number.isNaN(t.getTime())) return "-";
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(t);
+  return formatWaktuWib(iso);
 }
 
 type StatusView = {

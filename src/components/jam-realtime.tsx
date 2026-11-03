@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { ZONA_WIB } from "@/lib/waktu";
 
 // ============================================================================
 // Jam realtime — menampilkan tanggal hari ini + jam (berdetak tiap detik).
@@ -39,6 +40,7 @@ export function JamRealtime({ className = "" }: { className?: string }) {
     day: "numeric",
     month: "long",
     year: "numeric",
+    timeZone: ZONA_WIB,
   }).format(sekarang);
 
   const jam = new Intl.DateTimeFormat("id-ID", {
@@ -46,11 +48,12 @@ export function JamRealtime({ className = "" }: { className?: string }) {
     minute: "2-digit",
     second: "2-digit",
     hour12: false,
+    timeZone: ZONA_WIB,
   }).format(sekarang);
 
   return (
     <span className={className}>
-      {tanggal} · <span className="tabular-nums font-medium">{jam}</span>
+      {tanggal} · <span className="tabular-nums font-medium">{jam}</span> WIB
     </span>
   );
 }

@@ -4,6 +4,7 @@ import { requireSiswa } from "@/lib/sesi-siswa";
 import { createClient } from "@/lib/supabase/server";
 import { ambilKelasUlangan } from "@/lib/ambil-kelas-ulangan";
 import { tenggatSudahLewat } from "@/lib/deadline";
+import { formatWaktuWib } from "@/lib/waktu";
 import { FormJawaban } from "./form-jawaban";
 import { Kartu } from "@/components/ui/kartu";
 import { Badge } from "@/components/ui/badge";
@@ -134,7 +135,7 @@ export default async function KerjakanUlanganPage(
               Sudah submit
             </Badge>
             <span className="text-xs text-slate-400">
-              {new Date(submit.disubmit_at).toLocaleString("id-ID")}
+              {formatWaktuWib(submit.disubmit_at)}
             </span>
           </div>
 
@@ -233,7 +234,7 @@ export default async function KerjakanUlanganPage(
         {dataUlangan.tenggat ? (
           <span>
             · Tenggat:{" "}
-            {new Date(dataUlangan.tenggat).toLocaleString("id-ID")}
+            {formatWaktuWib(dataUlangan.tenggat)}
           </span>
         ) : null}
       </div>

@@ -11,18 +11,11 @@ import {
   ambilKelasTugas,
   bacaMetode,
 } from "@/lib/tugas";
+import { formatWaktuPanjangWib } from "@/lib/waktu";
 
 function formatWaktu(iso: string | null): string {
   if (!iso) return "Tanpa tenggat";
-  const t = new Date(iso);
-  if (Number.isNaN(t.getTime())) return "-";
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(t);
+  return formatWaktuPanjangWib(iso);
 }
 
 type BerkasRow = {

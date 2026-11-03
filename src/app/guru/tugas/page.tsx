@@ -3,6 +3,7 @@ import { BarisTugas } from "@/components/baris-tugas";
 import { FormTugas } from "@/components/form-tugas";
 import { createClient } from "@/lib/supabase/server";
 import { hitungRataRata, tampilkanRataRata } from "@/lib/rata-rata";
+import { formatWaktuWib } from "@/lib/waktu";
 import {
   LABEL_METODE,
   ambilKelasTugas,
@@ -31,15 +32,7 @@ type TugasRow = {
 
 function tenggatPendek(iso: string | null): string {
   if (!iso) return "Tanpa tenggat";
-  const t = new Date(iso);
-  if (Number.isNaN(t.getTime())) return "-";
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(t);
+  return formatWaktuWib(iso);
 }
 
 export default async function TugasPage() {

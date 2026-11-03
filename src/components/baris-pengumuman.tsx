@@ -7,11 +7,11 @@ import {
 } from "@/app/guru/pengumuman/actions";
 import { PilihKelasMulti } from "@/components/pilih-kelas-multi";
 import { Badge } from "@/components/ui/badge";
+import { sudahTampil } from "@/lib/jadwal-pengumuman";
 import {
-  formatJadwal,
-  isoKeInputLokal,
-  sudahTampil,
-} from "@/lib/jadwal-pengumuman";
+  formatWaktuWib,
+  isoKeInputLokalWib,
+} from "@/lib/waktu";
 
 type Kelas = { id: string; nama_kelas: string };
 
@@ -90,7 +90,7 @@ export function BarisPengumuman({
                 <Badge varian="peringatan">Terjadwal</Badge>
               ) : null}
               <span className="text-slate-400">
-                Tampil: {formatJadwal(mulaiPada)}
+                Tampil: {mulaiPada ? formatWaktuWib(mulaiPada) : "-"}
               </span>
             </span>
           ) : null}
@@ -170,7 +170,7 @@ export function BarisPengumuman({
               id={`mulai-pada-${id}`}
               name="mulai_pada"
               type="datetime-local"
-              defaultValue={isoKeInputLokal(mulaiPada)}
+              defaultValue={isoKeInputLokalWib(mulaiPada)}
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
             />
             <p className="mt-1 text-xs text-slate-500">

@@ -11,8 +11,10 @@ import {
   IkonLab,
   IkonNilai,
   IkonPengumuman,
+  IkonProfil,
   IkonTugas,
 } from "@/components/ui/ikon-siswa";
+import { buatInisial } from "@/lib/inisial";
 
 const MENU = [
   { href: "/siswa", label: "Dashboard", Ikon: IkonDashboard },
@@ -22,17 +24,11 @@ const MENU = [
   { href: "/siswa/nilai", label: "Nilai", Ikon: IkonNilai },
   { href: "/siswa/absensi", label: "Absensi", Ikon: IkonAbsensi },
   { href: "/siswa/pengumuman", label: "Pengumuman", Ikon: IkonPengumuman },
+  { href: "/siswa/profil", label: "Profil", Ikon: IkonProfil },
 ];
 
 // Inisial untuk avatar, mis. "GHAISAN APRILLIO" -> "GA".
-function buatInisial(nama: string): string {
-  return nama
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((kata) => kata[0]?.toUpperCase() ?? "")
-    .join("");
-}
+// Helper-nya dipakai juga oleh halaman profil (src/lib/inisial.ts).
 
 export function SiswaSidebar({
   namaSiswa,

@@ -12,7 +12,7 @@ import { createClient } from "@/lib/supabase/server";
 //    payload = "<uuid>|<siswa_id>|<username>|<iat_ms>"
 //    hmac   = HMAC-SHA256(payload, secret)
 //  - requireSiswa() baca cookie → cek HMAC + umur token → ambil siswa dari DB
-//    berdasarkan username (pastikan akun masih ada & belum dihapus).
+//    berdasarkan siswa_id, sekaligus memastikan akun masih ada & aktif.
 //
 // Token stateless (tanpa tabel session), tetapi tetap kedaluwarsa di server
 // lewat stempel waktu terbit (iat) yang ditandatangani.
@@ -119,7 +119,8 @@ export type HasilRequireSiswa = {
 
 // Guard untuk semua halaman siswa:
 //  1. Baca cookie sesi
-//  2. Verifikasi siswa masih ada di DB
+//  2. Pastikan siswa punya akun AKTIF (berlaku untuk login password maupun
+//     token kelas — token bukan pengganti akun)
 //  3. Kalau gagal, arahkan ke /logout-siswa (Route Handler yang menghapus
 //     cookie) lalu ke /login-siswa.
 //     Catatan: cookie TIDAK boleh diubah saat render Server Component.
@@ -129,40 +130,29 @@ export async function requireSiswa(): Promise<HasilRequireSiswa> {
 
   const admin = createAdminClient();
 
-  // Cari akun lama (login username+password). Untuk login lewat token
-  // kelas, siswa mungkin TIDAK punya akun — jadi kalau tidak ada akun
-  // yang cocok, kita ambil data siswa langsung dari sesi.siswaId.
+  // siswa_id unik di student_accounts → paling akurat untuk menemukan akun,
+  // termasuk untuk sesi lama yang username-nya masih "token:<kelasId>".
   const { data: account } = await admin
     .from("student_accounts")
     .select("username, is_active, students(*)")
-    .ilike("username", sesi.username)
+    .eq("siswa_id", sesi.siswaId)
     .maybeSingle();
 
   const students = (account as { students?: unknown; is_active: boolean } | null)
     ?.students;
   const isActive = (account as { is_active: boolean } | null)?.is_active;
 
-  let siswaRaw:
-    | { id: string; nis: string | null; nama_siswa: string; kelas_id: string | null }
-    | null = null;
-
-  if (account) {
-    // Akun nonaktif → keluarkan sesi lewat route handler.
-    if (!students || isActive === false) {
-      redirect("/logout-siswa");
-    }
-    siswaRaw = (Array.isArray(students) ? students[0] : students) as
-      | { id: string; nis: string | null; nama_siswa: string; kelas_id: string | null }
-      | null;
-  } else {
-    // Tidak ada akun → kemungkinan sesi login token. Ambil siswa by id.
-    const { data: siswaData } = await admin
-      .from("students")
-      .select("id, nis, nama_siswa, kelas_id")
-      .eq("id", sesi.siswaId)
-      .maybeSingle();
-    siswaRaw = (siswaData as typeof siswaRaw) ?? null;
+  // Tidak punya akun atau akun dinonaktifkan → keluarkan sesi.
+  if (!account || !students || isActive === false) {
+    redirect("/logout-siswa");
   }
+
+  const siswaRaw = ((Array.isArray(students) ? students[0] : students) ?? null) as {
+    id: string;
+    nis: string | null;
+    nama_siswa: string;
+    kelas_id: string | null;
+  } | null;
 
   if (!siswaRaw) {
     redirect("/logout-siswa");

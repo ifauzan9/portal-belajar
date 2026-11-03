@@ -9,16 +9,10 @@ import { KartuStat } from "@/components/ui/kartu-stat";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { IkonNilai } from "@/components/ui/ikon-siswa";
+import { formatTanggalBulanWib, formatTanggalWib } from "@/lib/waktu";
 
 function tanggalPendek(iso: string | null): string {
-  if (!iso) return "-";
-  const t = new Date(iso);
-  if (Number.isNaN(t.getTime())) return "-";
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(t);
+  return formatTanggalWib(iso);
 }
 
 // Label status untuk satu ulangan (dipakai di tabel desktop & kartu mobile).
@@ -36,10 +30,7 @@ function statusUlangan(u: {
     if (u.deadlineLewat) return { label: "Ditutup", varian: "netral" };
     if (u.sudahSubmit) return { label: "Sudah dijawab", varian: "sukses" };
     const tgl = u.tenggat
-      ? new Date(u.tenggat).toLocaleDateString("id-ID", {
-          day: "2-digit",
-          month: "short",
-        })
+      ? formatTanggalBulanWib(u.tenggat)
       : "Tanpa tenggat";
     return { label: `Buka · ${tgl}`, varian: "info" };
   }

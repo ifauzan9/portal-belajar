@@ -1,5 +1,10 @@
+import { cookies } from "next/headers";
 import { SiswaSidebar } from "@/components/siswa-sidebar";
 import { requireSiswa } from "@/lib/sesi-siswa";
+import {
+  NAMA_COOKIE_TAMPILAN,
+  uraiCookieTampilan,
+} from "@/lib/preferensi-siswa";
 
 export default async function SiswaLayout({
   children,
@@ -9,8 +14,20 @@ export default async function SiswaLayout({
   // sehingga halaman siswa tidak pernah dirender tanpa sesi valid.
   const { siswa, kelas } = await requireSiswa();
 
+  // Preferensi tampilan dibaca dari cookie di server, sehingga HTML pertama
+  // sudah bertema benar (tanpa kedip) dan halaman guru/login tidak terpengaruh.
+  const store = await cookies();
+  const tampilan = uraiCookieTampilan(store.get(NAMA_COOKIE_TAMPILAN)?.value);
+
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 sm:flex-row">
+    // id="area-siswa" menjadi batas tema: mode gelap & ukuran teks hanya
+    // berlaku di dalam elemen ini.
+    <div
+      id="area-siswa"
+      data-tema={tampilan.efektif}
+      data-ukuran={tampilan.ukuran}
+      className="flex min-h-screen flex-col bg-slate-50 sm:flex-row"
+    >
       <SiswaSidebar
         namaSiswa={siswa.nama_siswa}
         namaKelas={kelas?.nama_kelas ?? null}

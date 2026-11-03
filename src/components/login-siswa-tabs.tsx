@@ -217,6 +217,8 @@ function FormToken({
         >
           Token Kelas
         </label>
+        {/* Token kelas bukan pengganti akun: siswa tetap harus punya akun
+            login yang aktif (dibuat guru). */}
         <input
           id="token"
           name="token"

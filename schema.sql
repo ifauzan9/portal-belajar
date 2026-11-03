@@ -3020,3 +3020,56 @@ where l.id = e.lesson_id
 -- output + variabel dari input() + uji input berbeda; level 15 dinilai
 -- dari ketentuan karya bebas dan perubahan output saat input diganti.
 -- ============================================================
+
+
+-- ============================================================
+-- TAHAP 30: LOKASI PERANGKAT SISWA (PEMANTAUAN GURU)
+-- ============================================================
+-- Menyimpan lokasi TERAKHIR perangkat siswa (GPS browser) untuk dilihat guru
+-- di halaman Log Login. Satu baris per siswa (upsert), bukan riwayat.
+--
+-- Alur: siswa membuka dashboard -> browser meminta izin lokasi -> koordinat
+-- dikirim ke Server Action -> divalidasi -> disimpan lewat service-role.
+--
+-- Catatan ketelitian (penting untuk tidak menyesatkan guru):
+--  - HP/tablet dengan GPS sungguhan  -> akurasi sekitar 5-30 meter.
+--  - Laptop dengan WiFi              -> sekitar 20-50 meter di area kota.
+--  - PC lab dengan kabel LAN         -> jatuh ke IP geolocation: 1-50 KM,
+--    sering salah kota. Karena itu kolom akurasi_m SELALU diisi dan
+--    ditampilkan apa adanya supaya guru bisa menilai sendiri.
+--  - Lokasi hanya tersedia lewat HTTPS (atau localhost). Di HTTP biasa
+--    (mis. diakses dari HP via IP LAN) statusnya "tidak_didukung".
+--
+-- Privasi: lokasi hanya dibaca guru (authenticated). Akses langsung dari
+-- anon/authenticated dicabut; penulisan lewat service-role di server.
+create table if not exists public.lokasi_terakhir_siswa (
+  siswa_id uuid primary key references public.students(id) on delete cascade,
+  -- Koordinat null kalau status bukan 'diizinkan'.
+  lat double precision,
+  lng double precision,
+  akurasi_m double precision,
+  -- 'diizinkan' | 'ditolak' | 'tidak_didukung' | 'gagal'
+  status text not null default 'gagal',
+  diperbarui_at timestamptz not null default now()
+);
+
+create index if not exists idx_lokasi_siswa_diperbarui
+  on public.lokasi_terakhir_siswa (diperbarui_at desc);
+
+alter table public.lokasi_terakhir_siswa enable row level security;
+
+-- Cabut akses langsung; tulis hanya lewat service-role.
+revoke all privileges on table public.lokasi_terakhir_siswa from anon, authenticated, public;
+grant all privileges on table public.lokasi_terakhir_siswa to service_role;
+
+-- Guru (authenticated): hanya boleh baca, untuk halaman Log Login.
+grant select on table public.lokasi_terakhir_siswa to authenticated;
+
+drop policy if exists "Guru baca lokasi siswa" on public.lokasi_terakhir_siswa;
+create policy "Guru baca lokasi siswa"
+  on public.lokasi_terakhir_siswa for select to authenticated
+  using (true);
+
+-- ============================================================
+-- Selesai Tahap 30. Tabel baru: "lokasi_terakhir_siswa".
+-- ============================================================

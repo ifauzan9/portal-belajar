@@ -9,6 +9,7 @@ import {
 import { FormSoal } from "./form-soal";
 import { DaftarJawaban } from "./daftar-jawaban";
 import { DaftarSoal } from "./daftar-soal";
+import { formatWaktuWib } from "@/lib/waktu";
 
 // ============================================================================
 // Halaman kelola soal ulangan (status "akan dilaksanakan").
@@ -204,9 +205,7 @@ export default async function SoalUlanganPage({
         <p className="mt-1 text-sm text-slate-500">
           {dataUlangan.tanggal ? `Tanggal: ${dataUlangan.tanggal} · ` : ""}
           {dataUlangan.tenggat
-            ? `Tenggat: ${new Date(dataUlangan.tenggat).toLocaleString(
-                "id-ID",
-              )}`
+            ? `Tenggat: ${formatWaktuWib(dataUlangan.tenggat)}`
             : "Tanpa tenggat"}
           {dataUlangan.durasi ? ` · Durasi: ${dataUlangan.durasi} menit` : ""}
         </p>

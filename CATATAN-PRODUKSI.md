@@ -79,6 +79,18 @@ Hal yang disiapkan di database:
   file yang sangat besar bisa gagal dengan alasan yang sama.
 - `next.config.ts` menyetel `serverActions.bodySizeLimit: "30mb"`, tetapi limit
   platform Vercel tetap lebih rendah.
+- **Pelacakan lokasi siswa butuh HTTPS.** Browser hanya memberi GPS lewat
+  HTTPS (atau `localhost`). Di HTTP biasa (mis. dibuka dari HP via IP LAN
+  seperti `http://192.168.x.x`) lokasi tidak tersedia dan dicatat
+  "Tidak didukung". Vercel sudah HTTPS, jadi tidak perlu diubah.
+  - Lokasi diambil saat siswa membuka dashboard (bukan saat login) karena izin
+    browser baru bisa diminta setelah halaman terbuka.
+  - Ketelitian bervariasi: HP ±5–30 m, laptop WiFi ±20–50 m, sedangkan PC lab
+    berkabel bisa meleset 1–50 km (IP geolocation). Angka akurasi selalu
+    ditampilkan agar guru bisa menilai sendiri.
+  - Siswa bisa menolak izin atau memakai GPS palsu; karena sifatnya
+    pemantauan (bukan penegakan), status "Izin ditolak"/"Gagal dilacak"
+    tetap informatif.
 
 ## Cara Push Perubahan
 
@@ -104,6 +116,8 @@ Setelah itu (opsional) samakan **Supabase → Authentication → URL Configurati
 | Upload tugas gagal / error 413 | Berkas terlalu besar (limit ~4.5 MB) atau bucket `tugas` belum dibuat. |
 | Perubahan env var tidak berefek | Belum dilakukan **Redeploy**. |
 | Halaman tampil "Sedang Maintenance" terus | `MAINTENANCE_MODE` masih `1` → ubah ke `0` + Redeploy. |
+| Kolom Lokasi di Log Login selalu "Belum dilacak" | Siswa belum membuka dashboard sejak fitur ini dipasang, atau DDL Tahap 30 belum dijalankan. |
+| Lokasi selalu "Tidak didukung" | Halaman dibuka lewat HTTP (bukan HTTPS/localhost). |
 
 ## Checklist Cepat
 
@@ -113,4 +127,5 @@ Setelah itu (opsional) samakan **Supabase → Authentication → URL Configurati
 - [ ] `SISWA_SESSION_SECRET` diisi teks acak yang panjang
 - [ ] `schema.sql` sudah dijalankan di Supabase
 - [ ] Bucket Storage `tugas` sudah ada
+- [ ] Tabel `lokasi_terakhir_siswa` sudah ada (Tahap 30)
 - [ ] Login guru & siswa sudah dicoba di URL produksi

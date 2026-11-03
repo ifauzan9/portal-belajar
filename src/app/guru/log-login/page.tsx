@@ -4,19 +4,18 @@ import { Kartu, KartuJudul } from "@/components/ui/kartu";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { IkonBuku } from "@/components/ui/ikon-siswa";
+import { formatWaktuDetikWib } from "@/lib/waktu";
+import {
+  formatAkurasi,
+  formatKoordinat,
+  LABEL_STATUS_LOKASI,
+  tautanPeta,
+  type StatusLokasi,
+} from "@/lib/lokasi";
 
+// Waktu log selalu ditampilkan dalam WIB (UTC+7), bukan zona server.
 function formatWaktu(iso: string | null): string {
-  if (!iso) return "-";
-  const t = new Date(iso);
-  if (Number.isNaN(t.getTime())) return "-";
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).format(t);
+  return formatWaktuDetikWib(iso);
 }
 
 const LABEL_ALASAN: Record<string, string> = {
@@ -27,10 +26,12 @@ const LABEL_ALASAN: Record<string, string> = {
   token_salah: "Token kelas salah",
   siswa_bukan_di_kelas: "Nama/kelas tidak cocok",
   token_kelas_belum_dibuat: "Token kelas belum dibuat",
+  akun_belum_dibuat: "Akun belum dibuat",
 };
 
 type LogRow = {
   id: string;
+  siswa_id: string | null;
   username: string;
   berhasil: boolean;
   alasan: string | null;
@@ -41,6 +42,15 @@ type LogRow = {
     | { nama_siswa: string; nis: string | null; kelas_id: string | null }
     | { nama_siswa: string; nis: string | null; kelas_id: string | null }[]
     | null;
+};
+
+type LokasiRow = {
+  siswa_id: string;
+  lat: number | null;
+  lng: number | null;
+  akurasi_m: number | null;
+  status: string;
+  diperbarui_at: string | null;
 };
 
 function bacaSiswa(log: LogRow): {
@@ -54,6 +64,54 @@ function bacaSiswa(log: LogRow): {
     return data[0] ?? { nama_siswa: "", nis: null, kelas_id: null };
   }
   return data;
+}
+
+// Bagian tabel "Lokasi": koordinat + akurasi + link Google Maps kalau
+// lokasinya berhasil dilacak; kalau tidak, tampilkan alasannya.
+//
+// Lokasi dicatat saat siswa MEMBUKA DASHBOARD (bukan saat login), karena
+// browser baru bisa dimintai izin setelah halaman terbuka. Karena itu waktu
+// pencatatan ikut ditampilkan agar guru tidak salah tafsir.
+function SelLokasi({ lokasi }: { lokasi: LokasiRow | undefined }) {
+  if (!lokasi) {
+    return <span className="text-slate-400">Belum dilacak</span>;
+  }
+
+  const waktu = lokasi.diperbarui_at
+    ? formatWaktu(lokasi.diperbarui_at)
+    : null;
+
+  if (
+    lokasi.status === "diizinkan" &&
+    lokasi.lat !== null &&
+    lokasi.lng !== null
+  ) {
+    return (
+      <span className="flex flex-col gap-0.5">
+        <a
+          href={tautanPeta(lokasi.lat, lokasi.lng)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-mono text-xs text-emerald-700 underline-offset-2 hover:underline"
+        >
+          {formatKoordinat(lokasi.lat, lokasi.lng)}
+        </a>
+        <span className="text-xs text-slate-400">
+          {formatAkurasi(lokasi.akurasi_m)}
+          {waktu ? ` · ${waktu}` : ""}
+        </span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="flex flex-col gap-0.5">
+      <span className="text-xs text-slate-500">
+        {LABEL_STATUS_LOKASI[lokasi.status as StatusLokasi] ?? lokasi.status}
+      </span>
+      {waktu ? <span className="text-xs text-slate-400">{waktu}</span> : null}
+    </span>
+  );
 }
 
 export default async function LogLoginPage(
@@ -71,8 +129,10 @@ export default async function LogLoginPage(
     typeof searchParams.kelas === "string" ? searchParams.kelas : "";
   const hasilFilter =
     typeof searchParams.hasil === "string" ? searchParams.hasil : "";
+  const lokasiFilter =
+    typeof searchParams.lokasi === "string" ? searchParams.lokasi : "";
 
-  const [hasilKelas, hasilLog] = await Promise.all([
+  const [hasilKelas, hasilLog, hasilLokasi] = await Promise.all([
     supabase
       .from("classes")
       .select("id, nama_kelas")
@@ -80,11 +140,24 @@ export default async function LogLoginPage(
     supabase
       .from("login_logs")
       .select(
-        "id, username, berhasil, alasan, ip, user_agent, created_at, students(nama_siswa, nis, kelas_id)",
+        "id, siswa_id, username, berhasil, alasan, ip, user_agent, created_at, students(nama_siswa, nis, kelas_id)",
       )
       .order("created_at", { ascending: false })
       .limit(500),
+    // Lokasi terakhir tiap siswa (satu baris per siswa). Tabel baru Tahap 30;
+    // kalau DDL belum dijalankan, hasilnya kosong dan kolom tampil "Belum dilacak".
+    supabase
+      .from("lokasi_terakhir_siswa")
+      .select("siswa_id, lat, lng, akurasi_m, status, diperbarui_at"),
   ]);
+
+  const petaLokasi = new Map(
+    ((hasilLokasi.data ?? []) as LokasiRow[]).map((l) => [l.siswa_id, l]),
+  );
+
+  // Tabel lokasi baru ada sejak Tahap 30. Kalau DDL belum dijalankan, beri
+  // catatan singkat supaya guru tidak mengira semua siswa belum dilacak.
+  const lokasiSiap = !hasilLokasi.error;
 
   const kelasList = (hasilKelas.data ?? []) as {
     id: string;
@@ -103,19 +176,39 @@ export default async function LogLoginPage(
     logs = logs.filter((log) => !log.berhasil);
   }
 
+  // Filter lokasi: "terlacak" = koordinat ada; "tidak_terlacak" = belum ada
+  // baris lokasi atau statusnya izin ditolak/gagal.
+  if (lokasiFilter === "terlacak") {
+    logs = logs.filter((log) => {
+      const l = petaLokasi.get(log.siswa_id ?? "");
+      return l?.status === "diizinkan" && l.lat !== null && l.lng !== null;
+    });
+  } else if (lokasiFilter === "tidak_terlacak") {
+    logs = logs.filter((log) => {
+      const l = petaLokasi.get(log.siswa_id ?? "");
+      return !(l?.status === "diizinkan" && l.lat !== null && l.lng !== null);
+    });
+  }
+
   const totalBerhasil = logs.filter((log) => log.berhasil).length;
   const totalGagal = logs.length - totalBerhasil;
+  const totalTerlacak = logs.filter((log) => {
+    const l = petaLokasi.get(log.siswa_id ?? "");
+    return l?.status === "diizinkan" && l.lat !== null;
+  }).length;
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Log Login Siswa</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Pantau percobaan login siswa: waktu, status, dan alasan bila gagal.
+          Pantau percobaan login siswa: waktu, status, alasan bila gagal, dan
+          lokasi terakhir perangkat (akurasi bervariasi — lihat angka di kolom
+          Lokasi).
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
           <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">
             Total (tampil)
@@ -138,6 +231,14 @@ export default async function LogLoginPage(
           </p>
           <p className="mt-1 text-2xl font-semibold tabular-nums text-red-600">
             {totalGagal}
+          </p>
+        </div>
+        <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+          <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">
+            Lokasi terlacak
+          </p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums text-blue-600">
+            {totalTerlacak}
           </p>
         </div>
       </div>
@@ -186,6 +287,24 @@ export default async function LogLoginPage(
             <option value="gagal">Gagal</option>
           </select>
         </div>
+        <div>
+          <label
+            htmlFor="lokasi"
+            className="block text-xs font-medium text-slate-500"
+          >
+            Lokasi
+          </label>
+          <select
+            id="lokasi"
+            name="lokasi"
+            defaultValue={lokasiFilter}
+            className="mt-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+          >
+            <option value="">Semua</option>
+            <option value="terlacak">Terlacak</option>
+            <option value="tidak_terlacak">Belum / gagal</option>
+          </select>
+        </div>
         <button
           type="submit"
           className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
@@ -197,8 +316,15 @@ export default async function LogLoginPage(
       <Kartu>
         <KartuJudul
           judul="Riwayat Login"
-          subjudul="Menampilkan maksimal 500 percobaan terbaru"
+          subjudul="Waktu ditampilkan dalam WIB (UTC+7). Kolom Lokasi = lokasi terakhir perangkat siswa. Menampilkan maksimal 500 percobaan terbaru."
         />
+
+        {!lokasiSiap ? (
+          <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200">
+            Fitur lokasi belum aktif: jalankan <code>schema.sql</code> Tahap 30
+            (tabel <code>lokasi_terakhir_siswa</code>) di Supabase SQL Editor.
+          </p>
+        ) : null}
 
         {hasilLog.error ? (
           <p className="mt-3 text-sm text-red-600">
@@ -235,6 +361,9 @@ export default async function LogLoginPage(
                     <p className="mt-1 text-xs text-slate-500">
                       {formatWaktu(log.created_at)} · {log.ip ?? "–"}
                     </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Lokasi: <SelLokasi lokasi={petaLokasi.get(log.siswa_id ?? "")} />
+                    </p>
                     {!log.berhasil && log.alasan ? (
                       <p className="mt-1 text-xs text-red-600">
                         {LABEL_ALASAN[log.alasan] ?? log.alasan}
@@ -245,10 +374,10 @@ export default async function LogLoginPage(
               })}
             </ul>
             <div className="mt-3 hidden overflow-x-auto lg:block">
-            <table className="w-full min-w-[720px] text-sm">
+            <table className="w-full min-w-[980px] text-sm">
               <thead className="border-b border-slate-200 bg-slate-50">
                 <tr>
-                  {["Waktu", "Siswa", "Username", "Status", "Alasan", "IP"].map(
+                  {["Waktu (WIB)", "Siswa", "Username", "Status", "Alasan", "IP", "Lokasi"].map(
                     (h) => (
                       <th
                         key={h}
@@ -309,6 +438,9 @@ export default async function LogLoginPage(
                       </td>
                       <td className="px-3 py-2 font-mono text-xs text-slate-500">
                         {log.ip ?? "–"}
+                      </td>
+                      <td className="px-3 py-2">
+                        <SelLokasi lokasi={petaLokasi.get(log.siswa_id ?? "")} />
                       </td>
                     </tr>
                   );

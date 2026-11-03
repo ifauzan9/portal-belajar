@@ -1,20 +1,14 @@
 import { requireSiswa } from "@/lib/sesi-siswa";
 import { createClient } from "@/lib/supabase/server";
 import { sudahTampil } from "@/lib/jadwal-pengumuman";
+import { formatTanggalWib } from "@/lib/waktu";
 import { Kartu } from "@/components/ui/kartu";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { IkonPengumuman } from "@/components/ui/ikon-siswa";
 
 function tanggalPendek(iso: string | null): string {
-  if (!iso) return "-";
-  const t = new Date(iso);
-  if (Number.isNaN(t.getTime())) return "-";
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(t);
+  return formatTanggalWib(iso);
 }
 
 export default async function PengumumanSiswaPage() {

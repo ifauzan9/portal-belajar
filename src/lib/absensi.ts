@@ -2,6 +2,8 @@
 // Helper absensi siswa: status, validasi input, dan rekap kehadiran.
 // ============================================================================
 
+import { formatTanggalKalenderWib, tanggalWibHariIni } from "@/lib/waktu";
+
 export type StatusAbsensi = "hadir" | "sakit" | "izin" | "alpa";
 
 export const DAFTAR_STATUS: StatusAbsensi[] = [
@@ -41,30 +43,20 @@ export function bacaTanggal(nilai: unknown): string | null {
   if (typeof nilai !== "string") return null;
   const teks = nilai.trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(teks)) return null;
-  const waktu = new Date(`${teks}T00:00:00`);
+  // Anchor UTC: hanya untuk memvalidasi, tidak dipakai untuk tampilan.
+  const waktu = new Date(`${teks}T00:00:00Z`);
   if (Number.isNaN(waktu.getTime())) return null;
   return teks;
 }
 
-// Tanggal lokal hari ini dalam format YYYY-MM-DD (untuk default input date).
+// Tanggal lokal hari ini di WIB dalam format YYYY-MM-DD (default input date).
 export function hariIni(): string {
-  const sekarang = new Date();
-  const dua = (angka: number) => String(angka).padStart(2, "0");
-  return `${sekarang.getFullYear()}-${dua(sekarang.getMonth() + 1)}-${dua(
-    sekarang.getDate(),
-  )}`;
+  return tanggalWibHariIni();
 }
 
-// Format tanggal (YYYY-MM-DD, waktu lokal) untuk tampilan id-ID.
+// Format tanggal kalender (YYYY-MM-DD) untuk tampilan id-ID.
 export function formatTanggal(tanggal: string | null): string {
-  const valid = bacaTanggal(tanggal);
-  if (!valid) return "-";
-  return new Intl.DateTimeFormat("id-ID", {
-    weekday: "short",
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(`${valid}T00:00:00`));
+  return formatTanggalKalenderWib(tanggal);
 }
 
 export type RekapAbsensi = {

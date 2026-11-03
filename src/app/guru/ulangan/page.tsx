@@ -18,6 +18,7 @@ import {
   type UrutUlangan,
 } from "@/lib/urutkan-ulangan";
 import { tenggatSudahLewat } from "@/lib/deadline";
+import { formatTanggalWib } from "@/lib/waktu";
 
 type KelasRow = { id: string; nama_kelas: string };
 type UlanganRow = {
@@ -45,14 +46,7 @@ type UlanganRow = {
 };
 
 function tanggalPendek(iso: string | null): string {
-  if (!iso) return "-";
-  const tanggal = new Date(iso);
-  if (Number.isNaN(tanggal.getTime())) return "-";
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(tanggal);
+  return formatTanggalWib(iso);
 }
 
 function buatUrl(urut: UrutUlangan, arah: Arah, cari: string) {

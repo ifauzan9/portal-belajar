@@ -1,6 +1,8 @@
 export type UrutKelas = "nama" | "tanggal";
 export type Arah = "asc" | "desc";
 
+import { formatTanggalWib } from "@/lib/waktu";
+
 // Arah urutan dipakai juga oleh kolom lain di halaman ini.
 export function bacaArah(nilai: unknown): Arah {
   return nilai === "desc" ? "desc" : "asc";
@@ -8,20 +10,9 @@ export function bacaArah(nilai: unknown): Arah {
 
 type KelasUrut = { nama_kelas: string; created_at: string | null };
 
-const FORMAT_TANGGAL = new Intl.DateTimeFormat("id-ID", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-});
-
 // Menampilkan tanggal pendek, contoh: 30 Sep 2026
 export function tanggalPendek(iso: string | null): string {
-  if (!iso) return "-";
-
-  const tanggal = new Date(iso);
-  if (Number.isNaN(tanggal.getTime())) return "-";
-
-  return FORMAT_TANGGAL.format(tanggal);
+  return formatTanggalWib(iso);
 }
 
 function waktu(iso: string | null): number {

@@ -11,20 +11,14 @@ import { createClient } from "@/lib/supabase/server";
 import { ambilKelasTugas } from "@/lib/tugas";
 import { ambilKelasUlangan } from "@/lib/ambil-kelas-ulangan";
 import { relevansiKelas } from "@/lib/rekap";
+import { formatTanggalWib } from "@/lib/waktu";
 
 // ============================================================================
 // Detail rekap satu siswa — empat seksi kegiatan + tombol reset per kegiatan.
 // ============================================================================
 
 function formatWaktu(iso: string | null): string {
-  if (!iso) return "-";
-  const t = new Date(iso);
-  if (Number.isNaN(t.getTime())) return "-";
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(t);
+  return formatTanggalWib(iso);
 }
 
 function BarisKegiatan({

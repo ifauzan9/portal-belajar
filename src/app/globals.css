@@ -150,3 +150,401 @@ body {
     transition: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Preferensi tampilan siswa (hanya area /siswa).
+
+   Tema dipasang sebagai atribut di wrapper layout siswa:
+     <div id="area-siswa" data-tema="gelap" data-ukuran="besar">
+   Karena scope-nya wrapper (bukan <html>), halaman guru & login tidak pernah
+   ikut berubah.
+
+   Idenya: kelas Tailwind menulis warnanya lewat CSS variable
+   (mis. .bg-white -> var(--color-white)), jadi tema gelap cukup MENIMPA
+   variabel itu, bukan menulis ulang setiap kelas. Variabel didefinisikan
+   ulang di dalam [data-tema="gelap"] sehingga cascade-nya berlaku untuk
+   semua keturunan.
+   --------------------------------------------------------------------------- */
+
+#area-siswa {
+  /* Skala teks Tailwind memakai satuan rem. Saat ukuran "besar", root
+     font-size dinaikkan sedikit agar SEMUA teks ikut membesar (termasuk
+     yang memakai text-sm/text-xs), tanpa mengubah satu per satu. */
+  --siswa-skala-teks: 1;
+}
+
+#area-siswa[data-ukuran="besar"] {
+  --siswa-skala-teks: 1.15;
+}
+
+/* Terapkan skala ke ukuran teks: kalikan nilai text-* Tailwind. */
+#area-siswa[data-ukuran="besar"] .text-xs {
+  font-size: calc(var(--text-xs) * var(--siswa-skala-teks));
+}
+#area-siswa[data-ukuran="besar"] .text-sm {
+  font-size: calc(var(--text-sm) * var(--siswa-skala-teks));
+}
+#area-siswa[data-ukuran="besar"] .text-base {
+  font-size: calc(var(--text-base) * var(--siswa-skala-teks));
+}
+#area-siswa[data-ukuran="besar"] .text-lg {
+  font-size: calc(var(--text-lg) * var(--siswa-skala-teks));
+}
+#area-siswa[data-ukuran="besar"] .text-xl {
+  font-size: calc(var(--text-xl) * var(--siswa-skala-teks));
+}
+#area-siswa[data-ukuran="besar"] .text-2xl {
+  font-size: calc(var(--text-2xl) * var(--siswa-skala-teks));
+}
+#area-siswa[data-ukuran="besar"] .text-3xl {
+  font-size: calc(var(--text-3xl) * var(--siswa-skala-teks));
+}
+
+/* ---------------------------- Tema gelap ---------------------------- */
+
+#area-siswa[data-tema="gelap"] {
+  /* Permukaan */
+  --color-white: #0f172b; /* kartu, sidebar, input */
+  --color-slate-50: #0b1120; /* latar halaman */
+  --color-slate-100: #1d293d; /* chip, hover, garis pemisah */
+  --color-slate-200: #334155; /* ring kartu */
+  --color-slate-300: #475569; /* border input */
+  --color-slate-400: #94a3b8; /* teks samar */
+  --color-slate-500: #a3b1c6; /* teks sekunder */
+  --color-slate-600: #cbd5e1; /* teks isi */
+  --color-slate-700: #dbe4ef;
+  --color-slate-800: #e8eef7;
+  --color-slate-900: #f3f7fc; /* judul */
+  --color-slate-950: #ffffff;
+
+  color-scheme: dark;
+}
+
+/* Permukaan yang di mode terang memang gelap (bg-slate-900/800/700) tidak
+   boleh ikut memakai --color-slate-900 (yang dibalik jadi putih). Pertahankan
+   sebagai permukaan netral yang naik satu tingkat dari kartu, supaya tombol
+   gelap & panel editor tetap seperti desain aslinya.
+   Catatan: panel kode (bg-slate-950) tidak diikutkan dan tetap paling gelap. */
+#area-siswa[data-tema="gelap"] .bg-slate-900:not(.bg-slate-900\/5):not(.bg-slate-900\/95) {
+  background-color: #1b2740;
+}
+#area-siswa[data-tema="gelap"] .bg-slate-800 {
+  background-color: #24324c;
+}
+#area-siswa[data-tema="gelap"] .bg-slate-700 {
+  background-color: #2e3f5c;
+}
+
+/* Badge transparan di atas latar gelap (mis. bg-slate-900/5) tetap tipis. */
+#area-siswa[data-tema="gelap"] .bg-slate-900\/5 {
+  background-color: #ffffff14;
+}
+
+/* Panel kode (editor lab, terminal) sengaja gelap di kedua tema. */
+#area-siswa[data-tema="gelap"] .bg-slate-900\/95 {
+  background-color: #0f172bf2;
+}
+#area-siswa[data-tema="gelap"] .bg-slate-950,
+#area-siswa[data-tema="gelap"] .bg-slate-950\/60 {
+  background-color: #020618;
+}
+
+/* Teks & garis tepi di panel gelap harus tetap seperti mode terang. */
+#area-siswa[data-tema="gelap"] .bg-slate-950 .text-slate-900,
+#area-siswa[data-tema="gelap"] .text-white,
+#area-siswa[data-tema="gelap"] .text-slate-100,
+#area-siswa[data-tema="gelap"] .text-slate-200 {
+  color: #ffffff;
+}
+#area-siswa[data-tema="gelap"] .text-slate-400 {
+  color: #94a3b8;
+}
+#area-siswa[data-tema="gelap"] .text-slate-300 {
+  color: #cbd5e1;
+}
+/* Cincin putih pada avatar tetap putih agar kontras dengan latar gelap. */
+#area-siswa[data-tema="gelap"] .ring-white {
+  --tw-ring-color: #ffffff;
+}
+#area-siswa[data-tema="gelap"] .border-slate-600,
+#area-siswa[data-tema="gelap"] .border-slate-700,
+#area-siswa[data-tema="gelap"] .border-slate-800 {
+  border-color: #334155;
+}
+#area-siswa[data-tema="gelap"] .ring-slate-700,
+#area-siswa[data-tema="gelap"] .ring-slate-800 {
+  --tw-ring-color: #334155;
+}
+
+/* Variasi hover di mode terang yang memakai warna terang -> versi gelap. */
+#area-siswa[data-tema="gelap"] .hover\:bg-slate-800:hover {
+  background-color: #24324c;
+}
+#area-siswa[data-tema="gelap"] .hover\:bg-slate-700:hover {
+  background-color: #2e3f5c;
+}
+#area-siswa[data-tema="gelap"] .hover\:bg-slate-100:hover {
+  background-color: var(--color-slate-100);
+}
+#area-siswa[data-tema="gelap"] .hover\:bg-slate-50:hover {
+  background-color: var(--color-slate-100);
+}
+#area-siswa[data-tema="gelap"] .hover\:bg-red-50:hover {
+  background-color: #3f1d24;
+}
+#area-siswa[data-tema="gelap"] .hover\:bg-emerald-50:hover {
+  background-color: #12312b;
+}
+#area-siswa[data-tema="gelap"] .hover\:bg-blue-50:hover {
+  background-color: #17263f;
+}
+#area-siswa[data-tema="gelap"] .hover\:bg-amber-50:hover {
+  background-color: #3a2c14;
+}
+
+/* Latar berwarna muda. */
+#area-siswa[data-tema="gelap"] .bg-emerald-50 {
+  background-color: #10261f;
+}
+#area-siswa[data-tema="gelap"] .bg-emerald-100 {
+  background-color: #14342b;
+}
+#area-siswa[data-tema="gelap"] .bg-emerald-100\/60,
+#area-siswa[data-tema="gelap"] .bg-emerald-100\/80 {
+  background-color: #14342bcc;
+}
+#area-siswa[data-tema="gelap"] .bg-emerald-50\/50,
+#area-siswa[data-tema="gelap"] .bg-emerald-50\/60,
+#area-siswa[data-tema="gelap"] .bg-emerald-50\/70 {
+  background-color: #10261fb3;
+}
+#area-siswa[data-tema="gelap"] .border-emerald-100\/70 {
+  border-color: #1c4b3d;
+}
+#area-siswa[data-tema="gelap"] .bg-red-50 {
+  background-color: #2c1319;
+}
+#area-siswa[data-tema="gelap"] .bg-red-50\/50,
+#area-siswa[data-tema="gelap"] .bg-red-50\/95 {
+  background-color: #2c1319e6;
+}
+#area-siswa[data-tema="gelap"] .bg-red-100 {
+  background-color: #3a1a21;
+}
+#area-siswa[data-tema="gelap"] .bg-amber-50 {
+  background-color: #2b2110;
+}
+#area-siswa[data-tema="gelap"] .bg-amber-50\/70 {
+  background-color: #2b2110b3;
+}
+#area-siswa[data-tema="gelap"] .bg-amber-100 {
+  background-color: #3a2c14;
+}
+#area-siswa[data-tema="gelap"] .bg-amber-100\/60 {
+  background-color: #3a2c1499;
+}
+#area-siswa[data-tema="gelap"] .bg-blue-50 {
+  background-color: #101f36;
+}
+#area-siswa[data-tema="gelap"] .bg-blue-100 {
+  background-color: #16263f;
+}
+#area-siswa[data-tema="gelap"] .bg-blue-100\/60 {
+  background-color: #16263f99;
+}
+#area-siswa[data-tema="gelap"] .bg-violet-50 {
+  background-color: #1c1836;
+}
+#area-siswa[data-tema="gelap"] .bg-violet-100 {
+  background-color: #241e45;
+}
+#area-siswa[data-tema="gelap"] .bg-green-50 {
+  background-color: #10261c;
+}
+#area-siswa[data-tema="gelap"] .bg-sky-50 {
+  background-color: #0c2434;
+}
+#area-siswa[data-tema="gelap"] .bg-sky-100 {
+  background-color: #14324a;
+}
+#area-siswa[data-tema="gelap"] .bg-indigo-50 {
+  background-color: #141a33;
+}
+#area-siswa[data-tema="gelap"] .bg-indigo-50\/60 {
+  background-color: #141a3399;
+}
+#area-siswa[data-tema="gelap"] .bg-indigo-100 {
+  background-color: #1b2347;
+}
+#area-siswa[data-tema="gelap"] .bg-orange-100 {
+  background-color: #3a2412;
+}
+
+/* Teks berwarna yang terlalu gelap untuk latar gelap. */
+#area-siswa[data-tema="gelap"] .text-emerald-700 {
+  color: var(--color-emerald-300);
+}
+#area-siswa[data-tema="gelap"] .text-emerald-700\/60 {
+  color: color-mix(in oklab, var(--color-emerald-300) 60%, transparent);
+}
+#area-siswa[data-tema="gelap"] .text-emerald-700\/80 {
+  color: color-mix(in oklab, var(--color-emerald-300) 80%, transparent);
+}
+#area-siswa[data-tema="gelap"] .text-emerald-800,
+#area-siswa[data-tema="gelap"] .text-emerald-800\/80 {
+  color: var(--color-emerald-200);
+}
+#area-siswa[data-tema="gelap"] .text-emerald-900 {
+  color: var(--color-emerald-100);
+}
+#area-siswa[data-tema="gelap"] .text-emerald-950 {
+  color: var(--color-emerald-100);
+}
+#area-siswa[data-tema="gelap"] .text-red-700 {
+  color: var(--color-red-300);
+}
+#area-siswa[data-tema="gelap"] .text-red-800 {
+  color: var(--color-red-200);
+}
+#area-siswa[data-tema="gelap"] .text-amber-700 {
+  color: var(--color-amber-300);
+}
+#area-siswa[data-tema="gelap"] .text-amber-600 {
+  color: var(--color-amber-400);
+}
+#area-siswa[data-tema="gelap"] .text-amber-800,
+#area-siswa[data-tema="gelap"] .text-amber-900,
+#area-siswa[data-tema="gelap"] .text-amber-950 {
+  color: var(--color-amber-200);
+}
+/* Chip "sudah dicoba" berlatar amber muda: teksnya harus tetap gelap. */
+#area-siswa[data-tema="gelap"] .bg-amber-300.text-amber-950,
+#area-siswa[data-tema="gelap"] .bg-amber-400.text-slate-900 {
+  color: #3f2d0a;
+}
+#area-siswa[data-tema="gelap"] .text-slate-950 {
+  color: var(--color-slate-900);
+}
+#area-siswa[data-tema="gelap"] .text-blue-600,
+#area-siswa[data-tema="gelap"] .text-blue-900 {
+  color: var(--color-blue-300);
+}
+#area-siswa[data-tema="gelap"] .text-blue-800 {
+  color: var(--color-blue-200);
+}
+#area-siswa[data-tema="gelap"] .text-red-600 {
+  color: var(--color-red-400);
+}
+#area-siswa[data-tema="gelap"] .text-red-900 {
+  color: var(--color-red-200);
+}
+#area-siswa[data-tema="gelap"] .text-emerald-600 {
+  color: var(--color-emerald-400);
+}
+#area-siswa[data-tema="gelap"] .text-violet-700 {
+  color: #c4b5fd;
+}
+#area-siswa[data-tema="gelap"] .text-green-700 {
+  color: var(--color-green-300);
+}
+#area-siswa[data-tema="gelap"] .text-indigo-700 {
+  color: #a5b4fc;
+}
+#area-siswa[data-tema="gelap"] .text-indigo-800\/70,
+#area-siswa[data-tema="gelap"] .text-indigo-900\/80 {
+  color: color-mix(in oklab, #c7d2fe 85%, transparent);
+}
+#area-siswa[data-tema="gelap"] .text-indigo-950 {
+  color: #e0e7ff;
+}
+#area-siswa[data-tema="gelap"] .text-sky-700 {
+  color: #7dd3fc;
+}
+#area-siswa[data-tema="gelap"] .text-sky-600 {
+  color: #38bdf8;
+}
+#area-siswa[data-tema="gelap"] .text-orange-800 {
+  color: var(--color-orange-200);
+}
+
+/* Ring & garis tepi berwarna muda. */
+#area-siswa[data-tema="gelap"] .ring-emerald-100,
+#area-siswa[data-tema="gelap"] .ring-emerald-200 {
+  --tw-ring-color: #1c4b3d;
+}
+#area-siswa[data-tema="gelap"] .ring-red-200 {
+  --tw-ring-color: #5a2530;
+}
+#area-siswa[data-tema="gelap"] .ring-amber-200 {
+  --tw-ring-color: #574420;
+}
+#area-siswa[data-tema="gelap"] .ring-blue-200 {
+  --tw-ring-color: #22406b;
+}
+#area-siswa[data-tema="gelap"] .ring-violet-200 {
+  --tw-ring-color: #3a3168;
+}
+#area-siswa[data-tema="gelap"] .ring-green-200 {
+  --tw-ring-color: #1c4b3d;
+}
+#area-siswa[data-tema="gelap"] .border-emerald-100,
+#area-siswa[data-tema="gelap"] .border-emerald-200 {
+  border-color: #1c4b3d;
+}
+/* Kartu "Variabel yang diminta" (indigo) & border sejenis. */
+#area-siswa[data-tema="gelap"] .border-indigo-200 {
+  border-color: #2b3568;
+}
+#area-siswa[data-tema="gelap"] .border-slate-200\/80 {
+  border-color: #334155cc;
+}
+/* Level aktif di peta tantangan: ring luar harus menyatu dengan kartu gelap. */
+#area-siswa[data-tema="gelap"] .ring-offset-emerald-50 {
+  --tw-ring-offset-color: #10261f;
+}
+#area-siswa[data-tema="gelap"] .border-red-200 {
+  border-color: #5a2530;
+}
+#area-siswa[data-tema="gelap"] .border-amber-100 {
+  border-color: #574420;
+}
+
+/* Gradien header sidebar: emerald muda ke putih → ke permukaan gelap. */
+#area-siswa[data-tema="gelap"] .from-emerald-50\/80 {
+  --tw-gradient-from: #10261fe6;
+}
+#area-siswa[data-tema="gelap"] .to-white {
+  --tw-gradient-to: var(--color-white);
+}
+
+/* Kaca/blur di atas konten (bilah aksi ulangan). */
+#area-siswa[data-tema="gelap"] .bg-white\/95 {
+  background-color: #0f172bf2;
+}
+/* Tombol "belum dikerjakan"/terkunci di peta level memakai putih tipis. */
+#area-siswa[data-tema="gelap"] .bg-white\/60 {
+  background-color: #ffffff0f;
+}
+/* Pembatas baris tabel/daftar yang tadinya slate-100 muda. */
+#area-siswa[data-tema="gelap"] .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #1d293d;
+}
+/* Latar baris genap/tabel tipis. */
+#area-siswa[data-tema="gelap"] .bg-slate-50\/60 {
+  background-color: #0b112099;
+}
+/* Sorotan kartu saat hover (lab) tetap redup, bukan putih. */
+#area-siswa[data-tema="gelap"] .hover\:bg-emerald-100:hover {
+  background-color: #14342b;
+}
+
+/* Input: pastikan teks yang diketik tetap terang dan border tetap terlihat. */
+#area-siswa[data-tema="gelap"] input,
+#area-siswa[data-tema="gelap"] textarea,
+#area-siswa[data-tema="gelap"] select {
+  color: var(--color-slate-900);
+}
+#area-siswa[data-tema="gelap"] input::placeholder,
+#area-siswa[data-tema="gelap"] textarea::placeholder {
+  color: var(--color-slate-500);
+}

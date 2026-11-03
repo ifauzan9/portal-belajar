@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { hitungRataRata, tampilkanRataRata } from "@/lib/rata-rata";
 import { ambilKelasUlangan } from "@/lib/ambil-kelas-ulangan";
+import { formatTanggalWib } from "@/lib/waktu";
 
 type KelasRow = { id: string; nama_kelas: string };
 type UlanganRow = {
@@ -23,14 +24,7 @@ const REENTANG_NILAI = [
 ];
 
 function tanggalPendek(iso: string | null): string {
-  if (!iso) return "-";
-  const t = new Date(iso);
-  if (Number.isNaN(t.getTime())) return "-";
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(t);
+  return formatTanggalWib(iso);
 }
 
 function KartuStat({

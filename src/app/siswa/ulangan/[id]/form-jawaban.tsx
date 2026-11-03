@@ -10,6 +10,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Notifikasi } from "@/components/ui/notifikasi";
 import { IkonJam } from "@/components/ui/ikon-siswa";
+import { formatTanggalJamPendekWib } from "@/lib/waktu";
 
 type Soal = {
   id: string;
@@ -182,12 +183,7 @@ export function FormJawaban({
     durasi !== null
       ? `${formatMenit(detikSisa ?? 0)}`
       : tenggat
-        ? new Date(tenggat).toLocaleString("id-ID", {
-            day: "2-digit",
-            month: "short",
-            hour: "2-digit",
-            minute: "2-digit",
-          })
+        ? formatTanggalJamPendekWib(tenggat)
         : null;
 
   // ------------------- RENDER -------------------
@@ -257,12 +253,7 @@ export function FormJawaban({
             <div className="flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-1.5 ring-1 ring-slate-200">
               <span className="text-xs text-slate-500">Tenggat:</span>
               <span className="text-sm font-medium text-slate-900">
-                {new Date(tenggat).toLocaleString("id-ID", {
-                  day: "2-digit",
-                  month: "short",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
+                {formatTanggalJamPendekWib(tenggat)}
               </span>
             </div>
           ) : null}

@@ -5,6 +5,7 @@ import { requireGuru } from "@/lib/require-guru";
 import { bacaKelasDariForm } from "@/lib/pilih-kelas";
 import { ambilKelasUlangan } from "@/lib/ambil-kelas-ulangan";
 import { bacaNilaiDariForm, parseNilaiExcel } from "@/lib/parse-nilai";
+import { parseInputLokalWib } from "@/lib/waktu";
 
 const MAX_JUDUL = 200;
 const MAX_KODE = 50;
@@ -71,11 +72,9 @@ export async function addUlangan(
   }
 
   const statusValid = status === "akan" ? "akan" : "sudah";
-  // Tenggat hanya relevan untuk "akan"
+  // Tenggat hanya relevan untuk "akan". Input dibaca sebagai jam WIB.
   const tenggatValue =
-    statusValid === "akan" && tenggat
-      ? new Date(tenggat).toISOString()
-      : null;
+    statusValid === "akan" && tenggat ? parseInputLokalWib(tenggat) : null;
 
   // Durasi (menit) — validasi 0–9999
   let durasiValue: number | null = null;
@@ -202,9 +201,7 @@ export async function updateUlangan(
 
   const statusValid = status === "akan" ? "akan" : "sudah";
   const tenggatValue =
-    statusValid === "akan" && tenggat
-      ? new Date(tenggat).toISOString()
-      : null;
+    statusValid === "akan" && tenggat ? parseInputLokalWib(tenggat) : null;
 
   let durasiValue: number | null = null;
   if (durasiRaw) {

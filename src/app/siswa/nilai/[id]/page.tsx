@@ -7,6 +7,7 @@ import {
   namaKelasDariIds,
 } from "@/lib/ambil-kelas-ulangan";
 import { tenggatSudahLewat } from "@/lib/deadline";
+import { formatTanggalWib, formatWaktuWib } from "@/lib/waktu";
 
 // ============================================================================
 // Detail nilai ulangan per siswa.
@@ -138,7 +139,7 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
         <span className="inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-blue-200">
           Buka
           {dataUlangan.tenggat
-            ? ` · ${new Date(dataUlangan.tenggat).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}`
+            ? ` · ${formatTanggalWib(dataUlangan.tenggat)}`
             : ""}
         </span>
       )
@@ -238,7 +239,7 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
           </h2>
           <p className="mt-1 text-xs text-slate-500">
             {dataUlangan.tenggat
-              ? `Tenggat: ${new Date(dataUlangan.tenggat).toLocaleString("id-ID")}`
+              ? `Tenggat: ${formatWaktuWib(dataUlangan.tenggat)}`
               : "Tanpa tenggat waktu."}{" "}
             Arahkan ke halaman kerjakan untuk mulai.
           </p>
@@ -320,7 +321,7 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
           )}
 
           <p className="mt-3 text-xs text-slate-400">
-            Submit: {new Date(submitInfo.disubmit_at).toLocaleString("id-ID")}
+            Submit: {formatWaktuWib(submitInfo.disubmit_at)}
           </p>
         </div>
       </div>

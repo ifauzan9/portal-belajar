@@ -1,4 +1,5 @@
 import { readSheet } from "read-excel-file/node";
+import { tanggalWibDariDate } from "@/lib/waktu";
 
 export type BarisImport = {
   nomor: number;
@@ -17,7 +18,9 @@ type KelasRingkas = { id: string; nama_kelas: string };
 
 function teks(nilai: unknown): string {
   if (nilai === null || nilai === undefined) return "";
-  if (nilai instanceof Date) return nilai.toISOString().slice(0, 10);
+  // Sel Excel bertipe tanggal: pakai tanggal kalender WIB, bukan UTC
+  // (toISOString bisa menggeser tanggal untuk waktu sebelum 07:00 WIB).
+  if (nilai instanceof Date) return tanggalWibDariDate(nilai);
   return String(nilai).trim();
 }
 

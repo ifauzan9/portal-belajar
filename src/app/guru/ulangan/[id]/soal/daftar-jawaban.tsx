@@ -2,6 +2,7 @@
 
 import { useState, useActionState } from "react";
 import { simpanNilaiEsai } from "@/app/guru/ulangan/actions";
+import { formatWaktuWib } from "@/lib/waktu";
 
 type SubmitRow = {
   id: string;
@@ -92,7 +93,7 @@ export function DaftarJawaban({
                     ) : null}
                   </span>
                   <span className="text-xs text-slate-400">
-                    {new Date(row.disubmit_at).toLocaleString("id-ID")}
+                    {formatWaktuWib(row.disubmit_at)}
                   </span>
                 </div>
                 <div className="flex items-center gap-3 text-xs tabular-nums">

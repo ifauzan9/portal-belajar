@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useActionState } from "react";
 import { addTugas, updateTugas, type HasilTugas } from "@/app/guru/tugas/actions";
 import { PilihKelasMulti } from "@/components/pilih-kelas-multi";
 import { PilihFileDiizinkan } from "@/components/pilih-file-diizinkan";
-import { isoKeInputLokal } from "@/lib/jadwal-pengumuman";
+import { isoKeInputLokalWib } from "@/lib/waktu";
 import {
   LABEL_METODE,
   METODE_VALID,
@@ -139,7 +139,7 @@ export function FormTugas({
             id="tenggat-tugas"
             name="tenggat"
             type="datetime-local"
-            defaultValue={isoKeInputLokal(awal?.tenggat ?? null)}
+            defaultValue={isoKeInputLokalWib(awal?.tenggat ?? null)}
             className={inputBase}
           />
           <p className={hintBase}>Kosongkan = tanpa batas waktu.</p>

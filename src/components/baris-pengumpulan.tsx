@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { nilaiTugas, type HasilTugas } from "@/app/guru/tugas/actions";
 import { Badge } from "@/components/ui/badge";
 import { formatUkuran, urlPublikBerkas } from "@/lib/tugas";
+import { formatWaktuWib } from "@/lib/waktu";
 
 export type BerkasPengumpulan = {
   id: string;
@@ -44,9 +45,7 @@ export function BarisPengumpulan({
   const foto = berkas.filter((b) => b.tipe === "foto");
   const dokumen = berkas.filter((b) => b.tipe === "dokumen");
 
-  const waktu = updatedAt
-    ? new Date(updatedAt).toLocaleString("id-ID")
-    : "-";
+  const waktu = updatedAt ? formatWaktuWib(updatedAt) : "-";
 
   return (
     <div className="rounded-2xl bg-white p-5 ring-1 ring-slate-200">

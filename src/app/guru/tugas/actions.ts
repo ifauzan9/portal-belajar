@@ -9,6 +9,7 @@ import {
   bacaMetode,
   metodeMengizinkanFile,
 } from "@/lib/tugas";
+import { parseInputLokalWib } from "@/lib/waktu";
 
 const MAX_JUDUL = 200;
 const MAX_DESKRIPSI = 5000;
@@ -16,15 +17,15 @@ const MAX_UMPAN_BALIK = 2000;
 
 export type HasilTugas = { message: string | null; berhasil: boolean };
 
-// Membaca input datetime-local → ISO. Kosong = tanpa tenggat.
+// Membaca input datetime-local (jam WIB) → ISO. Kosong = tanpa tenggat.
 function parseTenggat(
   nilai: string,
 ): { ok: true; iso: string | null } | { ok: false } {
   const teks = nilai.trim();
   if (!teks) return { ok: true, iso: null };
-  const waktu = new Date(teks);
-  if (Number.isNaN(waktu.getTime())) return { ok: false };
-  return { ok: true, iso: waktu.toISOString() };
+  const iso = parseInputLokalWib(teks);
+  if (!iso) return { ok: false };
+  return { ok: true, iso };
 }
 
 // Simpan hubungan tugas-kelas (kosong = semua kelas). Pola sama

@@ -7,8 +7,13 @@ import { ambilKelasUlangan } from "@/lib/ambil-kelas-ulangan";
 import { tenggatSudahLewat } from "@/lib/deadline";
 import { sudahTampil } from "@/lib/jadwal-pengumuman";
 import { tugasDibuka } from "@/lib/tugas";
+import {
+  formatTanggalJamPendekWib,
+  formatTanggalWib,
+} from "@/lib/waktu";
 import { hitungProgresLab } from "@/lib/progres-lab";
 import { JamRealtime } from "@/components/jam-realtime";
+import { PelacakLokasi } from "@/components/pelacak-lokasi";
 import { Kartu, KartuJudul } from "@/components/ui/kartu";
 import { KartuStat } from "@/components/ui/kartu-stat";
 import { Badge } from "@/components/ui/badge";
@@ -28,26 +33,11 @@ import {
 } from "@/components/ui/ikon-siswa";
 
 function tanggalPendek(iso: string | null): string {
-  if (!iso) return "-";
-  const t = new Date(iso);
-  if (Number.isNaN(t.getTime())) return "-";
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(t);
+  return formatTanggalWib(iso);
 }
 
 function tenggatPendek(iso: string | null): string {
-  if (!iso) return "-";
-  const t = new Date(iso);
-  if (Number.isNaN(t.getTime())) return "-";
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(t);
+  return formatTanggalJamPendekWib(iso);
 }
 
 export default async function DashboardSiswaPage() {
@@ -274,6 +264,9 @@ export default async function DashboardSiswaPage() {
 
   return (
     <div className="space-y-6">
+      {/* Catat lokasi perangkat untuk pemantauan guru (best-effort, senyap). */}
+      <PelacakLokasi />
+
       <HeroSiswa
         label="Dashboard Siswa"
         judul={`Halo, ${siswa.nama_siswa}!`}
@@ -732,7 +725,7 @@ export default async function DashboardSiswaPage() {
           </Link>
 
           <Link
-            href="/siswa/ganti-password"
+            href="/siswa/profil"
             className="group flex items-center gap-3 rounded-2xl bg-white p-5 ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:ring-emerald-300 hover:shadow-lg hover:shadow-emerald-900/5"
           >
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
@@ -740,10 +733,10 @@ export default async function DashboardSiswaPage() {
             </span>
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-semibold text-slate-900">
-                Ganti Password
+                Profil &amp; Password
               </span>
               <span className="mt-0.5 block text-xs text-slate-500">
-                Ubah password akun kamu.
+                Identitas, kelas, ganti password, dan tampilan.
               </span>
             </span>
             <span
