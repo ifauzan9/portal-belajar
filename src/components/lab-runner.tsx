@@ -611,9 +611,9 @@ export function LabRunner({
   // ---------------- Mode fokus (layar penuh + gelap) ----------------
   if (fokus) {
     return createPortal(
-      <div className="fixed inset-0 z-50 overflow-x-hidden overflow-y-auto bg-slate-950 text-slate-100">
-        <div className="mx-auto flex min-h-full w-full max-w-[1500px] flex-col gap-4 p-3 sm:gap-5 sm:p-6">
-          <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+      <div className="fixed inset-0 z-50 bg-slate-950 text-slate-100">
+        <div className="mx-auto flex h-full w-full max-w-[1500px] flex-col gap-4 p-3 sm:gap-5 sm:p-6">
+          <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
             <div className="min-w-0">
               <p className="text-xs font-semibold tracking-wide text-emerald-300 uppercase">Ruang praktik Python</p>
               <h2 className="mt-1 truncate text-lg font-semibold text-white sm:text-xl">
@@ -632,8 +632,8 @@ export function LabRunner({
             </div>
           </header>
 
-          <div className="grid flex-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
-            <div className="order-2 flex flex-col gap-4 lg:order-1">
+          <div className="grid min-h-0 flex-1 gap-5 max-lg:overflow-y-auto lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
+            <div className="order-2 flex flex-col gap-4 lg:order-1 lg:min-h-0 lg:overflow-y-auto lg:pr-2">
               {panelEditor("min(58vh, 620px)")}
               {panelTombol(true)}
               {panelGalat}
@@ -643,7 +643,7 @@ export function LabRunner({
               {panelPesan}
             </div>
 
-            <aside className="order-1 flex flex-col gap-3 lg:order-2">
+            <aside className="order-1 flex flex-col gap-3 lg:order-2 lg:min-h-0 lg:overflow-y-auto lg:pr-2 lg:pb-6">
               <section className="rounded-2xl bg-slate-900 p-4 ring-1 ring-slate-800">
                 <p className="text-xs font-semibold tracking-wide text-emerald-300 uppercase">Tantangan {levelNumber}</p>
                 <p className="mt-2 whitespace-pre-wrap text-base leading-7 text-slate-100">{instruksi}</p>
