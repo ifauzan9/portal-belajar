@@ -87,6 +87,16 @@ export function IkonTugas({ className }: IkonProps) {
   );
 }
 
+export function IkonUlangan({ className }: IkonProps) {
+  return (
+    <svg {...dasar(className)}>
+      <path d="M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1Z" />
+      <path d="M8 6H6a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-2" />
+      <path d="M9 12h6M9 16h4" />
+    </svg>
+  );
+}
+
 export function IkonLab({ className }: IkonProps) {
   return (
     <svg {...dasar(className)}>

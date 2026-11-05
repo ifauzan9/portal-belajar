@@ -1,14 +1,30 @@
 "use client";
 
 import { useState, useActionState } from "react";
-import { simpanNilaiEsai } from "@/app/guru/ulangan/actions";
+import {
+  simpanNilaiEsai,
+  simpanNilaiKodeManual,
+} from "@/app/guru/ulangan/actions";
+import { TombolReset } from "@/components/tombol-reset";
 import { formatWaktuWib } from "@/lib/waktu";
+
+type KodeJawaban = {
+  soalId: string;
+  kode: string;
+  keluaran: string;
+  keluaranUji: string | null;
+  nilai: number;
+  rincian: { terpenuhi?: string[]; belum?: string[] } | null;
+  percobaan: number;
+};
 
 type SubmitRow = {
   id: string;
   siswa_id: string;
   nilai_pg: number;
   nilai_esai: number;
+  nilai_kode: number;
+  nilai_kode_manual: number | null;
   nilai_total: number;
   disubmit_at: string;
   namaSiswa: string;
@@ -17,19 +33,31 @@ type SubmitRow = {
   daftarJawaban: { soalId: string; jawaban: string }[];
   // Nilai esai yang sudah tersimpan per soal (soalId → nilai). null = belum.
   nilaiEsaiPerSoal: Record<string, number> | null;
+  // Jawaban kode (kosong kalau tidak ada soal kode).
+  daftarKode: KodeJawaban[];
 };
 
 type SoalEsai = { id: string; urutan: number; potongan: string };
 
+type SesiRow = {
+  siswa_id: string;
+  namaSiswa: string;
+  nis: string | null;
+  mulai_at: string;
+};
+
 export function DaftarJawaban({
   examId,
   daftarSubmit,
+  daftarSesi = [],
   soalCount,
   probeCounts,
   daftarSoalEsai,
 }: {
   examId: string;
   daftarSubmit: SubmitRow[];
+  // Siswa yang sudah mulai tetapi belum submit (timer masih berjalan).
+  daftarSesi?: SesiRow[];
   soalCount: number;
   // Jumlah probe (kiri halaman / pindah tab / minimize) per siswa_id.
   // null = fitur belum aktif (DDL Tahap 11 belum dijalankan).
@@ -39,10 +67,21 @@ export function DaftarJawaban({
 }) {
   const [bukaId, setBukaId] = useState<string | null>(null);
 
+  // Siswa yang punya sesi timer tetapi belum submit. Tombol reset tetap
+  // ditampilkan supaya guru bisa mengulang timer yang sudah habis.
+  const sesiBelumSubmit = daftarSesi.filter(
+    (s) => !daftarSubmit.some((r) => r.siswa_id === s.siswa_id),
+  );
+
   const [stateEsai, formActionEsai, pendingEsai] = useActionState<
     { message: string | null },
     FormData
   >(simpanNilaiEsai, { message: null });
+
+  const [stateKode, formActionKode, pendingKode] = useActionState<
+    { message: string | null },
+    FormData
+  >(simpanNilaiKodeManual, { message: null });
 
   // Hitung total nilai esai per siswa dari input per soal (untuk display
   // live sebelum simpan). Mengambil nilai tersimpan atau input lokal.
@@ -63,8 +102,15 @@ export function DaftarJawaban({
         </h2>
         <span className="text-xs text-slate-400">
           {soalCount} soal · {daftarSubmit.length} submit
+          {sesiBelumSubmit.length > 0
+            ? ` · ${sesiBelumSubmit.length} belum submit`
+            : ""}
         </span>
       </div>
+      <p className="mt-1 text-xs text-slate-500">
+        Klik nama siswa untuk melihat jawaban, nilai sistem, dan tombol reset
+        pengerjaan.
+      </p>
 
       {daftarSubmit.length === 0 ? (
         <p className="mt-4 text-sm text-slate-500">
@@ -113,6 +159,12 @@ export function DaftarJawaban({
                   <span className="text-amber-600">
                     Esai: {row.nilai_esai}
                   </span>
+                  {row.daftarKode.length > 0 ? (
+                    <span className="text-emerald-600">
+                      Kode: {row.nilai_kode_manual ?? row.nilai_kode}
+                      {row.nilai_kode_manual !== null ? " (manual)" : ""}
+                    </span>
+                  ) : null}
                   <span className="font-semibold text-slate-900">
                     Total: {row.nilai_total}
                   </span>
@@ -173,6 +225,120 @@ export function DaftarJawaban({
                       Belum ada detail jawaban.
                     </p>
                   )}
+
+                  {/* Jawaban kode + nilai otomatis + override guru */}
+                  {row.daftarKode.length > 0 ? (
+                    <div className="mt-4 space-y-3">
+                      <h3 className="text-xs font-semibold text-slate-700">
+                        Jawaban Kode
+                      </h3>
+
+                      {row.daftarKode.map((k, idx) => (
+                        <div
+                          key={k.soalId}
+                          className="rounded-xl bg-emerald-50/40 p-3 ring-1 ring-emerald-100"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-xs font-semibold text-emerald-800">
+                              Soal Kode #{idx + 1}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              Nilai otomatis:{" "}
+                              <span className="font-semibold text-emerald-700">
+                                {k.nilai}
+                              </span>{" "}
+                              · {k.percobaan}× run
+                            </p>
+                          </div>
+
+                          <pre className="mt-2 max-h-52 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-900 p-3 font-mono text-xs leading-5 text-slate-100">
+                            {k.kode || "(kode kosong)"}
+                          </pre>
+
+                          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                            <div className="rounded-lg bg-white p-2 ring-1 ring-slate-200">
+                              <p className="text-[11px] font-semibold text-slate-500">
+                                Output
+                              </p>
+                              <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap font-mono text-xs text-slate-800">
+                                {k.keluaran || "(kosong)"}
+                              </pre>
+                            </div>
+                            <div className="rounded-lg bg-white p-2 ring-1 ring-slate-200">
+                              <p className="text-[11px] font-semibold text-slate-500">
+                                Output uji
+                              </p>
+                              <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap font-mono text-xs text-slate-800">
+                                {k.keluaranUji ?? "(tidak diuji)"}
+                              </pre>
+                            </div>
+                          </div>
+
+                          {k.rincian ? (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {(k.rincian.terpenuhi ?? []).map((teks) => (
+                                <span
+                                  key={teks}
+                                  className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-200"
+                                >
+                                  ✓ {teks}
+                                </span>
+                              ))}
+                              {(k.rincian.belum ?? []).map((teks) => (
+                                <span
+                                  key={teks}
+                                  className="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700 ring-1 ring-rose-200"
+                                >
+                                  ✕ {teks}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
+
+                      <form
+                        action={formActionKode}
+                        className="rounded-xl bg-emerald-50 p-4 ring-1 ring-emerald-200"
+                      >
+                        <input type="hidden" name="exam_id" value={examId} />
+                        <input
+                          type="hidden"
+                          name="siswa_id"
+                          value={row.siswa_id}
+                        />
+                        <p className="text-xs font-semibold text-emerald-800">
+                          Nilai Kode Manual (hibrida)
+                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <input
+                            type="number"
+                            name="nilai_kode_manual"
+                            min={0}
+                            max={1000}
+                            defaultValue={row.nilai_kode_manual ?? ""}
+                            placeholder={`Otomatis: ${row.nilai_kode}`}
+                            className="w-32 rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                          />
+                          <button
+                            type="submit"
+                            disabled={pendingKode}
+                            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+                          >
+                            {pendingKode ? "Menyimpan..." : "Simpan Nilai Kode"}
+                          </button>
+                          <p className="text-xs text-slate-500">
+                            Kosongkan untuk kembali ke nilai otomatis.
+                          </p>
+                        </div>
+                        {stateKode.message ? (
+                          <p className="mt-2 text-xs text-red-600">
+                            {stateKode.message}
+                          </p>
+                        ) : null}
+                      </form>
+                    </div>
+                  ) : null}
 
                   {/* Form nilai esai per soal */}
                   {daftarSoalEsai.length > 0 ? (
@@ -249,12 +415,68 @@ export function DaftarJawaban({
                       Ulangan ini tidak punya soal esai.
                     </p>
                   )}
+
+                  {/* Reset pengerjaan: hapus jawaban, nilai, dan sesi timer
+                      supaya siswa bisa mengerjakan ulang dari awal. */}
+                  <div className="mt-4 flex justify-end border-t border-slate-100 pt-3">
+                    <TombolReset
+                      jenis="ulangan"
+                      siswaId={row.siswa_id}
+                      refId={examId}
+                      label={`${row.namaSiswa} — ulangan ini`}
+                      konfirmasi={`Reset pengerjaan ${row.namaSiswa}? Jawaban, nilai, dan timer akan dihapus sehingga siswa bisa mengerjakan ulang dari awal.`}
+                      teks="Reset pengerjaan"
+                    />
+                  </div>
                 </div>
               ) : null}
             </div>
           ))}
         </div>
       )}
+
+      {/* Siswa yang sudah mulai tetapi belum submit. Timer mereka masih
+          berjalan (atau sudah habis); reset membuat mereka bisa mulai lagi. */}
+      {sesiBelumSubmit.length > 0 ? (
+        <div className="mt-5 rounded-xl bg-amber-50/60 p-4 ring-1 ring-amber-200">
+          <h3 className="text-xs font-semibold text-amber-800">
+            Sudah mulai, belum submit
+          </h3>
+          <p className="mt-1 text-xs text-amber-700">
+            Timer sedang berjalan. Reset untuk mengulang dari awal.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {sesiBelumSubmit.map((s) => (
+              <li
+                key={s.siswa_id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white px-3 py-2 ring-1 ring-amber-100"
+              >
+                <div>
+                  <span className="text-sm font-medium text-slate-900">
+                    {s.namaSiswa}
+                    {s.nis ? (
+                      <span className="ml-1 text-xs text-slate-400">
+                        NIS {s.nis}
+                      </span>
+                    ) : null}
+                  </span>
+                  <p className="text-xs text-slate-500">
+                    Mulai {formatWaktuWib(s.mulai_at)}
+                  </p>
+                </div>
+                <TombolReset
+                  jenis="ulangan"
+                  siswaId={s.siswa_id}
+                  refId={examId}
+                  label={`${s.namaSiswa} — ulangan ini`}
+                  konfirmasi={`Reset timer ${s.namaSiswa}? Siswa akan mulai dari awal.`}
+                  teks="Reset timer"
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </section>
   );
 }

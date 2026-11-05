@@ -9,6 +9,7 @@ import {
   ambilKelasUlangan,
   namaKelasDariIds,
 } from "@/lib/ambil-kelas-ulangan";
+import { gabungNilaiUlangan } from "@/lib/nilai-ulangan";
 import {
   bacaArah,
   bacaUrutUlangan,
@@ -99,7 +100,7 @@ export default async function UlanganPage(
   const { data: ulanganData, error } = await supabase
     .from("exams")
     .select(
-      "id, judul, kelas_id, tanggal, access_code, status, tenggat, durasi, nilai_ditampilkan, dibuka, exam_scores(nilai), exam_classes(kelas_id)",
+      "id, judul, kelas_id, tanggal, access_code, status, tenggat, durasi, nilai_ditampilkan, dibuka, exam_scores(siswa_id, nilai), exam_submissions(siswa_id, nilai_total), exam_classes(kelas_id)",
     );
 
   const semua: UlanganRow[] = (ulanganData ?? []).map((row) => {
@@ -114,7 +115,8 @@ export default async function UlanganPage(
       durasi: number | null;
       nilai_ditampilkan: boolean;
       dibuka: boolean;
-      exam_scores?: { nilai: number }[];
+      exam_scores?: { siswa_id: string; nilai: number }[];
+      exam_submissions?: { siswa_id: string; nilai_total: number }[];
       exam_classes?: { kelas_id: string }[];
     };
 
@@ -126,8 +128,12 @@ export default async function UlanganPage(
       daftarKelasId,
       tanggal: dataRow.tanggal,
       access_code: dataRow.access_code,
-      nilaiSudah:
-        dataRow.exam_scores?.map((item) => item.nilai) ?? [],
+      nilaiSudah: [
+        ...gabungNilaiUlangan(
+          dataRow.exam_scores,
+          dataRow.exam_submissions,
+        ).values(),
+      ],
       status: dataRow.status ?? "sudah",
       tenggat: dataRow.tenggat,
       durasi: dataRow.durasi ?? null,

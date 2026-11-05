@@ -359,7 +359,7 @@ export default async function LevelLabSiswaPage(
         instruksi={exercise.instruksi}
         jenis={exercise.jenis}
         bantuan={lesson.isi}
-        wajibVariabel={exercise.aturan?.variabel_wajib ?? []}
+        variabelDiminta={variabelDiminta}
         finalBoss={exercise.aturan?.final_boss ?? false}
         badge={exercise.aturan?.badge ?? null}
         contoh={exercise.contoh_kode}

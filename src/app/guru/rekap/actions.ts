@@ -85,6 +85,22 @@ export async function resetKegiatan(
   }
 
   if (jenis === "ulangan") {
+    // Sesi timer (Tahap 33) dihapus lebih dulu. Kalau guru belum
+    // menjalankan SQL Tahap 35, jangan hapus apa pun supaya reset
+    // tidak berhenti setengah jalan.
+    const { error: galatSesi } = await supabase
+      .from("exam_sessions")
+      .delete()
+      .eq("exam_id", refId)
+      .eq("siswa_id", siswaId);
+
+    if (galatSesi) {
+      return {
+        message: `Gagal mereset timer ulangan: ${galatSesi.message}. Jalankan SQL Tahap 35 lalu coba lagi.`,
+        berhasil: false,
+      };
+    }
+
     // exam_answers hanya punya kolom submission_id, jadi hapus lewat id-nya.
     const { data: sub } = await supabase
       .from("exam_submissions")
@@ -130,6 +146,13 @@ export async function resetKegiatan(
       .delete()
       .eq("exam_id", refId)
       .eq("siswa_id", siswaId);
+
+    // Halaman review di Kelola Soal & Input Nilai juga perlu ikut segar.
+    revalidatePath(`/guru/ulangan/${refId}/soal`);
+    revalidatePath(`/guru/ulangan/${refId}/nilai`);
+    revalidatePath(`/siswa/ulangan/${refId}`);
+    revalidatePath(`/siswa/nilai/${refId}`);
+    revalidatePath("/siswa/nilai");
   }
 
   if (jenis === "lab_coding") {

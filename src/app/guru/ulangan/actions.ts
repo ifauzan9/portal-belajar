@@ -15,33 +15,48 @@ const MAX_KODE = 50;
 
 // Simpan hubungan kelas untuk satu ulangan. Kosong = hapus semua
 // (berlaku untuk semua kelas), mirip pola pengumuman.
+//
+// Tidak memakai upsert biasa: tabel exam_classes hanya punya policy
+// insert/delete untuk guru, tanpa policy update. Upsert pada baris
+// yang sudah ada akan memicu UPDATE dan ditolak RLS. Jadi: tambahkan
+// baris baru dengan "abaikan duplikat", lalu hapus baris yang tidak
+// dipilih lagi. Urutan ini juga membuat hubungan lama tetap utuh
+// kalau penambahan baris baru gagal.
 async function simpanKelasUlangan(
   supabase: Awaited<ReturnType<typeof requireGuru>>,
   ulanganId: string,
   daftarKelasId: string[],
 ) {
-  if (daftarKelasId.length > 0) {
-    const { error } = await supabase
-      .from("exam_classes")
-      .upsert(
-        daftarKelasId.map((kelasId) => ({
-          ulangan_id: ulanganId,
-          kelas_id: kelasId,
-        })),
-      );
+  const unik = Array.from(new Set(daftarKelasId));
+
+  if (unik.length > 0) {
+    const { error } = await supabase.from("exam_classes").upsert(
+      unik.map((kelasId) => ({
+        ulangan_id: ulanganId,
+        kelas_id: kelasId,
+      })),
+      { onConflict: "ulangan_id,kelas_id", ignoreDuplicates: true },
+    );
 
     if (error) {
       throw new Error(`gagal menyimpan hubungan kelas: ${error.message}`);
     }
-  } else {
-    const { error } = await supabase
-      .from("exam_classes")
-      .delete()
-      .eq("ulangan_id", ulanganId);
+  }
 
-    if (error) {
-      throw new Error(`gagal menghapus hubungan kelas: ${error.message}`);
-    }
+  // Hapus hubungan yang tidak dipilih lagi (atau semuanya kalau
+  // pilihan kosong = berlaku untuk semua kelas).
+  const kueri = supabase
+    .from("exam_classes")
+    .delete()
+    .eq("ulangan_id", ulanganId);
+
+  const { error: galatHapus } =
+    unik.length > 0
+      ? await kueri.not("kelas_id", "in", `(${unik.join(",")})`)
+      : await kueri;
+
+  if (galatHapus) {
+    throw new Error(`gagal menghapus hubungan kelas: ${galatHapus.message}`);
   }
 }
 
@@ -246,11 +261,15 @@ export async function updateUlangan(
 
   try {
     await simpanKelasUlangan(supabase, id, daftarKelasId);
-  } catch {
+  } catch (galatKelas) {
+    console.error("Gagal mengatur kelas ulangan:", galatKelas);
+    const alasan =
+      galatKelas instanceof Error ? ` (${galatKelas.message})` : "";
     return {
       message:
         "Judul dan data ulangan sudah tersimpan, tapi gagal mengatur kelasnya. " +
-        "Jalankan dulu bagian DDL terbaru di Supabase SQL Editor.",
+        "Coba pilih ulang kelas lalu simpan lagi." +
+        alasan,
     };
   }
 
@@ -572,12 +591,37 @@ export async function addQuestion(
     return { message: `Soal maksimal ${MAX_SOAL} karakter.` };
   }
 
-  if (jenis !== "pg" && jenis !== "esai") {
+  if (jenis !== "pg" && jenis !== "esai" && jenis !== "kode") {
     return { message: "Jenis soal tidak valid." };
   }
 
   if (poin < 0 || poin > 1000) {
     return { message: "Poin harus antara 0 dan 1000." };
+  }
+
+  // Kolom khusus soal kode.
+  const kodeAwal = String(formData.get("kode_awal") ?? "");
+  const keluaranDiharapkan = String(
+    formData.get("keluaran_diharapkan") ?? "",
+  ).trim();
+  const masukan = String(formData.get("masukan") ?? "").trim();
+  const masukanUji = String(formData.get("masukan_uji") ?? "").trim();
+  const keluaranUji = String(formData.get("keluaran_uji") ?? "").trim();
+  const variabelWajib = String(formData.get("variabel_wajib") ?? "")
+    .split(",")
+    .map((nama) => nama.trim())
+    .filter(Boolean);
+  const minInput = Math.max(
+    0,
+    Math.floor(Number(formData.get("min_input") ?? 0) || 0),
+  );
+  const minPrint = Math.max(
+    0,
+    Math.floor(Number(formData.get("min_print") ?? 0) || 0),
+  );
+
+  if (jenis === "kode" && !keluaranDiharapkan) {
+    return { message: "Target output utama wajib diisi untuk soal kode." };
   }
 
   const supabase = await requireGuru();
@@ -610,7 +654,7 @@ export async function addQuestion(
     kunciSimpan = kunci;
   }
 
-  const { error } = await supabase.from("exam_questions").insert({
+  const dataDasar = {
     exam_id: examId,
     soal,
     jenis,
@@ -618,10 +662,51 @@ export async function addQuestion(
     kunci: kunciSimpan,
     poin,
     urutan,
-  });
+  };
 
-  if (error) {
-    return { message: `Gagal menambah soal: ${error.message}` };
+  const dataLengkap = {
+    ...dataDasar,
+    kode_awal: jenis === "kode" ? kodeAwal : null,
+    keluaran_diharapkan: jenis === "kode" ? keluaranDiharapkan : null,
+    masukan: jenis === "kode" ? masukan : null,
+    masukan_uji: jenis === "kode" ? masukanUji : null,
+    keluaran_uji: jenis === "kode" ? keluaranUji : null,
+    aturan:
+      jenis === "kode"
+        ? {
+            variabel_wajib: variabelWajib,
+            dari_input: true,
+            min_input: minInput,
+            min_print: minPrint,
+            bobot: {
+              output: 50,
+              output_uji: 20,
+              variabel: 20,
+              jumlah: 10,
+            },
+          }
+        : null,
+  };
+
+  const hasilInsert = await supabase
+    .from("exam_questions")
+    .insert(dataLengkap);
+
+  if (hasilInsert.error) {
+    // Soal kode butuh kolom Tahap 33; beri pesan jelas.
+    if (jenis === "kode") {
+      return {
+        message: `Gagal menambah soal kode: ${hasilInsert.error.message}. Pastikan SQL Tahap 33 sudah dijalankan.`,
+      };
+    }
+
+    // Soal lama tetap bisa ditambah walau DDL Tahap 33 belum dijalankan.
+    const fallback = await supabase
+      .from("exam_questions")
+      .insert(dataDasar);
+    if (fallback.error) {
+      return { message: `Gagal menambah soal: ${fallback.error.message}` };
+    }
   }
 
   revalidatePath(`/guru/ulangan/${examId}/soal`);
@@ -672,20 +757,46 @@ export async function simpanNilaiEsai(
   // atau field lama), tetap jalankan dengan total 0 supaya nilai_total sinkron.
   const supabase = await requireGuru();
 
-  // Ambil nilai PG dari submit
-  const { data: submit, error: galatSubmit } = await supabase
+  // Ambil nilai PG + kode dari submit
+  const hasilSubmit = await supabase
     .from("exam_submissions")
-    .select("nilai_pg, nilai_esai, nilai_total")
+    .select("nilai_pg, nilai_esai, nilai_total, nilai_kode, nilai_kode_manual")
     .eq("exam_id", examId)
     .eq("siswa_id", siswaId)
     .maybeSingle();
+
+  let submit: unknown = hasilSubmit.data;
+  let galatSubmit: { message: string } | null = hasilSubmit.error;
+
+  // Fallback kalau DDL Tahap 33 belum dijalankan.
+  if (galatSubmit) {
+    const fallback = await supabase
+      .from("exam_submissions")
+      .select("nilai_pg, nilai_esai, nilai_total")
+      .eq("exam_id", examId)
+      .eq("siswa_id", siswaId)
+      .maybeSingle();
+    submit = fallback.data;
+    galatSubmit = fallback.error;
+  }
 
   if (galatSubmit || !submit) {
     return { message: "Submit siswa ini tidak ditemukan." };
   }
 
-  const nilaiPG = (submit as { nilai_pg: number }).nilai_pg;
-  const nilaiTotal = nilaiPG + totalEsai;
+  const dataSubmit = submit as {
+    nilai_pg: number;
+    nilai_esai: number;
+    nilai_total: number;
+    nilai_kode?: number | null;
+    nilai_kode_manual?: number | null;
+  };
+
+  const nilaiPG = dataSubmit.nilai_pg;
+  // Nilai kode manual (kalau guru menimpa) menggantikan nilai otomatis.
+  const nilaiKode =
+    dataSubmit.nilai_kode_manual ?? dataSubmit.nilai_kode ?? 0;
+  const nilaiTotal = nilaiPG + totalEsai + nilaiKode;
 
   // Update exam_submissions
   const { error: galatUpdate } = await supabase
@@ -743,6 +854,85 @@ export async function simpanNilaiEsai(
   revalidatePath(`/guru/ulangan/${examId}/soal`);
   revalidatePath(`/guru/ulangan/${examId}/nilai`);
   revalidatePath("/guru/ulangan");
+  return { message: null };
+}
+
+// ============================================================================
+// Nilai kode manual (hibrida): guru boleh menimpa nilai kode otomatis.
+// Field: exam_id, siswa_id, nilai_kode_manual (kosong = kembali otomatis).
+// Total dihitung ulang = PG + esai + (manual ?? otomatis).
+// ============================================================================
+export async function simpanNilaiKodeManual(
+  _prevState: { message: string | null },
+  formData: FormData,
+): Promise<{ message: string | null }> {
+  const examId = String(formData.get("exam_id") ?? "");
+  const siswaId = String(formData.get("siswa_id") ?? "");
+  const raw = String(formData.get("nilai_kode_manual") ?? "").trim();
+
+  if (!examId || !siswaId) {
+    return { message: "Data tidak lengkap." };
+  }
+
+  let manual: number | null = null;
+  if (raw !== "") {
+    const angka = Number(raw);
+    if (!Number.isFinite(angka)) {
+      return { message: "Nilai kode manual harus berupa angka." };
+    }
+    manual = Math.max(0, Math.min(1000, Math.floor(angka)));
+  }
+
+  const supabase = await requireGuru();
+
+  const { data: submit, error: galatSubmit } = await supabase
+    .from("exam_submissions")
+    .select("nilai_pg, nilai_esai, nilai_kode")
+    .eq("exam_id", examId)
+    .eq("siswa_id", siswaId)
+    .maybeSingle();
+
+  if (galatSubmit || !submit) {
+    return { message: "Submit siswa ini tidak ditemukan." };
+  }
+
+  const dataSubmit = submit as {
+    nilai_pg: number;
+    nilai_esai: number;
+    nilai_kode: number | null;
+  };
+
+  const nilaiKode = manual ?? dataSubmit.nilai_kode ?? 0;
+  const nilaiTotal =
+    dataSubmit.nilai_pg + dataSubmit.nilai_esai + nilaiKode;
+
+  const { error: galatUpdate } = await supabase
+    .from("exam_submissions")
+    .update({ nilai_kode_manual: manual, nilai_total: nilaiTotal })
+    .eq("exam_id", examId)
+    .eq("siswa_id", siswaId);
+
+  if (galatUpdate) {
+    return {
+      message: `Gagal menyimpan nilai kode: ${galatUpdate.message}`,
+    };
+  }
+
+  const { error: galatScores } = await supabase
+    .from("exam_scores")
+    .upsert(
+      [{ exam_id: examId, siswa_id: siswaId, nilai: nilaiTotal }],
+      { onConflict: "exam_id,siswa_id" },
+    );
+
+  if (galatScores) {
+    console.error("Gagal sinkronkan exam_scores:", galatScores.message);
+  }
+
+  revalidatePath(`/guru/ulangan/${examId}/soal`);
+  revalidatePath(`/guru/ulangan/${examId}/nilai`);
+  revalidatePath(`/siswa/nilai/${examId}`);
+  revalidatePath("/siswa/nilai");
   return { message: null };
 }
 

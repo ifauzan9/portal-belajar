@@ -18,6 +18,7 @@ type Soal = {
   kunci: string | null;
   poin: number;
   urutan: number;
+  keluaran_diharapkan?: string | null;
 };
 
 export function DaftarSoal({
@@ -86,16 +87,27 @@ export function DaftarSoal({
                     ))}
                   </ul>
                 ) : null}
+                {q.jenis === "kode" && q.keluaran_diharapkan ? (
+                  <pre className="mt-1 whitespace-pre-wrap rounded bg-slate-100 px-2 py-1 font-mono text-xs text-slate-600">
+                    Target: {q.keluaran_diharapkan}
+                  </pre>
+                ) : null}
               </td>
               <td className="px-3 py-2.5">
                 <span
                   className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${
                     q.jenis === "pg"
                       ? "bg-blue-50 text-blue-700 ring-blue-200"
-                      : "bg-amber-50 text-amber-700 ring-amber-200"
+                      : q.jenis === "kode"
+                        ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                        : "bg-amber-50 text-amber-700 ring-amber-200"
                   }`}
                 >
-                  {q.jenis === "pg" ? "Pilihan Ganda" : "Esai"}
+                  {q.jenis === "pg"
+                    ? "Pilihan Ganda"
+                    : q.jenis === "kode"
+                      ? "Kode"
+                      : "Esai"}
                 </span>
               </td>
               <td className="px-3 py-2.5 tabular-nums text-slate-600">

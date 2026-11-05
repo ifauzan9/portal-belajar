@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { useActionState } from "react";
 import {
   submitUlangan,
@@ -10,6 +10,10 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Notifikasi } from "@/components/ui/notifikasi";
 import { IkonJam } from "@/components/ui/ikon-siswa";
+import {
+  EditorKodeUjian,
+  type PeganganEditorKode,
+} from "@/components/lab-runner-ujian";
 import { formatTanggalJamPendekWib } from "@/lib/waktu";
 
 type Soal = {
@@ -20,6 +24,15 @@ type Soal = {
   kunci: string | null;
   poin: number;
   urutan: number;
+  kode_awal?: string | null;
+  keluaran_diharapkan?: string | null;
+  masukan?: string | null;
+  aturan?: {
+    variabel_wajib?: string[];
+    dari_input?: boolean;
+    min_input?: number;
+    min_print?: number;
+  } | null;
 };
 
 function formatMenit(detik: number): string {
@@ -28,12 +41,20 @@ function formatMenit(detik: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+function barisTeks(teks: string | null | undefined): string[] {
+  if (!teks) return [];
+  const baris = teks.replace(/\r\n/g, "\n").split("\n");
+  while (baris.length > 0 && baris[baris.length - 1].trim() === "") baris.pop();
+  return baris;
+}
+
 export function FormJawaban({
   examId,
   soalList,
   tenggat,
   durasi,
   nilaiDitampilkan,
+  mulaiAt,
 }: {
   examId: string;
   soalList: Soal[];
@@ -43,6 +64,9 @@ export function FormJawaban({
   durasi: number | null;
   // Apakah nilai langsung kelihatan setelah submit
   nilaiDitampilkan: boolean;
+  // Waktu mulai dari server (exam_sessions.mulai_at). Timer tidak reset
+  // saat halaman di-refresh.
+  mulaiAt: string;
 }) {
   const [state, formAction, pending] = useActionState<
     HasilSubmitUlangan,
@@ -52,46 +76,42 @@ export function FormJawaban({
   // Simpan jawaban di state; hidden input per soal dikirim ke form.
   const [jawaban, setJawaban] = useState<Record<string, string>>({});
 
-  // ------------------- TIMER -------------------
-  // Mulai hitung saat halaman pertama kali dirender (tandai kapan
-  // siswa membuka form — waktu mulai disimpan di ref).
-  const mulaiRef = useRef<number>(0);
-  useEffect(() => {
-    mulaiRef.current = Date.now();
-  }, []);
+  // ------------------- TIMER (server-anchored) -------------------
+  const mulaiMs = useMemo(() => {
+    const nilai = new Date(mulaiAt).getTime();
+    return Number.isFinite(nilai) ? nilai : 0;
+  }, [mulaiAt]);
 
-  // detik tersisa (untuk durasi) dan tenggat (untuk batas luar)
-  const [detikSisa, setDetikSisa] = useState<number | null>(null); // null = tanpa timer
+  const [detikSisa, setDetikSisa] = useState<number | null>(
+    durasi !== null ? durasi * 60 : null,
+  ); // null = tanpa timer
   const [lewatTenggat, setLewatTenggat] = useState(false);
   const [lewatDurasi, setLewatDurasi] = useState(false);
 
   useEffect(() => {
-    const idInterval = setInterval(() => {
+    function hitung() {
       const now = Date.now();
 
-      // Cek tenggat
       if (tenggat) {
-        const sisaTenggatMs = new Date(tenggat).getTime() - now;
-        setLewatTenggat(sisaTenggatMs <= 0);
+        setLewatTenggat(new Date(tenggat).getTime() - now <= 0);
       }
 
-      // Cek durasi
       if (durasi !== null) {
         const durasiMs = durasi * 60 * 1000;
-        const sudahLama = now - mulaiRef.current;
-        const sisa = durasiMs - sudahLama;
+        const sisa = durasiMs - (now - mulaiMs);
         setDetikSisa(Math.max(0, Math.floor(sisa / 1000)));
         if (sisa <= 0) setLewatDurasi(true);
       }
-    }, 1000);
+    }
 
+    hitung();
+    const idInterval = setInterval(hitung, 1000);
     return () => clearInterval(idInterval);
-  }, [tenggat, durasi]);
+  }, [tenggat, durasi, mulaiMs]);
 
   // Auto-submit saat durasi habis
   useEffect(() => {
     if (lewatDurasi && !pending && !state.nilaiTotal) {
-      // submit otomatis form
       const form = document.querySelector<HTMLFormElement>(
         'form[data-jawaban-form="true"]',
       );
@@ -121,12 +141,6 @@ export function FormJawaban({
   //   - blur:       kehilangan fokus window (pindah tab / aplikasi lain)
   //   - visibility: document.visibilityState → hidden (minimize / lock screen)
   //   - freeze:     Page Visibility Level 2 (OS membekukan tab)
-  //
-  // Setiap event → kirim `catatProbe` ke server (fire-and-forget).
-  // Server memvalidasi sesi siswa & mengabaikan probe jika:
-  //   - ulangan sudah lewat tenggat, atau
-  //   - siswa sudah submit.
-  // Jika DDL Tahap 11 belum dijalankan, insert gagal diam-diam.
   const jumlahProbe = useRef(0);
   const [probeCount, setProbeCount] = useState(0);
 
@@ -143,17 +157,13 @@ export function FormJawaban({
       void catatProbe(fd);
     }
 
-    // visibilitychange: pindah tab / minimize / sleep
     const onVisibility = () => {
       if (document.visibilityState === "hidden") {
         kirimProbe("visibility");
       }
     };
 
-    // blur: window kehilangan fokus (pindah ke aplikasi lain)
     const onBlur = () => kirimProbe("blur");
-
-    // freeze: Page Visibility Level 2 (tidak semua browser dukung)
     const onFreeze = () => kirimProbe("freeze");
 
     document.addEventListener("visibilitychange", onVisibility);
@@ -166,6 +176,51 @@ export function FormJawaban({
       window.removeEventListener("freeze", onFreeze);
     };
   }, [sudahSubmit, examId]);
+
+  // ------------------- SUBMIT -------------------
+  // Untuk soal kode: jalankan kode terakhir dengan input wajib SEBELUM
+  // mengirim, supaya nilai tidak memakai output lama. Run manual tidak
+  // menyimpan apa pun; hanya submit yang mengirim hasil.
+  const formRef = useRef<HTMLFormElement>(null);
+  const editorRefs = useRef<Record<string, PeganganEditorKode | null>>({});
+  const kirimRef = useRef(false);
+  const [menyiapkanKode, setMenyiapkanKode] = useState(false);
+
+  const soalKode = soalList.filter((s) => s.jenis === "kode");
+
+  async function tanganiSubmit(e: React.FormEvent<HTMLFormElement>) {
+    if (soalKode.length === 0) return; // form biasa (PG/esai)
+
+    e.preventDefault();
+    if (pending || menyiapkanKode || kirimRef.current) return;
+
+    const form = formRef.current;
+    if (!form) return;
+
+    kirimRef.current = true;
+    setMenyiapkanKode(true);
+    try {
+      const fd = new FormData(form);
+
+      for (const soal of soalKode) {
+        const editor = editorRefs.current[soal.id];
+        const hasil = editor ? await editor.siapkanHasil() : null;
+        if (!hasil) continue; // kode tetap terkirim lewat hidden input
+
+        fd.set(`kode_${soal.id}`, hasil.kode);
+        fd.set(`keluaran_${soal.id}`, hasil.keluaran);
+        fd.set(`keluaran_uji_${soal.id}`, hasil.keluaranUji ?? "");
+        fd.set(`analisis_${soal.id}`, JSON.stringify(hasil.analisis));
+        fd.set(`stdin_${soal.id}`, JSON.stringify(hasil.stdin));
+        fd.set(`percobaan_${soal.id}`, String(hasil.percobaan));
+      }
+
+      startTransition(() => formAction(fd));
+    } finally {
+      kirimRef.current = false;
+      setMenyiapkanKode(false);
+    }
+  }
 
   // ------------------- HITUNG PROGRES -------------------
   const totalPoin = soalList.reduce((akum, s) => akum + s.poin, 0);
@@ -185,6 +240,8 @@ export function FormJawaban({
       : tenggat
         ? formatTanggalJamPendekWib(tenggat)
         : null;
+
+  const sedangKirim = pending || menyiapkanKode;
 
   // ------------------- RENDER -------------------
   return (
@@ -218,6 +275,15 @@ export function FormJawaban({
                 <span className="font-medium text-slate-700">{dijawabEsai}</span>
                 /{soalEsai.length}
               </span>
+              {soalKode.length > 0 ? (
+                <span>
+                  Kode:{" "}
+                  <span className="font-medium text-slate-700">
+                    {soalKode.length}
+                  </span>{" "}
+                  soal
+                </span>
+              ) : null}
             </div>
 
             {/* Counter probe live */}
@@ -286,7 +352,9 @@ export function FormJawaban({
 
       {/* ---------------- FORM ---------------- */}
       <form
+        ref={formRef}
         action={formAction}
+        onSubmit={tanganiSubmit}
         data-jawaban-form="true"
         className="space-y-4"
       >
@@ -306,7 +374,9 @@ export function FormJawaban({
           const dijawab =
             soal.jenis === "esai"
               ? Boolean(jawaban[soal.id]?.trim())
-              : Boolean(jawaban[soal.id]);
+              : soal.jenis === "pg"
+                ? Boolean(jawaban[soal.id])
+                : false;
           return (
             <div
               key={soal.id}
@@ -380,6 +450,68 @@ export function FormJawaban({
                   className="mt-3 w-full resize-y rounded-xl border border-slate-300 px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
                 />
               ) : null}
+
+              {soal.jenis === "kode" ? (
+                <div className="mt-3 space-y-3">
+                  {barisTeks(soal.masukan).length > 0 ? (
+                    <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+                      <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+                        Input wajib
+                      </p>
+                      <ol className="mt-2 flex flex-wrap gap-2">
+                        {barisTeks(soal.masukan).map((isi, urutan) => (
+                          <li
+                            key={urutan}
+                            className="rounded-lg bg-white px-2.5 py-1 font-mono text-xs text-slate-800 ring-1 ring-slate-200"
+                          >
+                            {isi === "" ? "(kosong)" : isi}
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  ) : null}
+
+                  {soal.keluaran_diharapkan ? (
+                    <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+                      <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+                        Target output
+                      </p>
+                      <pre className="mt-2 overflow-x-auto rounded-lg bg-slate-900 p-3 font-mono text-xs leading-5 text-emerald-200">
+                        {soal.keluaran_diharapkan}
+                      </pre>
+                    </div>
+                  ) : null}
+
+                  {(soal.aturan?.variabel_wajib?.length ?? 0) > 0 ? (
+                    <div className="rounded-xl bg-indigo-50/60 p-3 ring-1 ring-indigo-100">
+                      <p className="text-xs font-semibold tracking-wide text-indigo-700 uppercase">
+                        Variabel yang diminta
+                      </p>
+                      <ul className="mt-2 flex flex-wrap gap-2">
+                        {soal.aturan!.variabel_wajib!.map((nama) => (
+                          <li
+                            key={nama}
+                            className="rounded-lg bg-white px-2.5 py-1 font-mono text-xs font-semibold text-indigo-700 ring-1 ring-indigo-200"
+                          >
+                            {nama}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+
+                  <EditorKodeUjian
+                    ref={(el) => {
+                      editorRefs.current[soal.id] = el;
+                    }}
+                    examId={examId}
+                    soalId={soal.id}
+                    kodeAwal={soal.kode_awal ?? null}
+                    masukan={soal.masukan ?? ""}
+                    nonaktif={lewatDurasi || lewatTenggat}
+                  />
+                </div>
+              ) : null}
             </div>
           );
         })}
@@ -388,19 +520,21 @@ export function FormJawaban({
         <div className="sticky bottom-2 z-10 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white/95 p-3 backdrop-blur">
           <button
             type="submit"
-            disabled={pending || lewatDurasi || lewatTenggat}
+            disabled={sedangKirim || lewatDurasi || lewatTenggat}
             className="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {pending
-              ? "Mengumpulkan..."
-              : lewatDurasi || lewatTenggat
-                ? "Ulangan ditutup"
-                : "Kumpulkan Jawaban"}
+            {menyiapkanKode
+              ? "Menyiapkan jawaban kode..."
+              : pending
+                ? "Mengumpulkan..."
+                : lewatDurasi || lewatTenggat
+                  ? "Ulangan ditutup"
+                  : "Selesai & Kirim"}
           </button>
           <p className="text-xs text-slate-400">
             {sudahSubmit
               ? "Jawaban sudah dikumpulkan."
-              : "Setelah submit, jawaban tidak bisa diubah."}
+              : "Run Python tidak menyimpan jawaban. Setelah Selesai & Kirim, jawaban tidak bisa diubah."}
           </p>
         </div>
       </form>

@@ -182,7 +182,16 @@ export type AnalisisBebas = {
   input_pertanyaan?: string[];
 };
 
+export type BobotNilaiKode = {
+  output?: number;
+  output_uji?: number;
+  variabel?: number;
+  jumlah?: number;
+};
+
 export type AturanBebas = {
+  // Bobot penilaian parsial soal ulangan jenis kode (opsional).
+  bobot?: BobotNilaiKode;
   min_variabel?: number;
   min_teks?: number;
   min_angka?: number;
@@ -408,4 +417,156 @@ export function cekKaryaBebas(
   return cekKetentuanKode(analisis, keluaran, aturan, {
     wajibSemuaDipakai: true,
   });
+}
+
+// ============================================================================
+// Penilaian parsial soal ulangan jenis "kode".
+//
+// Skor dihitung dari ketentuan yang terpenuhi, bukan benar/salah total:
+//   1. output utama (input wajib + keluaran_diharapkan)
+//   2. output uji (input berbeda, kalau dikonfigurasi)
+//   3. variabel wajib (dibuat, dari input(), ditampilkan)
+//   4. jumlah input()/print() sesuai ketentuan
+//
+// Bobot bawaan 50/20/20/10. Ketentuan yang tidak dikonfigurasi tidak ikut
+// dihitung, sehingga bobotnya otomatis dinormalisasi ke `poin` soal.
+// ============================================================================
+export type RincianNilaiKode = {
+  output_utama: boolean;
+  output_uji: boolean | null;
+  variabel: boolean;
+  jumlah: boolean;
+};
+
+export type HasilNilaiKode = {
+  nilai: number;
+  rincian: RincianNilaiKode;
+  bobotDipakai: BobotNilaiKode;
+  /** Ketentuan yang terpenuhi, untuk ditampilkan ke guru/siswa. */
+  terpenuhi: string[];
+  /** Ketentuan yang belum terpenuhi. */
+  belum: string[];
+};
+
+const BOBOT_BAWAAN: Required<BobotNilaiKode> = {
+  output: 50,
+  output_uji: 20,
+  variabel: 20,
+  jumlah: 10,
+};
+
+export function hitungNilaiKodeUjian(args: {
+  keluaran: string;
+  keluaranDiharapkan: string;
+  keluaranUji: string | null;
+  keluaranUjiDiharapkan: string | null;
+  masukanDipakai: string[] | null | undefined;
+  masukan: string[];
+  analisis: AnalisisBebas | null | undefined;
+  aturan: AturanBebas;
+  poin: number;
+}): HasilNilaiKode {
+  const { aturan } = args;
+  const bobot = {
+    output: aturan.bobot?.output ?? BOBOT_BAWAAN.output,
+    output_uji: aturan.bobot?.output_uji ?? BOBOT_BAWAAN.output_uji,
+    variabel: aturan.bobot?.variabel ?? BOBOT_BAWAAN.variabel,
+    jumlah: aturan.bobot?.jumlah ?? BOBOT_BAWAAN.jumlah,
+  };
+
+  const inputCocok = inputSesuaiWajib(
+    args.masukanDipakai,
+    args.masukan ?? [],
+  );
+  const outputUtama =
+    inputCocok &&
+    keluaranCocok(args.keluaran, args.keluaranDiharapkan ?? "");
+
+  const adaUji = Boolean(
+    args.keluaranUjiDiharapkan &&
+      args.keluaranUjiDiharapkan.trim().length > 0,
+  );
+  const outputUji = adaUji
+    ? args.keluaranUji !== null &&
+      keluaranCocok(args.keluaranUji, args.keluaranUjiDiharapkan ?? "")
+    : null;
+
+  const wajib = aturan.variabel_wajib ?? [];
+  const adaVariabel = wajib.length > 0;
+  const variabel = adaVariabel
+    ? cekVariabelWajib(args.analisis, wajib, {
+        dariInput: aturan.dari_input !== false,
+      }).benar
+    : false;
+
+  const minInput = aturan.min_input ?? 0;
+  const minPrint = aturan.min_print ?? 0;
+  const adaJumlah = minInput > 0 || minPrint > 0;
+  const jumlah = adaJumlah
+    ? Boolean(args.analisis?.ok) &&
+      (args.analisis?.jumlah_input ?? 0) >= minInput &&
+      (args.analisis?.jumlah_print ?? 0) >= minPrint
+    : false;
+
+  // Ketentuan yang benar-benar dinilai + bobotnya.
+  const aktif: { kunci: keyof BobotNilaiKode; benar: boolean; bobot: number }[] =
+    [];
+  aktif.push({ kunci: "output", benar: outputUtama, bobot: bobot.output });
+  if (adaUji) {
+    aktif.push({
+      kunci: "output_uji",
+      benar: outputUji === true,
+      bobot: bobot.output_uji,
+    });
+  }
+  if (adaVariabel) {
+    aktif.push({ kunci: "variabel", benar: variabel, bobot: bobot.variabel });
+  }
+  if (adaJumlah) {
+    aktif.push({ kunci: "jumlah", benar: jumlah, bobot: bobot.jumlah });
+  }
+
+  const totalBobot = aktif.reduce((akum, item) => akum + item.bobot, 0);
+  const dapatBobot = aktif
+    .filter((item) => item.benar)
+    .reduce((akum, item) => akum + item.bobot, 0);
+
+  const poin = Math.max(0, Math.floor(args.poin || 0));
+  const nilai =
+    totalBobot > 0
+      ? Math.min(poin, Math.round((poin * dapatBobot) / totalBobot))
+      : outputUtama
+        ? poin
+        : 0;
+
+  const label: Record<string, string> = {
+    output: "Output utama sesuai",
+    output_uji: "Output uji (input berbeda) sesuai",
+    variabel: "Variabel wajib dipakai dengan benar",
+    jumlah: "Jumlah input()/print() memenuhi ketentuan",
+  };
+  const terpenuhi = aktif
+    .filter((item) => item.benar)
+    .map((item) => label[item.kunci]);
+  const belum = aktif
+    .filter((item) => !item.benar)
+    .map((item) => label[item.kunci]);
+
+  return {
+    nilai,
+    rincian: {
+      output_utama: outputUtama,
+      output_uji: outputUji,
+      variabel,
+      jumlah,
+    },
+    bobotDipakai: {
+      output: bobot.output,
+      output_uji: adaUji ? bobot.output_uji : undefined,
+      variabel: adaVariabel ? bobot.variabel : undefined,
+      jumlah: adaJumlah ? bobot.jumlah : undefined,
+    },
+    terpenuhi,
+    belum,
+  };
 }

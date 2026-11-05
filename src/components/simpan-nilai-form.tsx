@@ -155,6 +155,7 @@ export function SimpanNilaiForm({
                   </td>
                   <td className="px-4 py-3 sm:px-5">
                     <input
+                      key={`${siswa.id}:${siswa.nilai ?? ""}`}
                       type="number"
                       name={`nilai_${siswa.id}`}
                       min={0}

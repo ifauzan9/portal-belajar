@@ -13,6 +13,7 @@ import {
   IkonPengumuman,
   IkonProfil,
   IkonTugas,
+  IkonUlangan,
 } from "@/components/ui/ikon-siswa";
 import { buatInisial } from "@/lib/inisial";
 
@@ -21,6 +22,7 @@ const MENU = [
   { href: "/siswa/tugas", label: "Tugas", Ikon: IkonTugas },
   { href: "/siswa/lab", label: "Lab Coding", Ikon: IkonLab },
   { href: "/siswa/komputer", label: "Lab Komputer", Ikon: IkonKomputer },
+  { href: "/siswa/ulangan", label: "Ulangan", Ikon: IkonUlangan },
   { href: "/siswa/nilai", label: "Nilai", Ikon: IkonNilai },
   { href: "/siswa/absensi", label: "Absensi", Ikon: IkonAbsensi },
   { href: "/siswa/pengumuman", label: "Pengumuman", Ikon: IkonPengumuman },
@@ -40,20 +42,19 @@ export function SiswaSidebar({
   const pathname = usePathname();
 
   // Kunci navigasi saat siswa sedang mengerjakan ulangan bersoal.
-  // Link ke luar /siswa/ulangan/[id] diarahkan kembali ke halaman ulangan
+  // Hanya halaman soal (/siswa/ulangan/[id]); halaman konfirmasi
+  // (/siswa/ulangan/[id]/konfirmasi) TIDAK dikunci karena timer belum mulai.
+  // Link ke luar halaman soal diarahkan kembali ke halaman ulangan
   // (tidak pindah) sampai submit. Tombol logout tetap aktif.
-  const sedangUlangan = /^\/siswa\/ulangan\/.+/u.test(pathname);
+  const sedangUlangan = /^\/siswa\/ulangan\/[^/]+\/?$/u.test(pathname);
 
-  // Menu aktif. /siswa/ulangan/* dianggap bagian dari "Nilai".
+  // Menu aktif. /siswa/ulangan/* punya menu sendiri.
   const aktif = (href: string) => {
     if (href === "/siswa") {
       return pathname === "/siswa";
     }
     if (href === "/siswa/nilai") {
-      return (
-        pathname.startsWith("/siswa/nilai") ||
-        pathname.startsWith("/siswa/ulangan")
-      );
+      return pathname.startsWith("/siswa/nilai");
     }
     return pathname === href || pathname.startsWith(`${href}/`);
   };

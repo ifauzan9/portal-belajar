@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { hitungRataRata, tampilkanRataRata } from "@/lib/rata-rata";
 import { ambilKelasUlangan } from "@/lib/ambil-kelas-ulangan";
 import { tenggatSudahLewat } from "@/lib/deadline";
+import { belumWaktunyaMulai } from "@/lib/jadwal-ulangan";
 import { Kartu, KartuJudul } from "@/components/ui/kartu";
 import { KartuStat } from "@/components/ui/kartu-stat";
 import { Badge } from "@/components/ui/badge";
@@ -16,19 +17,22 @@ function tanggalPendek(iso: string | null): string {
 }
 
 // Label status untuk satu ulangan (dipakai di tabel desktop & kartu mobile).
-type StatusView = { label: string; varian: "bahaya" | "netral" | "sukses" | "info" };
+type StatusView = { label: string; varian: "bahaya" | "netral" | "sukses" | "info" | "peringatan" };
 
 function statusUlangan(u: {
   status: "akan" | "sudah";
   dibuka: boolean;
   deadlineLewat: boolean;
   sudahSubmit: boolean;
+  belumWaktunya: boolean;
   tenggat: string | null;
 }): StatusView {
   if (u.status === "akan") {
     if (!u.dibuka) return { label: "Ditutup guru", varian: "bahaya" };
     if (u.deadlineLewat) return { label: "Ditutup", varian: "netral" };
     if (u.sudahSubmit) return { label: "Sudah dijawab", varian: "sukses" };
+    if (u.belumWaktunya)
+      return { label: "Dijadwalkan", varian: "peringatan" };
     const tgl = u.tenggat
       ? formatTanggalBulanWib(u.tenggat)
       : "Tanpa tenggat";
@@ -105,9 +109,10 @@ export default async function NilaiSiswaPage() {
       return [];
     }
 
-    const nilaiSiswaRaw = row.exam_scores?.find(
-      (n) => n.siswa_id === siswa.id,
-    )?.nilai ?? null;
+    const nilaiSiswaRaw =
+      row.exam_scores?.find((n) => n.siswa_id === siswa.id)?.nilai ??
+      mapSubmit.get(row.id)?.nilai_total ??
+      null;
 
     // Jika nilai ditahan oleh guru, sembunyikan angka dari tampilan siswa.
     const nilaiTerbuka =
@@ -123,6 +128,8 @@ export default async function NilaiSiswaPage() {
       tenggatSudahLewat(row.tenggat) &&
       dibukaRow;
     const sudahSubmit = mapSubmit.has(row.id);
+    const belumWaktunya =
+      statusRow === "akan" && belumWaktunyaMulai(row.tanggal);
 
     return [
       {
@@ -133,6 +140,7 @@ export default async function NilaiSiswaPage() {
         status: statusRow,
         tenggat: row.tenggat,
         deadlineLewat,
+        belumWaktunya,
         dibuka: dibukaRow,
         sudahSubmit,
       },
@@ -259,10 +267,10 @@ export default async function NilaiSiswaPage() {
                     <div className="mt-3 flex gap-2">
                       {boleh ? (
                         <Link
-                          href={`/siswa/ulangan/${u.id}`}
+                          href={`/siswa/ulangan/${u.id}/konfirmasi`}
                           className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-blue-500"
                         >
-                          Kerjakan
+                          {u.belumWaktunya ? "Lihat jadwal" : "Kerjakan"}
                         </Link>
                       ) : null}
                       <Link
@@ -317,10 +325,10 @@ export default async function NilaiSiswaPage() {
                           <div className="flex flex-wrap gap-1.5">
                             {boleh ? (
                               <Link
-                                href={`/siswa/ulangan/${u.id}`}
+                                href={`/siswa/ulangan/${u.id}/konfirmasi`}
                                 className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-blue-500"
                               >
-                                Kerjakan
+                                {u.belumWaktunya ? "Lihat jadwal" : "Kerjakan"}
                               </Link>
                             ) : null}
                             <Link

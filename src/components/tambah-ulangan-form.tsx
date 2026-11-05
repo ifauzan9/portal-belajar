@@ -55,12 +55,16 @@ export function TambahUlanganForm({ kelasList }: { kelasList: Kelas[] }) {
 
         <div className="md:col-span-1 xl:col-span-1">
           <label htmlFor="tanggal-ulangan" className={labelBase}>
-            Tanggal
+            Tanggal mulai
+            <span className="ml-1 text-xs font-normal text-slate-400">
+              (00.00 WIB)
+            </span>
           </label>
           <input
             id="tanggal-ulangan"
             name="tanggal"
             type="date"
+            title="Ulangan bisa dimulai sejak 00.00 WIB pada tanggal ini. Kosong = bisa kapan saja."
             className={inputBase}
           />
         </div>

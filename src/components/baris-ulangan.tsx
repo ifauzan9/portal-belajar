@@ -379,12 +379,13 @@ export function BarisUlangan({
             </div>
             <div>
               <label className="mb-0.5 block text-xs font-medium text-slate-500">
-                Tanggal
+                Tanggal mulai
               </label>
               <input
                 name="tanggal"
                 type="date"
                 defaultValue={tanggal === "-" ? "" : tanggal}
+                title="Ulangan bisa dimulai sejak 00.00 WIB pada tanggal ini. Kosong = bisa kapan saja."
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 sm:w-40"
               />
             </div>

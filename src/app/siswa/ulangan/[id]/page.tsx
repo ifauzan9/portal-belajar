@@ -66,12 +66,28 @@ export default async function KerjakanUlanganPage(
     exam_classes?: { kelas_id: string }[];
   };
 
-  // Ambil soal terpisah (tanpa kunci jawaban — siswa tidak boleh lihat kunci)
-  const { data: soalData } = await supabase
+  // Ambil soal terpisah (tanpa kunci jawaban — siswa tidak boleh lihat kunci).
+  // Kolom kode baru ada setelah DDL Tahap 33; sediakan fallback.
+  const kolomDasar = "id, soal, jenis, pilihan, poin, urutan";
+  const kolomLengkap =
+    "id, soal, jenis, pilihan, poin, urutan, kode_awal, keluaran_diharapkan, masukan, aturan";
+
+  const hasilSoal = await supabase
     .from("exam_questions")
-    .select("id, soal, jenis, pilihan, poin, urutan")
+    .select(kolomLengkap)
     .eq("exam_id", id)
     .order("urutan", { ascending: true });
+
+  let soalData: unknown[] | null = hasilSoal.data;
+
+  if (!soalData) {
+    const fallback = await supabase
+      .from("exam_questions")
+      .select(kolomDasar)
+      .eq("exam_id", id)
+      .order("urutan", { ascending: true });
+    soalData = fallback.data;
+  }
 
   // Cek relevansi kelas
   const daftarKelasId = ambilKelasUlangan(dataUlangan);
@@ -96,12 +112,24 @@ export default async function KerjakanUlanganPage(
   const deadlineLewat = tenggatSudahLewat(dataUlangan.tenggat);
 
   // Cek apakah siswa sudah submit
-  const { data: submitLama } = await supabase
+  const hasilSubmitLama = await supabase
     .from("exam_submissions")
-    .select("id, nilai_pg, nilai_esai, nilai_total, disubmit_at")
+    .select("id, nilai_pg, nilai_esai, nilai_kode, nilai_total, disubmit_at")
     .eq("exam_id", id)
     .eq("siswa_id", siswa.id)
     .maybeSingle();
+
+  let submitLama: unknown = hasilSubmitLama.data;
+
+  if (!submitLama) {
+    const fallbackSubmit = await supabase
+      .from("exam_submissions")
+      .select("id, nilai_pg, nilai_esai, nilai_total, disubmit_at")
+      .eq("exam_id", id)
+      .eq("siswa_id", siswa.id)
+      .maybeSingle();
+    submitLama = fallbackSubmit.data;
+  }
 
   // Cek apakah nilai boleh ditampilkan (guru menahan / sudah selesai dinilai)
   const nilaiDitampilkan =
@@ -115,6 +143,15 @@ export default async function KerjakanUlanganPage(
     kunci: string | null;
     poin: number;
     urutan: number;
+    kode_awal?: string | null;
+    keluaran_diharapkan?: string | null;
+    masukan?: string | null;
+    aturan?: {
+      variabel_wajib?: string[];
+      dari_input?: boolean;
+      min_input?: number;
+      min_print?: number;
+    } | null;
   }[];
 
   // Jika sudah submit → tampilkan hasil
@@ -122,9 +159,12 @@ export default async function KerjakanUlanganPage(
     const submit = submitLama as {
       nilai_pg: number;
       nilai_esai: number;
+      nilai_kode?: number;
       nilai_total: number;
       disubmit_at: string;
     };
+    const nilaiKode = submit.nilai_kode ?? 0;
+    const adaKode = nilaiKode > 0 || soalList.some((s) => s.jenis === "kode");
     return (
       <div className="space-y-6">
         <Kepala judul={dataUlangan.judul} />
@@ -141,7 +181,11 @@ export default async function KerjakanUlanganPage(
 
           {nilaiDitampilkan ? (
             <>
-              <div className="mt-4 grid grid-cols-3 gap-3">
+              <div
+                className={`mt-4 grid gap-3 ${
+                  adaKode ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"
+                }`}
+              >
                 <div className="rounded-xl bg-blue-50 p-3 text-center ring-1 ring-blue-100">
                   <p className="text-xs text-blue-600">Nilai PG</p>
                   <p className="text-2xl font-semibold tabular-nums text-blue-700">
@@ -154,6 +198,14 @@ export default async function KerjakanUlanganPage(
                     {submit.nilai_esai}
                   </p>
                 </div>
+                {adaKode ? (
+                  <div className="rounded-xl bg-emerald-50 p-3 text-center ring-1 ring-emerald-100">
+                    <p className="text-xs text-emerald-600">Nilai Kode</p>
+                    <p className="text-2xl font-semibold tabular-nums text-emerald-700">
+                      {nilaiKode}
+                    </p>
+                  </div>
+                ) : null}
                 <div className="rounded-xl bg-slate-100 p-3 text-center ring-1 ring-slate-200">
                   <p className="text-xs text-slate-500">Total</p>
                   <p className="text-2xl font-semibold tabular-nums text-slate-900">
@@ -163,7 +215,7 @@ export default async function KerjakanUlanganPage(
               </div>
 
               <p className="mt-3 text-xs text-slate-500">
-                {submit.nilai_esai === 0
+                {submit.nilai_esai === 0 && !adaKode
                   ? "Nilai esai masih menunggu penilaian guru."
                   : "Nilai sudah lengkap."}
               </p>
@@ -222,7 +274,24 @@ export default async function KerjakanUlanganPage(
     );
   }
 
-  // Belum submit + masih terbuka → tampilkan form
+  // Belum submit + masih terbuka → tampilkan form.
+  // Timer baru dimulai setelah siswa mengonfirmasi di halaman konfirmasi.
+  // Kalau belum ada sesi, kembalikan ke halaman konfirmasi (jangan buat sesi
+  // di sini) supaya membuka URL langsung tidak memulai timer.
+  const { data: sesiLama } = await supabase
+    .from("exam_sessions")
+    .select("mulai_at")
+    .eq("exam_id", id)
+    .eq("siswa_id", siswa.id)
+    .maybeSingle();
+
+  const sesiRow = sesiLama as { mulai_at: string } | null;
+  if (!sesiRow?.mulai_at) {
+    redirect(`/siswa/ulangan/${id}/konfirmasi`);
+  }
+
+  const mulaiAt = sesiRow.mulai_at;
+
   return (
     <div className="space-y-6">
       <Kepala judul={dataUlangan.judul} />
@@ -254,6 +323,7 @@ export default async function KerjakanUlanganPage(
           tenggat={dataUlangan.tenggat}
           durasi={dataUlangan.durasi}
           nilaiDitampilkan={nilaiDitampilkan}
+          mulaiAt={mulaiAt}
         />
       )}
     </div>

@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { hitungRataRata, tampilkanRataRata } from "@/lib/rata-rata";
 import { ambilKelasUlangan } from "@/lib/ambil-kelas-ulangan";
 import { tenggatSudahLewat } from "@/lib/deadline";
+import { belumWaktunyaMulai } from "@/lib/jadwal-ulangan";
 import { sudahTampil } from "@/lib/jadwal-pengumuman";
 import { tugasDibuka } from "@/lib/tugas";
 import {
@@ -122,9 +123,10 @@ export default async function DashboardSiswaPage() {
 
       if (!relevanUntukSiswa) return [];
 
-      const nilaiSiswaRaw = row.exam_scores?.find(
-        (n) => n.siswa_id === siswa.id,
-      )?.nilai ?? null;
+      const nilaiSiswaRaw =
+        row.exam_scores?.find((n) => n.siswa_id === siswa.id)?.nilai ??
+        mapSubmit.get(row.id)?.nilai_total ??
+        null;
 
       // Jika nilai ditahan, sembunyikan angka dari dashboard siswa.
       const nilaiTerbuka =
@@ -140,6 +142,8 @@ export default async function DashboardSiswaPage() {
       const deadlineLewat =
         statusRow === "akan" && dibukaRow && tenggatSudahLewat(row.tenggat);
       const sudahSubmit = mapSubmit.has(row.id);
+      const belumWaktunya =
+        statusRow === "akan" && belumWaktunyaMulai(row.tanggal);
 
       return [
         {
@@ -150,6 +154,7 @@ export default async function DashboardSiswaPage() {
           status: statusRow,
           durasi: row.durasi ?? null,
           deadlineLewat,
+          belumWaktunya,
           dibuka: dibukaRow,
           sudahSubmit,
         },
@@ -305,7 +310,7 @@ export default async function DashboardSiswaPage() {
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 font-medium text-white ring-1 ring-white/20">
             <IkonBuku className="h-3.5 w-3.5" />
-            {ulanganAktif.length} ulangan aktif
+            {ulanganAktif.length} ulangan menunggu
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 font-medium text-white ring-1 ring-white/20">
             <IkonJam className="h-3.5 w-3.5" />
@@ -432,7 +437,7 @@ export default async function DashboardSiswaPage() {
                 Ulangan yang Menunggumu
               </h2>
               <p className="text-xs text-blue-700">
-                {ulanganAktif.length} ulangan masih bisa dikerjakan.
+                {ulanganAktif.length} ulangan menunggu perhatian.
               </p>
             </div>
           </div>
@@ -440,13 +445,18 @@ export default async function DashboardSiswaPage() {
             {ulanganAktif.map((u) => (
               <Link
                 key={u.id}
-                href={`/siswa/ulangan/${u.id}`}
+                href={`/siswa/ulangan/${u.id}/konfirmasi`}
                 className="flex items-center justify-between gap-3 rounded-xl bg-white p-3 ring-1 ring-blue-100 transition hover:-translate-y-0.5 hover:shadow-sm hover:ring-blue-300"
               >
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="truncate text-sm font-medium text-slate-900">
                     {u.judul}
                   </span>
+                  {u.belumWaktunya && u.tanggal ? (
+                    <Badge varian="peringatan" className="shrink-0">
+                      {formatTanggalWib(u.tanggal)}
+                    </Badge>
+                  ) : null}
                   {u.durasi ? (
                     <Badge varian="peringatan" className="shrink-0">
                       ⏱ {u.durasi} mnt
@@ -454,7 +464,7 @@ export default async function DashboardSiswaPage() {
                   ) : null}
                 </span>
                 <span className="shrink-0 text-xs font-semibold text-blue-700">
-                  Kerjakan →
+                  {u.belumWaktunya ? "Lihat jadwal →" : "Kerjakan →"}
                 </span>
               </Link>
             ))}

@@ -2,11 +2,14 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AreaInputNilai } from "@/components/area-input-nilai";
 import { KartuRanking } from "@/components/kartu-ranking";
+import { DaftarJawaban } from "@/app/guru/ulangan/[id]/soal/daftar-jawaban";
 import { createClient } from "@/lib/supabase/server";
 import {
   ambilKelasUlangan,
   namaKelasDariIds,
 } from "@/lib/ambil-kelas-ulangan";
+import { gabungNilaiUlangan } from "@/lib/nilai-ulangan";
+import { ambilDataJawabanUlangan } from "@/lib/ulangan-jawaban";
 import { toggleUlangan } from "@/app/guru/ulangan/actions";
 
 type SiswaRow = {
@@ -90,14 +93,39 @@ export default async function InputNilaiPage({
   // Nama kelas per id (untuk kolom "Kelas" di tabel input nilai)
   const mapKelasIdKeNama = mapIdKeNama;
 
-  // Nilai yang sudah diinput sebelumnya untuk ulangan ini
-  const { data: nilaiLama } = await supabase
-    .from("exam_scores")
-    .select("siswa_id, nilai")
-    .eq("exam_id", id);
+  // Soal untuk review jawaban + penilaian sistem.
+  const { data: soalData } = await supabase
+    .from("exam_questions")
+    .select("id, jenis, soal, urutan")
+    .eq("exam_id", id)
+    .order("urutan", { ascending: true });
 
-  const nilaiPerSiswa = new Map(
-    (nilaiLama ?? []).map((row) => [row.siswa_id, row.nilai]),
+  const daftarSoal = (soalData ?? []) as {
+    id: string;
+    jenis: string;
+    soal: string;
+  }[];
+
+  // Nilai resmi yang sudah diinput guru + nilai otomatis dari submission.
+  // Submission dipakai sebagai cadangan supaya nilai ulangan online tetap
+  // terlihat walau baris `exam_scores` belum tersinkron. Data submission
+  // yang sama juga dipakai bagian review jawaban di bawah.
+  const [hasilNilaiLama, dataJawaban] = await Promise.all([
+    supabase
+      .from("exam_scores")
+      .select("siswa_id, nilai")
+      .eq("exam_id", id),
+    ambilDataJawabanUlangan(supabase, id, daftarSoal),
+  ]);
+
+  const { daftarSubmit, daftarSesi, soalCount, probeCounts, daftarSoalEsai } =
+    dataJawaban;
+
+  const nilaiPerSiswa = gabungNilaiUlangan(
+    hasilNilaiLama.data as
+      | { siswa_id: string; nilai: number }[]
+      | null,
+    daftarSubmit,
   );
 
   // Daftar siswa yang akan dinilai.
@@ -252,6 +280,19 @@ export default async function InputNilaiPage({
           Tambahkan siswa dulu di menu Data Siswa.
         </div>
       )}
+
+      {/* Review jawaban + penilaian sistem. Sama seperti di halaman
+          Kelola Soal, tetapi bisa diakses langsung dari halaman nilai. */}
+      {dataUlangan.status === "akan" || daftarSubmit.length > 0 ? (
+        <DaftarJawaban
+          examId={id}
+          daftarSubmit={daftarSubmit}
+          daftarSesi={daftarSesi}
+          soalCount={soalCount}
+          probeCounts={probeCounts}
+          daftarSoalEsai={daftarSoalEsai}
+        />
+      ) : null}
     </div>
   );
 }

@@ -9,6 +9,7 @@ import {
 import { FormSoal } from "./form-soal";
 import { DaftarJawaban } from "./daftar-jawaban";
 import { DaftarSoal } from "./daftar-soal";
+import { ambilDataJawabanUlangan } from "@/lib/ulangan-jawaban";
 import { formatWaktuWib } from "@/lib/waktu";
 
 // ============================================================================
@@ -17,29 +18,6 @@ import { formatWaktuWib } from "@/lib/waktu";
 //   1. Daftar soal — tambah/hapus soal PG & esai.
 //   2. Jawaban siswa — review submit, nilai esai manual, sinkron exam_scores.
 // ============================================================================
-
-// ============================================================================
-// Jawaban siswa. Input nilai esai bersifat per soal esai (bukan total),
-// jadi kita kirim daftar soal esai + map nilai esai yang sudah tersimpan.
-// ============================================================================
-
-type SoalEsaiView = { id: string; urutan: number; potongan: string };
-type NilaiEsaiPerSoal = Record<string, number>; // soalId → nilai
-
-type SubmitView = {
-  id: string;
-  siswa_id: string;
-  nilai_pg: number;
-  nilai_esai: number;
-  nilai_total: number;
-  disubmit_at: string;
-  namaSiswa: string;
-  nis: string | null;
-  daftarJawaban: { soalId: string; jawaban: string }[];
-  // Nilai esai yang sudah tersimpan per soal (soalId → nilai).
-  // null = belum ada data penilaian per soal.
-  nilaiEsaiPerSoal: NilaiEsaiPerSoal | null;
-};
 
 export default async function SoalUlanganPage({
   params,
@@ -80,33 +58,27 @@ export default async function SoalUlanganPage({
     dibuka: boolean | null;
   };
 
-  // Detail ulangan
-  // ---
-  // Ambil jumlah "probe" per siswa: berapa kali siswa meninggalkan
-  // halaman soal / pindah tab / minimize browser selama pengerjaan.
-  // Dicatat real-time oleh server action `catatProbe` di sisi siswa.
-  const { data: probeData, error: galatProbe } = await supabase
-    .from("exam_probes")
-    .select("siswa_id")
-    .eq("exam_id", id);
-
-  // GalatProbe tidak ditangani: kalau tabel belum dibuat (DDL belum
-  // dijalankan), kembalikan null dan tampilkan tanpa data probe.
-  let probeCounts: Record<string, number> | null = null;
-  if (!galatProbe) {
-    probeCounts = {};
-    for (const p of probeData ?? []) {
-      const row = p as { siswa_id: string };
-      probeCounts[row.siswa_id] = (probeCounts[row.siswa_id] ?? 0) + 1;
-    }
-  }
-
   // Soal untuk ulangan ini
-  const { data: soalData } = await supabase
+  const kolomSoalDasar = "id, soal, jenis, pilihan, kunci, poin, urutan";
+  const kolomSoalLengkap =
+    "id, soal, jenis, pilihan, kunci, poin, urutan, keluaran_diharapkan, kode_awal, masukan, aturan";
+
+  const hasilSoal = await supabase
     .from("exam_questions")
-    .select("id, soal, jenis, pilihan, kunci, poin, urutan")
+    .select(kolomSoalLengkap)
     .eq("exam_id", id)
     .order("urutan", { ascending: true });
+
+  let soalData: unknown[] | null = hasilSoal.data;
+
+  if (!soalData) {
+    const fallback = await supabase
+      .from("exam_questions")
+      .select(kolomSoalDasar)
+      .eq("exam_id", id)
+      .order("urutan", { ascending: true });
+    soalData = fallback.data;
+  }
 
   const daftarSoal = (soalData ?? []) as {
     id: string;
@@ -116,79 +88,14 @@ export default async function SoalUlanganPage({
     kunci: string | null;
     poin: number;
     urutan: number;
+    keluaran_diharapkan?: string | null;
+    kode_awal?: string | null;
+    masukan?: string | null;
+    aturan?: { variabel_wajib?: string[] } | null;
   }[];
 
-  // Daftar soal esai (urut) + potongan teks soal sebagai label input
-  // nilai per soal. Urutan = posisi soal esai ke-n di antara semua soal.
-  const daftarSoalEsai: SoalEsaiView[] = daftarSoal
-    .filter((s) => s.jenis === "esai")
-    .map((s, i) => ({
-      id: s.id,
-      urutan: i + 1,
-      potongan: s.soal.length > 48 ? `${s.soal.slice(0, 48)}…` : s.soal,
-    }));
-
-  // Nilai esai per soal (tabel baru `exam_essay_scores`), di-
-  // grupkan per (exam_id, siswa_id). Kalau DDL belum dijalankan
-  // (tabel belum ada) → galat, tetap jalan dengan nilai lama.
-  const { data: esaiPerSoal, error: galatEsaiPerSoal } = await supabase
-    .from("exam_essay_scores")
-    .select("siswa_id, soal_id, nilai")
-    .eq("exam_id", id);
-
-  const mapNilaiEsaiPerSoal: Record<string, NilaiEsaiPerSoal> = {};
-  if (!galatEsaiPerSoal) {
-    for (const r of esaiPerSoal ?? []) {
-      const row = r as { siswa_id: string; soal_id: string; nilai: number };
-      const kunci = `${row.siswa_id}`;
-      if (!mapNilaiEsaiPerSoal[kunci]) mapNilaiEsaiPerSoal[kunci] = {};
-      mapNilaiEsaiPerSoal[kunci][row.soal_id] = row.nilai;
-    }
-  }
-
-  // Submit jawaban siswa (dengan nama siswa + jawaban detail)
-  const { data: submitData } = await supabase
-    .from("exam_submissions")
-    .select(
-      "id, siswa_id, nilai_pg, nilai_esai, nilai_total, disubmit_at, students(nis, nama_siswa), exam_answers(soal_id, jawaban)",
-    )
-    .eq("exam_id", id)
-    .order("nilai_total", { ascending: false });
-
-  // Ratakan: satu SubmitView per submit
-  const daftarSubmit: SubmitView[] = (submitData ?? []).map((row) => {
-    const r = row as {
-      id: string;
-      siswa_id: string;
-      nilai_pg: number;
-      nilai_esai: number;
-      nilai_total: number;
-      disubmit_at: string;
-      students:
-        | { nis: string | null; nama_siswa: string }
-        | { nis: string | null; nama_siswa: string }[]
-        | null;
-      exam_answers?: { soal_id: string; jawaban: string }[] | null;
-    };
-    const siswa = Array.isArray(r.students)
-      ? r.students[0]
-      : r.students;
-    return {
-      id: r.id,
-      siswa_id: r.siswa_id,
-      nilai_pg: r.nilai_pg,
-      nilai_esai: r.nilai_esai,
-      nilai_total: r.nilai_total,
-      disubmit_at: r.disubmit_at,
-      namaSiswa: siswa?.nama_siswa ?? "Siswa",
-      nis: siswa?.nis ?? null,
-      daftarJawaban: (r.exam_answers ?? []).map((a) => ({
-        soalId: a.soal_id,
-        jawaban: a.jawaban,
-      })),
-      nilaiEsaiPerSoal: mapNilaiEsaiPerSoal[r.siswa_id] ?? null,
-    };
-  });
+  const { daftarSubmit, daftarSesi, soalCount, probeCounts, daftarSoalEsai } =
+    await ambilDataJawabanUlangan(supabase, id, daftarSoal);
 
   return (
     <div className="space-y-6">
@@ -337,8 +244,9 @@ export default async function SoalUlanganPage({
       <section className="rounded-2xl bg-white p-5 ring-1 ring-slate-200">
         <h2 className="text-sm font-semibold text-slate-900">Daftar Soal</h2>
         <p className="mt-1 text-xs text-slate-500">
-          Tambahkan soal pilihan ganda (dinilai otomatis) atau esai (dinilai
-          manual). Urutan tampil mengikuti urutan input.
+          Tambahkan soal pilihan ganda (dinilai otomatis), esai (dinilai
+          manual), atau kode (nilai parsial otomatis + bisa ditimpa guru).
+          Urutan tampil mengikuti urutan input.
         </p>
 
         {/* Form tambah soal */}
@@ -365,7 +273,8 @@ export default async function SoalUlanganPage({
       <DaftarJawaban
         examId={id}
         daftarSubmit={daftarSubmit}
-        soalCount={(soalData ?? []).length}
+        daftarSesi={daftarSesi}
+        soalCount={soalCount}
         probeCounts={probeCounts}
         daftarSoalEsai={daftarSoalEsai}
       />

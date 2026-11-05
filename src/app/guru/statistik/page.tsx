@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { hitungRataRata, tampilkanRataRata } from "@/lib/rata-rata";
 import { ambilKelasUlangan } from "@/lib/ambil-kelas-ulangan";
+import { gabungNilaiUlangan } from "@/lib/nilai-ulangan";
 import { formatTanggalWib } from "@/lib/waktu";
 
 type KelasRow = { id: string; nama_kelas: string };
@@ -12,7 +13,8 @@ type UlanganRow = {
   // Daftar id kelas (gabungan legacy + relasi). [] = semua kelas.
   daftarKelasId: string[];
   tanggal: string | null;
-  exam_scores?: { nilai: number }[];
+  exam_scores?: { siswa_id: string; nilai: number }[];
+  exam_submissions?: { siswa_id: string; nilai_total: number }[];
 };
 
 // Rentang nilai untuk grafik distribusi.
@@ -92,7 +94,7 @@ export default async function StatistikPage() {
     supabase.from("classes").select("id, nama_kelas").order("nama_kelas"),
     supabase
       .from("exams")
-      .select("id, judul, kelas_id, tanggal, exam_scores(nilai), exam_classes(kelas_id)"),
+      .select("id, judul, kelas_id, tanggal, exam_scores(siswa_id, nilai), exam_submissions(siswa_id, nilai_total), exam_classes(kelas_id)"),
   ]);
 
   const kelasList: KelasRow[] = hasilKelas.data ?? [];
@@ -106,7 +108,8 @@ export default async function StatistikPage() {
         judul: string;
         kelas_id: string | null;
         tanggal: string | null;
-        exam_scores?: { nilai: number }[];
+        exam_scores?: { siswa_id: string; nilai: number }[];
+        exam_submissions?: { siswa_id: string; nilai_total: number }[];
         exam_classes?: { kelas_id: string }[];
       };
       return {
@@ -115,6 +118,7 @@ export default async function StatistikPage() {
         daftarKelasId: ambilKelasUlangan(dataRow),
         tanggal: dataRow.tanggal,
         exam_scores: dataRow.exam_scores,
+        exam_submissions: dataRow.exam_submissions,
       };
     },
   );
@@ -122,9 +126,18 @@ export default async function StatistikPage() {
   const galat =
     hasilKelas.error?.message ?? hasilUlangan.error?.message ?? null;
 
+  // Nilai per ulangan: utamakan exam_scores, lengkapi dari submission
+  // (nilai otomatis) untuk siswa yang belum punya nilai resmi.
+  const nilaiPerUlangan = new Map(
+    ulanganDaftar.map((u) => [
+      u.id,
+      [...gabungNilaiUlangan(u.exam_scores, u.exam_submissions).values()],
+    ]),
+  );
+
   // ---------- Ringkasan global ----------
-  const semuaNilai = ulanganDaftar.flatMap((u) =>
-    (u.exam_scores ?? []).map((n) => n.nilai),
+  const semuaNilai = ulanganDaftar.flatMap(
+    (u) => nilaiPerUlangan.get(u.id) ?? [],
   );
   const rataGlobal = hitungRataRata(semuaNilai);
   const tertinggiGlobal = semuaNilai.length ? Math.max(...semuaNilai) : null;
@@ -133,7 +146,7 @@ export default async function StatistikPage() {
   // ---------- Statistik per ulangan (yang sudah punya nilai) ----------
   const perUlangan = ulanganDaftar
     .map((u) => {
-      const nilai = (u.exam_scores ?? []).map((n) => n.nilai);
+      const nilai = nilaiPerUlangan.get(u.id) ?? [];
       return {
         id: u.id,
         judul: u.judul,
@@ -155,7 +168,7 @@ export default async function StatistikPage() {
   const distribusiPerKelas = kelasList.map((kelas) => {
     const nilaiKelas = ulanganDaftar
       .filter((u) => u.daftarKelasId.includes(kelas.id))
-      .flatMap((u) => (u.exam_scores ?? []).map((n) => n.nilai));
+      .flatMap((u) => nilaiPerUlangan.get(u.id) ?? []);
     const total = nilaiKelas.length;
     const rentang = REENTANG_NILAI.map((r) => ({
       label: r.label,

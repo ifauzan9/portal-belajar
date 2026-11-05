@@ -7,6 +7,7 @@ import {
   namaKelasDariIds,
 } from "@/lib/ambil-kelas-ulangan";
 import { tenggatSudahLewat } from "@/lib/deadline";
+import { belumWaktunyaMulai } from "@/lib/jadwal-ulangan";
 import { formatTanggalWib, formatWaktuWib } from "@/lib/waktu";
 
 // ============================================================================
@@ -53,6 +54,10 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
     exam_classes?: { kelas_id: string }[];
   };
 
+  const belumWaktunya =
+    dataUlangan.status === "akan" &&
+    belumWaktunyaMulai(dataUlangan.tanggal);
+
   // Apakah nilai boleh dilihat siswa?
   const nilaiTerbuka =
     dataUlangan.nilai_ditampilkan === true || dataUlangan.nilai_selesai === true;
@@ -62,25 +67,52 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
   let submitInfo: {
     nilai_pg: number;
     nilai_esai: number;
+    nilai_kode: number;
+    nilai_kode_manual: number | null;
     nilai_total: number;
     disubmit_at: string;
   } | null = null;
 
   if (dataUlangan.status === "akan") {
-    const { data: submitData } = await supabase
+    let submitData: unknown = null;
+
+    const hasilSubmit = await supabase
       .from("exam_submissions")
-      .select("nilai_pg, nilai_esai, nilai_total, disubmit_at")
+      .select(
+        "nilai_pg, nilai_esai, nilai_kode, nilai_kode_manual, nilai_total, disubmit_at",
+      )
       .eq("exam_id", id)
       .eq("siswa_id", siswa.id)
       .maybeSingle();
 
+    submitData = hasilSubmit.data;
+    if (!submitData) {
+      const fallback = await supabase
+        .from("exam_submissions")
+        .select("nilai_pg, nilai_esai, nilai_total, disubmit_at")
+        .eq("exam_id", id)
+        .eq("siswa_id", siswa.id)
+        .maybeSingle();
+      submitData = fallback.data;
+    }
+
     if (submitData) {
       sudahSubmit = true;
-      submitInfo = submitData as {
+      const row = submitData as {
         nilai_pg: number;
         nilai_esai: number;
+        nilai_kode?: number;
+        nilai_kode_manual?: number | null;
         nilai_total: number;
         disubmit_at: string;
+      };
+      submitInfo = {
+        nilai_pg: row.nilai_pg,
+        nilai_esai: row.nilai_esai,
+        nilai_kode: row.nilai_kode ?? 0,
+        nilai_kode_manual: row.nilai_kode_manual ?? null,
+        nilai_total: row.nilai_total,
+        disubmit_at: row.disubmit_at,
       };
     }
   }
@@ -241,13 +273,17 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
             {dataUlangan.tenggat
               ? `Tenggat: ${formatWaktuWib(dataUlangan.tenggat)}`
               : "Tanpa tenggat waktu."}{" "}
-            Arahkan ke halaman kerjakan untuk mulai.
+            {belumWaktunya
+              ? `Ulangan dijadwalkan mulai ${formatTanggalWib(
+                  dataUlangan.tanggal,
+                )}.`
+              : "Buka halaman konfirmasi untuk melihat informasi sebelum mulai."}
           </p>
           <Link
-            href={`/siswa/ulangan/${id}`}
+            href={`/siswa/ulangan/${id}/konfirmasi`}
             className="mt-3 inline-block rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
           >
-            Kerjakan Sekarang →
+            {belumWaktunya ? "Lihat jadwal →" : "Kerjakan Sekarang →"}
           </Link>
         </div>
       </div>
@@ -281,32 +317,59 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
 
           {nilaiTerbuka ? (
             <>
-              <div className="mt-3 grid grid-cols-3 gap-3">
-                <div className="rounded-xl bg-blue-50 p-3 text-center">
-                  <p className="text-xs text-blue-600">Nilai PG</p>
-                  <p className="text-2xl font-semibold tabular-nums text-blue-700">
-                    {submitInfo.nilai_pg}
-                  </p>
-                </div>
-                <div className="rounded-xl bg-amber-50 p-3 text-center">
-                  <p className="text-xs text-amber-600">Nilai Esai</p>
-                  <p className="text-2xl font-semibold tabular-nums text-amber-700">
-                    {submitInfo.nilai_esai}
-                  </p>
-                </div>
-                <div className="rounded-xl bg-slate-100 p-3 text-center">
-                  <p className="text-xs text-slate-500">Total</p>
-                  <p className="text-2xl font-semibold tabular-nums text-slate-900">
-                    {submitInfo.nilai_total}
-                  </p>
-                </div>
-              </div>
+              {(() => {
+                const nilaiKode =
+                  submitInfo.nilai_kode_manual ?? submitInfo.nilai_kode;
+                const adaKode =
+                  nilaiKode > 0 || submitInfo.nilai_kode_manual !== null;
+                return (
+                  <>
+                    <div
+                      className={`mt-3 grid gap-3 ${
+                        adaKode ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"
+                      }`}
+                    >
+                      <div className="rounded-xl bg-blue-50 p-3 text-center">
+                        <p className="text-xs text-blue-600">Nilai PG</p>
+                        <p className="text-2xl font-semibold tabular-nums text-blue-700">
+                          {submitInfo.nilai_pg}
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-amber-50 p-3 text-center">
+                        <p className="text-xs text-amber-600">Nilai Esai</p>
+                        <p className="text-2xl font-semibold tabular-nums text-amber-700">
+                          {submitInfo.nilai_esai}
+                        </p>
+                      </div>
+                      {adaKode ? (
+                        <div className="rounded-xl bg-emerald-50 p-3 text-center">
+                          <p className="text-xs text-emerald-600">Nilai Kode</p>
+                          <p className="text-2xl font-semibold tabular-nums text-emerald-700">
+                            {nilaiKode}
+                          </p>
+                          {submitInfo.nilai_kode_manual !== null ? (
+                            <p className="text-[10px] text-emerald-500">
+                              dinilai guru
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      <div className="rounded-xl bg-slate-100 p-3 text-center">
+                        <p className="text-xs text-slate-500">Total</p>
+                        <p className="text-2xl font-semibold tabular-nums text-slate-900">
+                          {submitInfo.nilai_total}
+                        </p>
+                      </div>
+                    </div>
 
-              <p className="mt-3 text-xs text-slate-500">
-                {submitInfo.nilai_esai === 0
-                  ? "Nilai esai masih menunggu penilaian guru."
-                  : "Nilai sudah lengkap."}
-              </p>
+                    <p className="mt-3 text-xs text-slate-500">
+                      {submitInfo.nilai_esai === 0 && !adaKode
+                        ? "Nilai esai masih menunggu penilaian guru."
+                        : "Nilai sudah lengkap."}
+                    </p>
+                  </>
+                );
+              })()}
             </>
           ) : (
             <div className="mt-3 rounded-xl bg-violet-50 p-4 ring-1 ring-violet-200">

@@ -3570,3 +3570,210 @@ on conflict do nothing;
 -- Selesai Tahap 32. Modul baru: "Tugas Praktik — Persiapan Ujian Praktik Python"
 -- dengan 2 tugas praktik berurutan (level 1 dan level 2).
 -- ============================================================
+
+
+-- ============================================================
+-- TAHAP 33: ULANGAN PRAKTIK AKHIR SEMESTER (SOAL KODE)
+-- ============================================================
+-- Menambah jenis soal "kode" ke ulangan. Satu soal praktik dengan
+-- penilaian parsial otomatis di server + bisa ditimpa guru (hibrida).
+--
+-- Catatan idempoten: aman dijalankan berulang kali.
+
+-- 1. Jenis soal baru: 'kode'.
+alter table public.exam_questions
+  drop constraint if exists exam_questions_jenis_check;
+alter table public.exam_questions
+  add constraint exam_questions_jenis_check
+  check (jenis in ('pg', 'esai', 'kode'));
+
+-- 2. Kolom soal kode (null untuk soal PG/esai).
+alter table public.exam_questions add column if not exists kode_awal text;
+alter table public.exam_questions add column if not exists keluaran_diharapkan text;
+alter table public.exam_questions add column if not exists masukan text;
+alter table public.exam_questions add column if not exists masukan_uji text;
+alter table public.exam_questions add column if not exists keluaran_uji text;
+alter table public.exam_questions add column if not exists aturan jsonb;
+
+-- 3. Nilai kode otomatis + nilai manual guru di submission.
+alter table public.exam_submissions
+  add column if not exists nilai_kode int not null default 0
+  check (nilai_kode >= 0);
+alter table public.exam_submissions
+  add column if not exists nilai_kode_manual int
+  check (nilai_kode_manual is null or nilai_kode_manual >= 0);
+
+-- 4. Jawaban kode per soal (kode terakhir + output + rincian nilai).
+create table if not exists public.exam_code_answers (
+  id uuid primary key default gen_random_uuid(),
+  submission_id uuid not null references public.exam_submissions(id) on delete cascade,
+  soal_id uuid not null references public.exam_questions(id) on delete cascade,
+  kode text not null default '',
+  keluaran text not null default '',
+  keluaran_uji text,
+  nilai int not null default 0 check (nilai >= 0),
+  rincian jsonb,
+  percobaan int not null default 0,
+  unique (submission_id, soal_id)
+);
+
+-- 5. Sesi pengerjaan: penanda waktu mulai yang ditetapkan server.
+--    Dipakai supaya timer tetap berjalan walau halaman di-refresh,
+--    logout, atau browser ditutup.
+create table if not exists public.exam_sessions (
+  id uuid primary key default gen_random_uuid(),
+  exam_id uuid not null references public.exams(id) on delete cascade,
+  siswa_id uuid not null references public.students(id) on delete cascade,
+  mulai_at timestamptz not null default now(),
+  unique (exam_id, siswa_id)
+);
+
+-- 6. RLS + izin (pola portal siswa: server action memvalidasi sesi).
+alter table public.exam_code_answers enable row level security;
+alter table public.exam_sessions enable row level security;
+
+grant select, insert on table public.exam_code_answers to anon;
+grant select, insert on table public.exam_sessions to anon;
+
+drop policy if exists "Anon bisa baca jawaban kode" on public.exam_code_answers;
+create policy "Anon bisa baca jawaban kode"
+  on public.exam_code_answers for select
+  to anon using (true);
+
+drop policy if exists "Anon bisa tambah jawaban kode" on public.exam_code_answers;
+create policy "Anon bisa tambah jawaban kode"
+  on public.exam_code_answers for insert
+  to anon with check (true);
+
+drop policy if exists "Anon bisa baca sesi ulangan" on public.exam_sessions;
+create policy "Anon bisa baca sesi ulangan"
+  on public.exam_sessions for select
+  to anon using (true);
+
+drop policy if exists "Anon bisa tambah sesi ulangan" on public.exam_sessions;
+create policy "Anon bisa tambah sesi ulangan"
+  on public.exam_sessions for insert
+  to anon with check (true);
+
+-- Guru (authenticated) boleh melihat jawaban kode & sesi.
+grant select on table public.exam_code_answers to authenticated;
+grant select on table public.exam_sessions to authenticated;
+
+drop policy if exists "Guru bisa baca jawaban kode" on public.exam_code_answers;
+create policy "Guru bisa baca jawaban kode"
+  on public.exam_code_answers for select
+  to authenticated using (true);
+
+drop policy if exists "Guru bisa baca sesi ulangan" on public.exam_sessions;
+create policy "Guru bisa baca sesi ulangan"
+  on public.exam_sessions for select
+  to authenticated using (true);
+
+-- 6b. Untuk kelengkapan: guru juga boleh mengubah relasi kelas.
+--     Kode aplikasi tidak bergantung pada policy ini (menambah baris
+--     baru lalu menghapus yang tidak dipakai), tetapi policy update
+--     mencegah kegagalan kalau ada upsert di masa depan.
+drop policy if exists "Guru bisa mengubah hubungan ulangan-kelas" on public.exam_classes;
+create policy "Guru bisa mengubah hubungan ulangan-kelas"
+  on public.exam_classes for update
+  to authenticated
+  using (true)
+  with check (true);
+
+-- 7. Seed ulangan praktik (idempoten). Durasi & kode akses sengaja null:
+--    guru mengaturnya lewat /guru/ulangan.
+insert into public.exams (judul, tanggal, status, nilai_ditampilkan)
+select
+  'Ulangan Praktik Akhir Semester',
+  current_date,
+  'akan',
+  true
+where not exists (
+  select 1 from public.exams
+  where judul = 'Ulangan Praktik Akhir Semester'
+);
+
+-- 8. Seed satu soal kode mudah (idempoten per ulangan).
+insert into public.exam_questions (
+  exam_id, soal, jenis, poin, urutan,
+  kode_awal, keluaran_diharapkan, masukan, masukan_uji, keluaran_uji, aturan
+)
+select
+  e.id,
+  'Buat program Python yang meminta nama pengguna dengan input(), menyimpannya di variabel bernama nama, lalu menampilkan sapaan: Halo, <nama>!',
+  'kode',
+  100,
+  1,
+  '# Tulis programmu di sini.' || chr(10) ||
+  '# Minta nama dengan input(), simpan di variabel `nama`,' || chr(10) ||
+  '# lalu tampilkan: Halo, <nama>!',
+  'Halo, Budi!',
+  'Budi',
+  'Siti',
+  'Halo, Siti!',
+  '{"variabel_wajib": ["nama"], "dari_input": true, "min_input": 1, "min_print": 1, "izinkan_prompt": true, "bobot": {"output": 50, "output_uji": 20, "variabel": 20, "jumlah": 10}}'::jsonb
+from public.exams e
+where e.judul = 'Ulangan Praktik Akhir Semester'
+  and not exists (
+    select 1 from public.exam_questions q
+    where q.exam_id = e.id and q.jenis = 'kode'
+  );
+
+-- 9. Target kelas: kelas IX (kalau ada). Kalau tidak ada yang cocok,
+--    ulangan berlaku untuk semua kelas.
+insert into public.exam_classes (ulangan_id, kelas_id)
+select e.id, c.id
+from public.exams e
+join public.classes c
+  on (c.nama_kelas ilike '9%' or c.nama_kelas ilike 'kelas 9%' or c.nama_kelas ilike 'ix%')
+where e.judul = 'Ulangan Praktik Akhir Semester'
+on conflict do nothing;
+
+-- ============================================================
+-- Selesai Tahap 33. Ulangan "Ulangan Praktik Akhir Semester"
+-- dengan 1 soal kode dan penilaian parsial.
+-- ============================================================
+
+-- ============================================================
+-- TAHAP 34: SINKRONISASI NILAI ULANGAN ONLINE KE exam_scores
+-- ============================================================
+-- Saat siswa submit ulangan, server menulis nilai otomatis ke
+-- exam_scores memakai service_role (createAdminClient). Role itu
+-- perlu izin tulis pada exam_scores.
+--
+-- Jalankan bagian ini sekali di Supabase SQL Editor. Aman diulang.
+
+grant usage on schema public to service_role;
+grant select, insert, update on table public.exam_scores to service_role;
+
+-- Backfill: isi nilai yang belum punya baris exam_scores dari submission
+-- yang sudah ada. Baris yang sudah ada TIDAK ditimpa supaya nilai yang
+-- sudah diinput/diubah guru tetap dipertahankan.
+insert into public.exam_scores (exam_id, siswa_id, nilai)
+select s.exam_id, s.siswa_id, s.nilai_total
+from public.exam_submissions s
+on conflict (exam_id, siswa_id) do nothing;
+
+-- ============================================================
+-- Selesai Tahap 34.
+-- ============================================================
+
+-- ============================================================
+-- TAHAP 35: RESET SESI TIMER ULANGAN OLEH GURU
+-- ============================================================
+-- Saat guru mereset pengerjaan ulangan, baris exam_sessions juga
+-- dihapus supaya timer dimulai dari awal. Guru (authenticated)
+-- perlu izin DELETE pada tabel ini.
+--
+-- Jalankan bagian ini sekali di Supabase SQL Editor. Aman diulang.
+
+grant delete on table public.exam_sessions to authenticated;
+
+drop policy if exists "Guru bisa hapus sesi ulangan" on public.exam_sessions;
+create policy "Guru bisa hapus sesi ulangan"
+  on public.exam_sessions for delete
+  to authenticated using (true);
+
+-- ============================================================
+-- Selesai Tahap 35.
+-- ============================================================

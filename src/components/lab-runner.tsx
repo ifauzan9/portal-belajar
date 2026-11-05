@@ -52,7 +52,7 @@ export function LabRunner({
   instruksi,
   jenis,
   bantuan,
-  wajibVariabel,
+  variabelDiminta,
   finalBoss = false,
   badge,
   contoh,
@@ -70,7 +70,8 @@ export function LabRunner({
   instruksi: string;
   jenis: string;
   bantuan: string | null;
-  wajibVariabel: string[];
+  /** Nama variabel yang diminta pada tantangan (ditampilkan ke siswa). */
+  variabelDiminta: string[];
   /** Level puncak (mis. level 15 "FINAL BOSS"). */
   finalBoss?: boolean;
   /** Nama badge saat final boss berhasil (mis. "PRINT MASTER"). */
@@ -348,7 +349,7 @@ export function LabRunner({
       // Teks input("...") tidak boleh ikut jadi output; prompt dikirim
       // supaya worker bisa membersihkannya dari stdout.
       prompt,
-      analisis: jenis === "bebas" || wajibVariabel.length > 0,
+      analisis: jenis === "bebas" || variabelDiminta.length > 0,
     });
   }
 
@@ -633,14 +634,21 @@ export function LabRunner({
           </header>
 
           <div className="grid min-h-0 flex-1 gap-5 max-lg:overflow-y-auto lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
-            <div className="order-2 flex flex-col gap-4 lg:order-1 lg:min-h-0 lg:overflow-y-auto lg:pr-2">
-              {panelEditor("min(58vh, 620px)")}
-              {panelTombol(true)}
-              {panelGalat}
-              {panelOutput(true)}
-              {panelInputDipakai}
-              {panelFinalBoss}
-              {panelPesan}
+            {/* Editor + tombol Run dibuat tetap (tidak ikut ter-scroll) supaya
+                siswa selalu bisa mengedit kode tanpa scroll ke atas saat hasil
+                sudah muncul. Hanya area hasil di bawahnya yang di-scroll. */}
+            <div className="order-2 flex min-w-0 flex-col gap-4 lg:order-1 lg:min-h-0">
+              <div className="shrink-0 space-y-4">
+                {panelEditor("min(38vh, 420px)")}
+                {panelTombol(true)}
+              </div>
+              <div className="flex min-h-0 flex-1 flex-col gap-4 lg:overflow-y-auto lg:pr-2">
+                {panelGalat}
+                {panelOutput(true)}
+                {panelInputDipakai}
+                {panelFinalBoss}
+                {panelPesan}
+              </div>
             </div>
 
             <aside className="order-1 flex flex-col gap-3 lg:order-2 lg:min-h-0 lg:overflow-y-auto lg:pr-2 lg:pb-6">
@@ -686,6 +694,38 @@ export function LabRunner({
                   <h3 className="text-sm font-semibold text-white">Target output</h3>
                   <p className="mt-1 text-xs text-slate-400">Lihat sebagai acuan, teks tidak dapat dipilih.</p>
                   <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-xl bg-slate-950 p-4 font-mono text-sm leading-6 text-emerald-200 select-none">{keluaranDiharapkan}</pre>
+                </section>
+              ) : null}
+
+              {variabelDiminta.length > 0 ? (
+                <section className="rounded-2xl bg-slate-900 p-4 ring-1 ring-slate-800">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-white">
+                      Variabel yang diminta
+                    </h3>
+                    <p className="text-xs text-slate-400">Nama harus sama persis</p>
+                  </div>
+                  <ul className="mt-3 flex flex-wrap gap-2">
+                    {variabelDiminta.map((nama, urutan) => (
+                      <li
+                        key={nama}
+                        className="inline-flex items-center gap-2 rounded-lg border border-indigo-500/30 bg-slate-800 px-2.5 py-1.5 shadow-sm"
+                      >
+                        <span className="flex h-5 w-5 items-center justify-center rounded bg-indigo-500/20 text-[11px] font-semibold text-indigo-300">
+                          {urutan + 1}
+                        </span>
+                        <code className="font-mono text-sm font-semibold text-indigo-200">
+                          {nama}
+                        </code>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-3 text-xs leading-5 text-slate-400">
+                    Buat variabel dengan nama di atas, isi dari{" "}
+                    <code className="font-mono">input()</code>, lalu tampilkan
+                    dengan <code className="font-mono">print()</code>. Penilaian
+                    mengecek nama, isi dari input, dan urutannya.
+                  </p>
                 </section>
               ) : null}
 
