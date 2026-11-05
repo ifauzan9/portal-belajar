@@ -27,14 +27,15 @@ export function KartuRanking({
       </p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        {daftar.map((s, i) => (
+        {daftar.map((s) => (
           <div
-            key={s.nama + s.nilai}
+            key={`${s.ranking}-${s.nama}-${s.nis ?? ""}-${s.nilai}`}
             className="flex items-center gap-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200"
           >
             <span
               className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold ring-1 ${
-                WARNAPEDUMAN[i] ?? "bg-slate-100 text-slate-600 ring-slate-200"
+                WARNAPEDUMAN[s.ranking - 1] ??
+                "bg-slate-100 text-slate-600 ring-slate-200"
               }`}
             >
               {s.ranking}

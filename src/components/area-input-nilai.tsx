@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ImportNilaiPanel } from "@/components/import-nilai-panel";
 import { SimpanNilaiForm } from "@/components/simpan-nilai-form";
-import type { InfoRanking } from "@/app/guru/ulangan/[id]/nilai/page";
+import type { InfoRanking } from "@/lib/ranking";
 
 type SiswaBaris = {
   id: string;

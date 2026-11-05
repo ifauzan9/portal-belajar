@@ -2,7 +2,7 @@
 
 import { useActionState, useRef, useEffect } from "react";
 import { simpanNilaiBatch } from "@/app/guru/ulangan/actions";
-import type { InfoRanking } from "@/app/guru/ulangan/[id]/nilai/page";
+import type { InfoRanking } from "@/lib/ranking";
 
 type SiswaBaris = {
   id: string;

@@ -13,6 +13,7 @@ import {
   namaKelasDariIds,
 } from "@/lib/ambil-kelas-ulangan";
 import { gabungNilaiUlangan } from "@/lib/nilai-ulangan";
+import { hitungRanking } from "@/lib/ranking";
 import { ambilDataJawabanUlangan } from "@/lib/ulangan-jawaban";
 import { toggleUlangan } from "@/app/guru/ulangan/actions";
 
@@ -24,13 +25,6 @@ type SiswaRow = {
   kelasId: string | null;
   // Nilai yang sudah terinput untuk ulangan ini, atau null
   nilai: number | null;
-};
-
-// Ranking per siswa. tiedWith = jumlah siswa lain yang nilainya sama
-// (1 berarti tidak ada yang seri). null = belum ada nilai.
-export type InfoRanking = {
-  ranking: number | null;
-  tiedWith: number;
 };
 
 export default async function InputNilaiPage({
@@ -353,11 +347,19 @@ export default async function InputNilaiPage({
           </p>
         </div>
 
-        <FilterKelasNilai
-          kelasList={kelasTersedia}
-          active={kelasFilter}
-          izinkanTanpaKelas={izinkanTanpaKelas}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={`/guru/ulangan/${id}/ranking`}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+          >
+            🏆 Ranking seluruh siswa
+          </Link>
+          <FilterKelasNilai
+            kelasList={kelasTersedia}
+            active={kelasFilter}
+            izinkanTanpaKelas={izinkanTanpaKelas}
+          />
+        </div>
       </div>
 
       {tigaTeratas.length > 0 ? (
@@ -413,43 +415,3 @@ export default async function InputNilaiPage({
   );
 }
 
-// Competition ranking: nilai sama dapat ranking sama (1, 2, 2, 4).
-// Siswa tanpa nilai tidak ikut ranking (ranking: null).
-function hitungRanking(daftar: SiswaRow[]): Map<string, InfoRanking> {
-  const hasil = new Map<string, InfoRanking>();
-
-  const dinilai = daftar
-    .filter((s): s is SiswaRow & { nilai: number } => s.nilai !== null)
-    .sort((a, b) => {
-      if (b.nilai - a.nilai !== 0) return b.nilai - a.nilai;
-      return a.nama_siswa.localeCompare(b.nama_siswa, "id", {
-        numeric: true,
-        sensitivity: "base",
-      });
-    });
-
-  let urutan = 0;
-  for (let i = 0; i < dinilai.length; i++) {
-    const s = dinilai[i];
-    // Posisi berubah saat nilainya beda dari sebelumnya.
-    if (i === 0 || s.nilai !== dinilai[i - 1].nilai) {
-      urutan = i + 1;
-    }
-    // tiedWith = berapa banyak siswa dengan nilai sama (termasuk diri sendiri).
-    let tiedWith = 1;
-    for (let j = i + 1; j < dinilai.length; j++) {
-      if (dinilai[j].nilai === s.nilai) tiedWith++;
-      else break;
-    }
-    hasil.set(s.id, { ranking: urutan, tiedWith });
-  }
-
-  // Sisanya (belum dinilai) tidak punya ranking.
-  for (const s of daftar) {
-    if (!hasil.has(s.id)) {
-      hasil.set(s.id, { ranking: null, tiedWith: 0 });
-    }
-  }
-
-  return hasil;
-}

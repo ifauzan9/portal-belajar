@@ -280,6 +280,12 @@ export function BarisUlangan({
                 }
                 className="fixed z-30 w-36 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg shadow-slate-900/5"
               >
+                <Link
+                  href={`/guru/ulangan/${id}/ranking`}
+                  className="flex w-full items-center px-3 py-1.5 text-left text-xs font-medium text-slate-600 transition hover:bg-slate-100"
+                >
+                  Ranking
+                </Link>
                 <button
                   type="button"
                   onClick={() => {
