@@ -7,6 +7,7 @@ import {
   toggleUlangan,
 } from "@/app/guru/ulangan/actions";
 import { FormSoal } from "./form-soal";
+import { FormJawabanAsli } from "./form-jawaban-asli";
 import { DaftarJawaban } from "./daftar-jawaban";
 import { DaftarSoal } from "./daftar-soal";
 import { ambilDataJawabanUlangan } from "@/lib/ulangan-jawaban";
@@ -60,8 +61,9 @@ export default async function SoalUlanganPage({
 
   // Soal untuk ulangan ini
   const kolomSoalDasar = "id, soal, jenis, pilihan, kunci, poin, urutan";
-  const kolomSoalLengkap =
-    "id, soal, jenis, pilihan, kunci, poin, urutan, keluaran_diharapkan, kode_awal, masukan, masukan_uji, keluaran_uji, aturan";
+  const kolomSoalKode =
+    "id, soal, jenis, pilihan, kunci, poin, urutan, kode_awal, keluaran_diharapkan, masukan, masukan_uji, keluaran_uji, aturan";
+  const kolomSoalLengkap = `${kolomSoalKode}, jawaban_asli`;
 
   const hasilSoal = await supabase
     .from("exam_questions")
@@ -70,6 +72,17 @@ export default async function SoalUlanganPage({
     .order("urutan", { ascending: true });
 
   let soalData: unknown[] | null = hasilSoal.data;
+
+  // Kalau kolom `jawaban_asli` (Tahap 36) belum ada, tetap ambil kolom
+  // soal kode (Tahap 33) supaya target output dan aturan tidak hilang.
+  if (!soalData) {
+    const tanpaJawabanAsli = await supabase
+      .from("exam_questions")
+      .select(kolomSoalKode)
+      .eq("exam_id", id)
+      .order("urutan", { ascending: true });
+    soalData = tanpaJawabanAsli.data;
+  }
 
   if (!soalData) {
     const fallback = await supabase
@@ -93,6 +106,7 @@ export default async function SoalUlanganPage({
     masukan?: string | null;
     masukan_uji?: string | null;
     keluaran_uji?: string | null;
+    jawaban_asli?: string | null;
     aturan?: {
       variabel_wajib?: string[];
       dari_input?: boolean;
@@ -101,6 +115,8 @@ export default async function SoalUlanganPage({
       izinkan_prompt?: boolean;
     } | null;
   }[];
+
+  const soalKode = daftarSoal.filter((s) => s.jenis === "kode");
 
   const { daftarSubmit, daftarSesi, soalCount, probeCounts, daftarSoalEsai } =
     await ambilDataJawabanUlangan(supabase, id, daftarSoal);
@@ -276,6 +292,43 @@ export default async function SoalUlanganPage({
           }[]}
         />
       </section>
+
+      {/* ======================= KUNCI JAWABAN KODE ======================= */}
+      {soalKode.length > 0 ? (
+        <section
+          id="kunci-jawaban-kode"
+          className="rounded-2xl bg-white p-5 ring-1 ring-slate-200"
+        >
+          <h2 className="text-sm font-semibold text-slate-900">
+            Kunci Jawaban Kode
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Simpan kode jawaban asli/referensi. Kode ini hanya terlihat oleh
+            guru dan ditampilkan di review jawaban siswa.
+          </p>
+
+          <div className="mt-4 space-y-3">
+            {soalKode.map((q) => (
+              <div
+                key={q.id}
+                className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200"
+              >
+                <p className="text-xs font-semibold text-slate-700">
+                  Soal #{q.urutan} — Kode
+                </p>
+                <p className="mt-1 whitespace-pre-wrap text-xs text-slate-600">
+                  {q.soal}
+                </p>
+                <FormJawabanAsli
+                  examId={id}
+                  soalId={q.id}
+                  defaultValue={q.jawaban_asli ?? ""}
+                />
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {/* ======================= JAWABAN SISWA ======================= */}
       <DaftarJawaban

@@ -171,6 +171,21 @@ export function FormSoal({
             />
           </div>
 
+          <div>
+            <label className="block text-xs font-medium text-slate-700">
+              Kode jawaban asli (referensi guru)
+            </label>
+            <textarea
+              name="jawaban_asli"
+              rows={5}
+              placeholder={'nama = input()\nprint(f"Halo, {nama}!")'}
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+            />
+            <p className="mt-1 text-[11px] text-slate-400">
+              Hanya terlihat oleh guru dan ditampilkan di review jawaban siswa.
+            </p>
+          </div>
+
           <div className="grid gap-2 sm:grid-cols-3">
             <div>
               <label className="block text-xs font-medium text-slate-700">

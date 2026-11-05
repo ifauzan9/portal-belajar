@@ -601,6 +601,8 @@ export async function addQuestion(
 
   // Kolom khusus soal kode.
   const kodeAwal = String(formData.get("kode_awal") ?? "");
+  // Referensi kode jawaban asli (hanya untuk guru).
+  const jawabanAsli = String(formData.get("jawaban_asli") ?? "");
   const keluaranDiharapkan = String(
     formData.get("keluaran_diharapkan") ?? "",
   ).trim();
@@ -688,15 +690,37 @@ export async function addQuestion(
         : null,
   };
 
+  // `jawaban_asli` baru ada setelah Tahap 36. Untuk soal kode, coba simpan
+  // bersama kolom lain; kalau kolomnya belum ada, soal tetap disimpan tanpa
+  // jawaban asli dan guru diberi tahu.
+  const dataDenganJawabanAsli =
+    jenis === "kode"
+      ? {
+          ...dataLengkap,
+          jawaban_asli: jawabanAsli.trim() ? jawabanAsli : null,
+        }
+      : dataLengkap;
+
   const hasilInsert = await supabase
     .from("exam_questions")
-    .insert(dataLengkap);
+    .insert(dataDenganJawabanAsli);
 
   if (hasilInsert.error) {
-    // Soal kode butuh kolom Tahap 33; beri pesan jelas.
     if (jenis === "kode") {
+      const fallback = await supabase
+        .from("exam_questions")
+        .insert(dataLengkap);
+
+      if (fallback.error) {
+        return {
+          message: `Gagal menambah soal kode: ${fallback.error.message}. Pastikan SQL Tahap 33 dan Tahap 36 sudah dijalankan.`,
+        };
+      }
+
+      revalidatePath(`/guru/ulangan/${examId}/soal`);
       return {
-        message: `Gagal menambah soal kode: ${hasilInsert.error.message}. Pastikan SQL Tahap 33 sudah dijalankan.`,
+        message:
+          "Soal kode tersimpan, tetapi kode jawaban asli belum tersimpan. Jalankan SQL Tahap 36 agar kolom jawaban asli aktif.",
       };
     }
 
@@ -711,6 +735,39 @@ export async function addQuestion(
 
   revalidatePath(`/guru/ulangan/${examId}/soal`);
   return { message: null };
+}
+
+// Simpan kode jawaban asli/referensi untuk soal kode yang sudah ada.
+// Dipakai oleh form di halaman Kelola Soal.
+export async function simpanJawabanAsliSoal(
+  _prevState: { message: string | null },
+  formData: FormData,
+): Promise<{ message: string | null }> {
+  const examId = String(formData.get("exam_id") ?? "");
+  const soalId = String(formData.get("soal_id") ?? "");
+  const jawabanAsli = String(formData.get("jawaban_asli") ?? "");
+
+  if (!examId || !soalId) {
+    return { message: "Soal tidak ditemukan." };
+  }
+
+  const supabase = await requireGuru();
+  const { error } = await supabase
+    .from("exam_questions")
+    .update({ jawaban_asli: jawabanAsli.trim() ? jawabanAsli : null })
+    .eq("id", soalId)
+    .eq("exam_id", examId)
+    .eq("jenis", "kode");
+
+  if (error) {
+    return {
+      message: `Gagal menyimpan kode jawaban asli: ${error.message}. Pastikan SQL Tahap 36 sudah dijalankan.`,
+    };
+  }
+
+  revalidatePath(`/guru/ulangan/${examId}/soal`);
+  revalidatePath(`/guru/ulangan/${examId}/nilai`);
+  return { message: "Kode jawaban asli tersimpan." };
 }
 
 export async function deleteQuestion(formData: FormData) {

@@ -97,11 +97,12 @@ export default async function InputNilaiPage({
   const mapKelasIdKeNama = mapIdKeNama;
 
   // Soal untuk review jawaban + penilaian sistem. Ambil kolom lengkap
-  // supaya teks soal dan kunci/target output bisa ditampilkan di samping
-  // jawaban siswa. Fallback ke kolom dasar kalau DDL Tahap 33 belum ada.
+  // supaya teks soal, kunci, dan kode jawaban asli bisa ditampilkan di
+  // samping jawaban siswa. Fallback bertahap kalau Tahap 36/33 belum ada.
   const kolomSoalDasar = "id, jenis, soal, urutan, pilihan, kunci, poin";
-  const kolomSoalLengkap =
+  const kolomSoalKode =
     "id, jenis, soal, urutan, pilihan, kunci, poin, keluaran_diharapkan, kode_awal, masukan, masukan_uji, keluaran_uji, aturan";
+  const kolomSoalLengkap = `${kolomSoalKode}, jawaban_asli`;
 
   const hasilSoal = await supabase
     .from("exam_questions")
@@ -110,6 +111,17 @@ export default async function InputNilaiPage({
     .order("urutan", { ascending: true });
 
   let soalData: unknown[] | null = hasilSoal.data;
+
+  // Kalau kolom `jawaban_asli` (Tahap 36) belum ada, tetap ambil kolom
+  // soal kode (Tahap 33) supaya target output dan aturan tidak hilang.
+  if (!soalData) {
+    const tanpaJawabanAsli = await supabase
+      .from("exam_questions")
+      .select(kolomSoalKode)
+      .eq("exam_id", id)
+      .order("urutan", { ascending: true });
+    soalData = tanpaJawabanAsli.data;
+  }
 
   if (!soalData) {
     const fallback = await supabase

@@ -3777,3 +3777,33 @@ create policy "Guru bisa hapus sesi ulangan"
 -- ============================================================
 -- Selesai Tahap 35.
 -- ============================================================
+
+-- ============================================================
+-- TAHAP 36: KODE JAWABAN ASLI SOAL KODE
+-- ============================================================
+-- Kolom referensi guru untuk soal kode. Nilainya hanya dibaca dan
+-- ditampilkan di halaman guru (review jawaban); tidak dikirim ke siswa.
+--
+-- Jalankan bagian ini sekali di Supabase SQL Editor. Aman diulang.
+
+alter table public.exam_questions
+  add column if not exists jawaban_asli text;
+
+-- Backfill contoh untuk soal kode bawaan "Ulangan Praktik Akhir Semester".
+-- Hanya diisi kalau kolomnya masih kosong, jadi jawaban yang sudah diubah
+-- guru tidak akan ditimpa.
+update public.exam_questions
+set jawaban_asli =
+  'nama = input()' || chr(10) ||
+  'print(f"Halo, {nama}!")'
+where jenis = 'kode'
+  and (jawaban_asli is null or btrim(jawaban_asli) = '')
+  and soal ilike '%Halo, <nama>!%'
+  and exam_id in (
+    select id from public.exams
+    where judul = 'Ulangan Praktik Akhir Semester'
+  );
+
+-- ============================================================
+-- Selesai Tahap 36.
+-- ============================================================

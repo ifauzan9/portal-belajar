@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useActionState } from "react";
 import {
   simpanNilaiEsai,
@@ -53,6 +54,7 @@ export type SoalReview = {
   masukan?: string | null;
   masukan_uji?: string | null;
   keluaran_uji?: string | null;
+  jawaban_asli?: string | null;
   aturan?: {
     variabel_wajib?: string[];
     dari_input?: boolean;
@@ -153,8 +155,8 @@ export function DaftarJawaban({
         </span>
       </div>
       <p className="mt-1 text-xs text-slate-500">
-        Klik nama siswa untuk melihat teks soal, kunci/target output, jawaban,
-        nilai sistem, dan tombol reset pengerjaan.
+        Klik nama siswa untuk melihat teks soal, kunci, kode jawaban asli,
+        jawaban, nilai sistem, dan tombol reset pengerjaan.
       </p>
 
       {daftarSubmit.length === 0 ? (
@@ -428,12 +430,33 @@ export function DaftarJawaban({
                             </div>
                           ) : null}
 
-                          <p className="mt-3 text-[11px] font-semibold text-slate-500">
-                            Jawaban siswa
-                          </p>
-                          <pre className="mt-1 max-h-52 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-900 p-3 font-mono text-xs leading-5 text-slate-100">
-                            {k.kode || "(kode kosong)"}
-                          </pre>
+                          <div className="mt-3 grid gap-2 lg:grid-cols-2">
+                            <div>
+                              <p className="text-[11px] font-semibold text-emerald-700">
+                                Kunci — kode jawaban asli
+                              </p>
+                              <pre className="mt-1 max-h-52 overflow-auto whitespace-pre-wrap rounded-lg bg-emerald-50 p-3 font-mono text-xs leading-5 text-emerald-900 ring-1 ring-emerald-100">
+                                {soal?.jawaban_asli ||
+                                  "(belum diisi guru)"}
+                              </pre>
+                              {soal?.jawaban_asli ? null : (
+                                <Link
+                                  href={`/guru/ulangan/${examId}/soal#kunci-jawaban-kode`}
+                                  className="mt-1 inline-block text-[11px] font-medium text-emerald-700 underline"
+                                >
+                                  Isi di halaman Kelola Soal →
+                                </Link>
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-[11px] font-semibold text-slate-500">
+                                Jawaban siswa
+                              </p>
+                              <pre className="mt-1 max-h-52 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-900 p-3 font-mono text-xs leading-5 text-slate-100">
+                                {k.kode || "(kode kosong)"}
+                              </pre>
+                            </div>
+                          </div>
 
                           <div className="mt-2 grid gap-2 sm:grid-cols-2">
                             <div className="rounded-lg bg-white p-2 ring-1 ring-slate-200">
