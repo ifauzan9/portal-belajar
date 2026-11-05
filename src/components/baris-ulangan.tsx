@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useCallback, useEffect, useRef, useState } from "react";
 import {
   deleteUlangan,
   toggleUlangan,
@@ -67,16 +67,51 @@ export function BarisUlangan({
     null,
   );
 
+  const hitungPosisiMenu = useCallback(() => {
+    const details = menuRef.current;
+    const tombol = details?.querySelector("summary");
+    if (!details || !tombol) return null;
+
+    const r = tombol.getBoundingClientRect();
+    // Lebar menu 144px (w-36). Ukur tingginya supaya bisa dibuka ke atas
+    // kalau ruang di bawah tombol tidak cukup (mis. baris terakhir tabel).
+    const menu = details.querySelector<HTMLElement>("[data-menu]");
+    const tinggiMenu = menu?.offsetHeight ?? 0;
+    const lebarMenu = 144;
+    const jarak = 4;
+    const tepi = 8;
+
+    const adaRuangBawah =
+      r.bottom + jarak + tinggiMenu <= window.innerHeight - tepi;
+    const adaRuangAtas = r.top - jarak - tinggiMenu >= tepi;
+
+    let top = r.bottom + jarak;
+    if (!adaRuangBawah && adaRuangAtas) {
+      top = r.top - jarak - tinggiMenu;
+    } else if (!adaRuangBawah) {
+      // Layar terlalu pendek untuk membuka ke atas maupun ke bawah.
+      // Tempelkan sedekat mungkin ke tepi bawah viewport.
+      top = Math.max(tepi, window.innerHeight - tepi - tinggiMenu);
+    }
+
+    const left = Math.min(
+      Math.max(tepi, r.right - lebarMenu),
+      Math.max(tepi, window.innerWidth - tepi - lebarMenu),
+    );
+
+    return { top, left };
+  }, []);
+
   const bukaTutupMenu = (terbuka: boolean) => {
     if (!terbuka) {
       setPosMenu(null);
       return;
     }
-    const tombol = menuRef.current?.querySelector("summary");
-    if (!tombol) return;
-    const r = tombol.getBoundingClientRect();
-    // Lebar menu 144px (w-36); tempelkan ke kanan tombol.
-    setPosMenu({ top: r.bottom + 4, left: r.right - 144 });
+
+    const posisi = hitungPosisiMenu();
+    if (posisi) {
+      setPosMenu(posisi);
+    }
   };
 
   // Tutup dropdown saat klik di luar atau tekan Escape.
@@ -106,6 +141,32 @@ export function BarisUlangan({
       document.removeEventListener("keydown", onEsc);
     };
   }, [posMenu]);
+
+  // Ikuti posisi tombol saat halaman di-scroll / ukuran layar berubah,
+  // supaya menu `fixed` tidak tertinggal atau terpotong viewport.
+  const menuTerbuka = posMenu !== null;
+  useEffect(() => {
+    if (!menuTerbuka) return;
+
+    let frame = 0;
+    const perbarui = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const posisi = hitungPosisiMenu();
+        if (posisi) {
+          setPosMenu(posisi);
+        }
+      });
+    };
+
+    window.addEventListener("scroll", perbarui, true);
+    window.addEventListener("resize", perbarui);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", perbarui, true);
+      window.removeEventListener("resize", perbarui);
+    };
+  }, [menuTerbuka, hitungPosisiMenu]);
 
   const [state, formAction, pending] = useActionState<
     { message: string | null },
@@ -273,12 +334,13 @@ export function BarisUlangan({
                 </span>
               </summary>
               <div
+                data-menu
                 style={
                   posMenu
                     ? { top: posMenu.top, left: posMenu.left }
                     : undefined
                 }
-                className="fixed z-30 w-36 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg shadow-slate-900/5"
+                className="fixed z-50 w-36 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg shadow-slate-900/5"
               >
                 <Link
                   href={`/guru/ulangan/${id}/ranking`}
