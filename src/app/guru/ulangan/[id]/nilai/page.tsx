@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AreaInputNilai } from "@/components/area-input-nilai";
+import { FilterKelasNilai } from "@/components/filter-kelas-nilai";
 import { KartuRanking } from "@/components/kartu-ranking";
 import {
   DaftarJawaban,
@@ -34,8 +35,10 @@ export type InfoRanking = {
 
 export default async function InputNilaiPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ kelas?: string | string[] }>;
 }) {
   const supabase = await createClient();
   const {
@@ -47,6 +50,9 @@ export default async function InputNilaiPage({
   }
 
   const { id } = await params;
+  const { kelas: kelasDimintaRaw } = await searchParams;
+  const kelasDiminta =
+    typeof kelasDimintaRaw === "string" ? kelasDimintaRaw : "";
 
   // Ambil detail ulangan + semua kelasnya (gabungan legacy + relasi)
   const { data: ulangan, error: galatUlangan } = await supabase
@@ -95,6 +101,32 @@ export default async function InputNilaiPage({
 
   // Nama kelas per id (untuk kolom "Kelas" di tabel input nilai)
   const mapKelasIdKeNama = mapIdKeNama;
+
+  // Kelas yang boleh dipilih di filter: hanya kelas sasaran ulangan.
+  // Kalau ulangan berlaku untuk semua kelas, semua kelas ditampilkan.
+  const kelasTersedia =
+    daftarKelasId.length > 0
+      ? semuaKelas.filter((kelas) => daftarKelasId.includes(kelas.id))
+      : semuaKelas;
+  const izinkanTanpaKelas = daftarKelasId.length === 0;
+
+  // Validasi query `?kelas=` supaya tidak bisa memfilter kelas lain.
+  let kelasFilter = "";
+  if (kelasDiminta === "tanpa" && izinkanTanpaKelas) {
+    kelasFilter = "tanpa";
+  } else if (
+    kelasDiminta &&
+    kelasTersedia.some((kelas) => kelas.id === kelasDiminta)
+  ) {
+    kelasFilter = kelasDiminta;
+  }
+
+  const labelKelasFilter =
+    kelasFilter === "tanpa"
+      ? "Belum ada kelas"
+      : kelasFilter
+        ? (mapKelasIdKeNama.get(kelasFilter) ?? "Kelas")
+        : "Semua kelas";
 
   // Soal untuk review jawaban + penilaian sistem. Ambil kolom lengkap
   // supaya teks soal, kunci, dan kode jawaban asli bisa ditampilkan di
@@ -157,22 +189,24 @@ export default async function InputNilaiPage({
   );
 
   // Daftar siswa yang akan dinilai.
-  // - "Semua kelas" (0 id) → semua siswa tanpa filter.
-  // - Kelas tertentu → siswa di kelas-kelas tersebut.
+  // - Filter kelas aktif → hanya siswa kelas itu (atau tanpa kelas).
+  // - Tanpa filter + kelas sasaran → siswa di kelas-kelas tersebut.
+  // - Tanpa filter + "semua kelas" → semua siswa.
   let daftarSiswa: SiswaRow[] = [];
 
-  const ambilSiswa = async () => {
-    const query = supabase
-      .from("students")
-      .select("id, nis, nama_siswa, kelas_id");
+  let siswaQuery = supabase
+    .from("students")
+    .select("id, nis, nama_siswa, kelas_id");
 
-    if (daftarKelasId.length > 0) {
-      query.in("kelas_id", daftarKelasId);
-    }
-    return query;
-  };
+  if (kelasFilter === "tanpa") {
+    siswaQuery = siswaQuery.is("kelas_id", null);
+  } else if (kelasFilter) {
+    siswaQuery = siswaQuery.eq("kelas_id", kelasFilter);
+  } else if (daftarKelasId.length > 0) {
+    siswaQuery = siswaQuery.in("kelas_id", daftarKelasId);
+  }
 
-  const { data: siswaData, error: galatSiswa } = await ambilSiswa();
+  const { data: siswaData, error: galatSiswa } = await siswaQuery;
 
   if (!galatSiswa) {
     daftarSiswa = (siswaData ?? []).map((row) => ({
@@ -183,17 +217,32 @@ export default async function InputNilaiPage({
       nilai: nilaiPerSiswa.get(row.id) ?? null,
     }));
 
-    daftarSiswa.sort((a, b) =>
-      a.nama_siswa.localeCompare(b.nama_siswa, "id", {
+    // Saat "Semua kelas", urutkan per kelas lalu nama supaya daftar
+    // tetap terasa dikelompokkan per kelas.
+    daftarSiswa.sort((a, b) => {
+      // "~" membuat siswa tanpa kelas tampil paling bawah.
+      const kelasA = a.kelasId
+        ? (mapKelasIdKeNama.get(a.kelasId) ?? "~")
+        : "~";
+      const kelasB = b.kelasId
+        ? (mapKelasIdKeNama.get(b.kelasId) ?? "~")
+        : "~";
+      if (kelasA !== kelasB) {
+        return kelasA.localeCompare(kelasB, "id", {
+          numeric: true,
+          sensitivity: "base",
+        });
+      }
+      return a.nama_siswa.localeCompare(b.nama_siswa, "id", {
         numeric: true,
         sensitivity: "base",
-      }),
-    );
+      });
+    });
   }
 
-  // ---------- Ranking per ulangan (competition ranking: 1, 2, 2, 4) ----------
-  // Berdasarkan nilai yang sudah tersimpan di DB. Siswa tanpa nilai
-  // tidak ikut ranking.
+  // ---------- Ranking per daftar yang ditampilkan (1, 2, 2, 4) ----------
+  // Saat filter kelas aktif, ranking dihitung di dalam kelas itu. Siswa
+  // tanpa nilai tidak ikut ranking.
   const ranking = hitungRanking(daftarSiswa);
 
   // Tiga nama teratas untuk kartu ringkasan.
@@ -220,6 +269,16 @@ export default async function InputNilaiPage({
       mapSiswaIdKeNamaKelas.set(siswa.id, "Belum ada kelas");
     }
   }
+
+  // Review jawaban ikut filter kelas supaya isinya konsisten dengan
+  // tabel nilai. "Semua kelas" tetap menampilkan semua submission.
+  const idSiswaTampil = new Set(daftarSiswa.map((siswa) => siswa.id));
+  const daftarSubmitTampil = kelasFilter
+    ? daftarSubmit.filter((submit) => idSiswaTampil.has(submit.siswa_id))
+    : daftarSubmit;
+  const daftarSesiTampil = kelasFilter
+    ? daftarSesi.filter((sesi) => idSiswaTampil.has(sesi.siswa_id))
+    : daftarSesi;
 
   return (
     <div className="space-y-6">
@@ -283,9 +342,31 @@ export default async function InputNilaiPage({
         ) : null}
       </div>
 
+      <div className="flex flex-wrap items-end justify-between gap-3 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+        <div>
+          <p className="text-sm font-semibold text-slate-900">Daftar Nilai</p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {kelasFilter
+              ? `Menampilkan ${labelKelasFilter}`
+              : "Menampilkan semua kelas"}{" "}
+            · {daftarSiswa.length} siswa
+          </p>
+        </div>
+
+        <FilterKelasNilai
+          kelasList={kelasTersedia}
+          active={kelasFilter}
+          izinkanTanpaKelas={izinkanTanpaKelas}
+        />
+      </div>
+
       {tigaTeratas.length > 0 ? (
         <KartuRanking
-          judul="3 Siswa Teratas"
+          judul={
+            kelasFilter
+              ? `3 Siswa Teratas — ${labelKelasFilter}`
+              : "3 Siswa Teratas"
+          }
           daftar={tigaTeratas.map((s) => ({
             nama: s.nama_siswa,
             nis: s.nis,
@@ -297,25 +378,31 @@ export default async function InputNilaiPage({
 
       {daftarSiswa.length > 0 ? (
         <AreaInputNilai
+          key={kelasFilter || "semua"}
           examId={id}
           daftarSiswa={daftarSiswa}
           ranking={ranking}
           mapSiswaIdKeNamaKelas={mapSiswaIdKeNamaKelas}
+          kelasId={kelasFilter}
         />
       ) : (
         <div className="rounded-2xl bg-white p-8 text-center text-sm text-slate-500 ring-1 ring-slate-200">
-          Belum ada siswa{daftarKelasId.length > 0 ? " di kelas-kelas tersebut" : ""}.
+          {kelasFilter
+            ? `Belum ada siswa di ${labelKelasFilter}.`
+            : `Belum ada siswa${
+                daftarKelasId.length > 0 ? " di kelas-kelas tersebut" : ""
+              }.`}{" "}
           Tambahkan siswa dulu di menu Data Siswa.
         </div>
       )}
 
       {/* Review jawaban + penilaian sistem. Sama seperti di halaman
           Kelola Soal, tetapi bisa diakses langsung dari halaman nilai. */}
-      {dataUlangan.status === "akan" || daftarSubmit.length > 0 ? (
+      {dataUlangan.status === "akan" || daftarSubmitTampil.length > 0 ? (
         <DaftarJawaban
           examId={id}
-          daftarSubmit={daftarSubmit}
-          daftarSesi={daftarSesi}
+          daftarSubmit={daftarSubmitTampil}
+          daftarSesi={daftarSesiTampil}
           soalCount={soalCount}
           probeCounts={probeCounts}
           daftarSoalEsai={daftarSoalEsai}

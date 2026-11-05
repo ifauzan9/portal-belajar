@@ -17,12 +17,16 @@ export function AreaInputNilai({
   daftarSiswa,
   ranking,
   mapSiswaIdKeNamaKelas,
+  kelasId,
 }: {
   examId: string;
   daftarSiswa: SiswaBaris[];
   ranking: Map<string, InfoRanking>;
   // Nama kelas per siswa (untuk kolom "Kelas" di tabel input nilai)
   mapSiswaIdKeNamaKelas: Map<string, string>;
+  // Filter kelas aktif ("", id kelas, atau "tanpa"). Dipakai untuk
+  // membatasi import Excel ke kelas yang sedang ditampilkan.
+  kelasId?: string;
 }) {
   const [nilaiImport, setNilaiImport] = useState<Map<string, number> | null>(
     null,
@@ -41,7 +45,11 @@ export function AreaInputNilai({
 
   return (
     <div className="space-y-4">
-      <ImportNilaiPanel examId={examId} onSimpanPratinjau={onSimpanPratinjau} />
+      <ImportNilaiPanel
+        examId={examId}
+        kelasId={kelasId}
+        onSimpanPratinjau={onSimpanPratinjau}
+      />
 
       <SimpanNilaiForm
         examId={examId}
@@ -50,6 +58,7 @@ export function AreaInputNilai({
         onTersimpan={onNilaiTersimpan}
         ranking={ranking}
         mapSiswaIdKeNamaKelas={mapSiswaIdKeNamaKelas}
+        kelasId={kelasId}
       />
     </div>
   );

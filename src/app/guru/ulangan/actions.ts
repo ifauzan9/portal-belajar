@@ -331,9 +331,11 @@ export async function toggleUlangan(formData: FormData) {
   revalidatePath("/siswa");
 }
 
-// Menyimpan nilai semua siswa sekaligus untuk satu ulangan.
+// Menyimpan nilai siswa untuk satu ulangan.
 // Input form bernama `nilai_{siswaId}`. Siswa yang inputnya kosong
 // dianggap belum dinilai — baris lamanya dihapus kalau tadinya ada.
+// Form mengirim hidden `kelas_id` (filter aktif) supaya menyimpan satu
+// kelas tidak menghapus nilai kelas lain. Kosong = semua kelas.
 export async function simpanNilaiBatch(
   _prevState: { message: string | null },
   formData: FormData,
@@ -344,6 +346,7 @@ export async function simpanNilaiBatch(
     return { message: "Ulangan tidak ditemukan." };
   }
 
+  const kelasId = String(formData.get("kelas_id") ?? "");
   const { daftar, galat } = bacaNilaiDariForm(formData);
 
   if (galat) {
@@ -352,12 +355,83 @@ export async function simpanNilaiBatch(
 
   const supabase = await requireGuru();
 
-  // 1) Hapus semua nilai lama ulangan ini (nilai yang dikosongkan
-  //    di form berarti "belum dinilai" lagi).
-  const { error: galatHapus } = await supabase
-    .from("exam_scores")
-    .delete()
-    .eq("exam_id", examId);
+  // Validasi kelas filter terhadap kelas sasaran ulangan.
+  const { data: ulangan, error: galatUlangan } = await supabase
+    .from("exams")
+    .select("id, kelas_id, exam_classes(kelas_id)")
+    .eq("id", examId)
+    .maybeSingle();
+
+  if (galatUlangan || !ulangan) {
+    return { message: "Ulangan tidak ditemukan." };
+  }
+
+  const daftarKelasId = ambilKelasUlangan(
+    ulangan as {
+      kelas_id: string | null;
+      exam_classes: { kelas_id: string }[];
+    },
+  );
+
+  if (kelasId === "tanpa" && daftarKelasId.length > 0) {
+    return {
+      message: "Kelas 'Belum ada kelas' tidak termasuk ulangan ini.",
+    };
+  }
+  if (
+    kelasId &&
+    kelasId !== "tanpa" &&
+    daftarKelasId.length > 0 &&
+    !daftarKelasId.includes(kelasId)
+  ) {
+    return { message: "Kelas yang dipilih tidak termasuk ulangan ini." };
+  }
+
+  // Tentukan siswa yang nilainya diganti:
+  //   null = semua kelas (hapus semua nilai ulangan ini)
+  //   []   = kelas kosong (tidak ada yang dihapus)
+  let siswaIds: string[] | null = null;
+
+  if (kelasId === "tanpa") {
+    const { data: siswa, error: galatSiswa } = await supabase
+      .from("students")
+      .select("id")
+      .is("kelas_id", null);
+
+    if (galatSiswa) {
+      return { message: `Gagal memuat siswa: ${galatSiswa.message}` };
+    }
+    siswaIds = (siswa ?? []).map((row) => row.id);
+  } else if (kelasId) {
+    const { data: siswa, error: galatSiswa } = await supabase
+      .from("students")
+      .select("id")
+      .eq("kelas_id", kelasId);
+
+    if (galatSiswa) {
+      return { message: `Gagal memuat siswa: ${galatSiswa.message}` };
+    }
+    siswaIds = (siswa ?? []).map((row) => row.id);
+  }
+
+  // 1) Hapus nilai lama. Nilai yang dikosongkan di form berarti
+  //    "belum dinilai" lagi.
+  let galatHapus: { message: string } | null = null;
+
+  if (siswaIds === null) {
+    const { error } = await supabase
+      .from("exam_scores")
+      .delete()
+      .eq("exam_id", examId);
+    galatHapus = error;
+  } else if (siswaIds.length > 0) {
+    const { error } = await supabase
+      .from("exam_scores")
+      .delete()
+      .eq("exam_id", examId)
+      .in("siswa_id", siswaIds);
+    galatHapus = error;
+  }
 
   if (galatHapus) {
     return { message: `Gagal menghapus nilai lama: ${galatHapus.message}` };
@@ -455,20 +529,57 @@ export async function importNilaiExcel(
       exam_classes: { kelas_id: string }[];
     },
   );
-  if (daftarKelasId.length === 0) {
+
+  // Filter kelas dari halaman nilai. Kalau ada, import hanya mencocokkan
+  // siswa di kelas itu supaya nilai tidak masuk ke kelas yang tidak
+  // sedang ditampilkan.
+  const kelasDiminta = String(formData.get("kelas_id") ?? "");
+  let kelasImport = "";
+
+  if (kelasDiminta === "tanpa") {
+    if (daftarKelasId.length > 0) {
+      return {
+        message: "Kelas 'Belum ada kelas' tidak termasuk ulangan ini.",
+        daftar: [],
+        nilaiOk: null,
+      };
+    }
+    kelasImport = "tanpa";
+  } else if (kelasDiminta) {
+    if (
+      daftarKelasId.length > 0 &&
+      !daftarKelasId.includes(kelasDiminta)
+    ) {
+      return {
+        message: "Kelas yang dipilih tidak termasuk ulangan ini.",
+        daftar: [],
+        nilaiOk: null,
+      };
+    }
+    kelasImport = kelasDiminta;
+  }
+
+  if (daftarKelasId.length === 0 && !kelasImport) {
     return {
       message:
-        "Ulangan ini berlaku untuk semua kelas, jadi import per kelas tidak bisa memastikan NIS terdaftar. Import langsung dari halaman input nilai.",
+        "Ulangan ini berlaku untuk semua kelas. Pilih kelas pada filter di atas halaman, lalu import ulang.",
       daftar: [],
       nilaiOk: null,
     };
   }
 
   // 2) Ambil daftar siswa kelas (NIS + id) untuk matching
-  const { data: siswaData, error: galatSiswa } = await supabase
-    .from("students")
-    .select("id, nis")
-    .in("kelas_id", daftarKelasId);
+  let siswaQuery = supabase.from("students").select("id, nis");
+
+  if (kelasImport === "tanpa") {
+    siswaQuery = siswaQuery.is("kelas_id", null);
+  } else if (kelasImport) {
+    siswaQuery = siswaQuery.eq("kelas_id", kelasImport);
+  } else {
+    siswaQuery = siswaQuery.in("kelas_id", daftarKelasId);
+  }
+
+  const { data: siswaData, error: galatSiswa } = await siswaQuery;
 
   if (galatSiswa) {
     return {

@@ -9,6 +9,10 @@ import {
 
 type Props = {
   examId: string;
+  // Filter kelas aktif ("", id kelas, atau "tanpa"). Import hanya
+  // mencocokkan NIS siswa di kelas ini supaya nilai tidak masuk ke
+  // siswa yang sedang tidak ditampilkan.
+  kelasId?: string;
   // Dipanggil setelah pratinjau disimpan: nilai OK masuk ke form induk
   onSimpanPratinjau: (nilai: Map<string, number>) => void;
 };
@@ -17,6 +21,7 @@ type StatusForm = "siap" | "pratinjau" | "tersimpan";
 
 export function ImportNilaiPanel({
   examId,
+  kelasId,
   onSimpanPratinjau,
 }: Props) {
   const [state, formAction, pending] = useActionState<
@@ -81,10 +86,14 @@ export function ImportNilaiPanel({
       <p className="mt-1 text-sm text-slate-500">
         Format: NIS · Nama · Nilai (0–100). Baris pertama di file dianggap
         judul kolom.
+        {kelasId
+          ? " Import dibatasi ke kelas yang sedang dipilih di filter."
+          : ""}
       </p>
 
       <form action={formAction} className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
         <input type="hidden" name="exam_id" value={examId} />
+        <input type="hidden" name="kelas_id" value={kelasId ?? ""} />
 
         <input
           id="file-nilai"

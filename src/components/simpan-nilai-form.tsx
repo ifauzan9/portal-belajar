@@ -28,6 +28,7 @@ export function SimpanNilaiForm({
   onTersimpan,
   ranking,
   mapSiswaIdKeNamaKelas,
+  kelasId,
 }: {
   examId: string;
   daftarSiswa: SiswaBaris[];
@@ -36,6 +37,9 @@ export function SimpanNilaiForm({
   ranking: Map<string, InfoRanking>;
   // Nama kelas per siswaId (untuk kolom "Kelas" di tabel input nilai)
   mapSiswaIdKeNamaKelas: Map<string, string>;
+  // Filter kelas aktif ("", id kelas, atau "tanpa"). Server hanya
+  // mengganti nilai siswa di kelas ini supaya kelas lain tidak terhapus.
+  kelasId?: string;
 }) {
   const [state, formAction, pending] = useActionState<
     { message: string | null },
@@ -72,6 +76,11 @@ export function SimpanNilaiForm({
   return (
     <form action={formAction}>
       <input type="hidden" name="exam_id" value={examId} />
+
+      {/* Filter kelas aktif. Server memakai ini untuk membatasi baris
+          nilai yang dihapus/diganti, sehingga menyimpan satu kelas
+          tidak menghapus nilai kelas lain. Kosong = semua kelas. */}
+      <input type="hidden" name="kelas_id" value={kelasId ?? ""} />
 
       <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200">
         <div className="overflow-x-auto">
