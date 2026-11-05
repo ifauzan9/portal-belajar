@@ -39,6 +39,46 @@ type SubmitRow = {
 
 type SoalEsai = { id: string; urutan: number; potongan: string };
 
+// Soal lengkap untuk menampilkan teks soal + kunci di samping jawaban siswa.
+export type SoalReview = {
+  id: string;
+  jenis: string;
+  soal: string;
+  urutan: number;
+  pilihan?: string[] | null;
+  kunci?: string | null;
+  poin?: number;
+  keluaran_diharapkan?: string | null;
+  kode_awal?: string | null;
+  masukan?: string | null;
+  masukan_uji?: string | null;
+  keluaran_uji?: string | null;
+  aturan?: {
+    variabel_wajib?: string[];
+    dari_input?: boolean;
+    min_input?: number;
+    min_print?: number;
+    izinkan_prompt?: boolean;
+  } | null;
+};
+
+const LABEL_JENIS_SOAL: Record<string, string> = {
+  pg: "Pilihan Ganda",
+  esai: "Esai",
+  kode: "Kode",
+};
+
+function formatAturan(aturan: NonNullable<SoalReview["aturan"]>): string {
+  const bagian: string[] = [];
+  if (aturan.variabel_wajib?.length) {
+    bagian.push(`variabel ${aturan.variabel_wajib.join(", ")}`);
+  }
+  if (aturan.dari_input) bagian.push("memakai input()");
+  if (aturan.min_input) bagian.push(`min. ${aturan.min_input} input()`);
+  if (aturan.min_print) bagian.push(`min. ${aturan.min_print} print()`);
+  return bagian.length > 0 ? bagian.join(" · ") : "—";
+}
+
 type SesiRow = {
   siswa_id: string;
   namaSiswa: string;
@@ -53,6 +93,7 @@ export function DaftarJawaban({
   soalCount,
   probeCounts,
   daftarSoalEsai,
+  daftarSoal,
 }: {
   examId: string;
   daftarSubmit: SubmitRow[];
@@ -64,8 +105,12 @@ export function DaftarJawaban({
   probeCounts: Record<string, number> | null;
   // Daftar soal esai (urut) untuk input nilai per soal.
   daftarSoalEsai: SoalEsai[];
+  // Soal lengkap untuk menampilkan teks + kunci di samping jawaban siswa.
+  daftarSoal: SoalReview[];
 }) {
   const [bukaId, setBukaId] = useState<string | null>(null);
+
+  const petaSoal = new Map(daftarSoal.map((s) => [s.id, s]));
 
   // Siswa yang punya sesi timer tetapi belum submit. Tombol reset tetap
   // ditampilkan supaya guru bisa mengulang timer yang sudah habis.
@@ -108,8 +153,8 @@ export function DaftarJawaban({
         </span>
       </div>
       <p className="mt-1 text-xs text-slate-500">
-        Klik nama siswa untuk melihat jawaban, nilai sistem, dan tombol reset
-        pengerjaan.
+        Klik nama siswa untuk melihat teks soal, kunci/target output, jawaban,
+        nilai sistem, dan tombol reset pengerjaan.
       </p>
 
       {daftarSubmit.length === 0 ? (
@@ -194,31 +239,106 @@ export function DaftarJawaban({
 
                   {row.daftarJawaban.length > 0 ? (
                     <div className="grid gap-2 sm:grid-cols-2">
-                      {row.daftarJawaban.map((j, i) => {
-                        // Tampilkan label urutan soal esai kalau ini soal esai
-                        const soalEsaiInfo = daftarSoalEsai.find(
-                          (s) => s.id === j.soalId,
-                        );
-                        return (
-                          <div
-                            key={j.soalId}
-                            className="rounded-lg bg-slate-50 p-3 text-xs"
-                          >
-                            <p className="font-medium text-slate-500">
-                              {soalEsaiInfo
-                                ? `Soal Esai #${soalEsaiInfo.urutan}`
-                                : `Soal #${i + 1}`}
-                            </p>
-                            <p className="mt-1 whitespace-pre-wrap text-slate-900">
-                              {j.jawaban || (
-                                <span className="text-slate-400">
-                                  (belum dijawab)
-                                </span>
+                      {[...row.daftarJawaban]
+                        .sort((a, b) => {
+                          const urutanA =
+                            petaSoal.get(a.soalId)?.urutan ??
+                            Number.MAX_SAFE_INTEGER;
+                          const urutanB =
+                            petaSoal.get(b.soalId)?.urutan ??
+                            Number.MAX_SAFE_INTEGER;
+                          return urutanA - urutanB;
+                        })
+                        .map((j, i) => {
+                          const soal = petaSoal.get(j.soalId);
+                          const kunci = soal?.kunci ?? null;
+                          const pilihanBenar =
+                            soal?.pilihan?.find((p) =>
+                              kunci ? p.startsWith(`${kunci}.`) : false,
+                            ) ?? null;
+                          const pilihanSiswa =
+                            soal?.pilihan?.find((p) =>
+                              j.jawaban
+                                ? p.startsWith(
+                                    `${j.jawaban.trim().toUpperCase().charAt(0)}.`,
+                                  )
+                                : false,
+                            ) ?? null;
+
+                          return (
+                            <div
+                              key={j.soalId}
+                              className="rounded-lg bg-slate-50 p-3 text-xs ring-1 ring-slate-200"
+                            >
+                              <p className="font-medium text-slate-500">
+                                {soal
+                                  ? `Soal #${soal.urutan} · ${
+                                      LABEL_JENIS_SOAL[soal.jenis] ??
+                                      soal.jenis
+                                    }`
+                                  : `Soal #${i + 1}`}
+                              </p>
+
+                              {soal ? (
+                                <p className="mt-1 whitespace-pre-wrap text-slate-900">
+                                  {soal.soal}
+                                </p>
+                              ) : (
+                                <p className="mt-1 text-slate-400">
+                                  Teks soal tidak ditemukan.
+                                </p>
                               )}
-                            </p>
-                          </div>
-                        );
-                      })}
+
+                              {soal?.jenis === "pg" ? (
+                                <div className="mt-2 space-y-0.5">
+                                  {(soal.pilihan ?? []).map((p, idx) => (
+                                    <p
+                                      key={`${j.soalId}-opsi-${idx}`}
+                                      className={
+                                        kunci && p.startsWith(`${kunci}.`)
+                                          ? "font-medium text-emerald-700"
+                                          : "text-slate-500"
+                                      }
+                                    >
+                                      {p}
+                                    </p>
+                                  ))}
+                                  <div className="mt-1 rounded-md bg-emerald-50 px-2 py-1.5 text-emerald-800 ring-1 ring-emerald-100">
+                                    <span className="font-semibold">
+                                      Kunci:
+                                    </span>{" "}
+                                    {kunci ?? "—"}
+                                    {pilihanBenar ? ` — ${pilihanBenar}` : ""}
+                                  </div>
+                                </div>
+                              ) : null}
+
+                              {soal?.jenis === "esai" ? (
+                                <p className="mt-2 rounded-md bg-slate-100 px-2 py-1.5 text-slate-500">
+                                  Kunci: tidak ada — esai dinilai manual.
+                                </p>
+                              ) : null}
+
+                              <div className="mt-2 border-t border-slate-200 pt-2">
+                                <p className="font-medium text-slate-500">
+                                  Jawaban siswa
+                                </p>
+                                <p className="mt-1 whitespace-pre-wrap text-slate-900">
+                                  {j.jawaban || (
+                                    <span className="text-slate-400">
+                                      (belum dijawab)
+                                    </span>
+                                  )}
+                                </p>
+                                {soal?.jenis === "pg" && pilihanSiswa ? (
+                                  <p className="mt-1 text-slate-500">
+                                    {pilihanSiswa}
+                                  </p>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        })}
                     </div>
                   ) : (
                     <p className="text-sm text-slate-500">
@@ -233,14 +353,18 @@ export function DaftarJawaban({
                         Jawaban Kode
                       </h3>
 
-                      {row.daftarKode.map((k, idx) => (
+                      {row.daftarKode.map((k, idx) => {
+                        const soal = petaSoal.get(k.soalId);
+                        return (
                         <div
                           key={k.soalId}
                           className="rounded-xl bg-emerald-50/40 p-3 ring-1 ring-emerald-100"
                         >
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <p className="text-xs font-semibold text-emerald-800">
-                              Soal Kode #{idx + 1}
+                              {soal
+                                ? `Soal #${soal.urutan} · Kode`
+                                : `Soal Kode #${idx + 1}`}
                             </p>
                             <p className="text-xs text-slate-500">
                               Nilai otomatis:{" "}
@@ -251,14 +375,70 @@ export function DaftarJawaban({
                             </p>
                           </div>
 
-                          <pre className="mt-2 max-h-52 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-900 p-3 font-mono text-xs leading-5 text-slate-100">
+                          {soal ? (
+                            <div className="mt-2 rounded-lg bg-white p-2.5 ring-1 ring-slate-200">
+                              <p className="text-[11px] font-semibold text-slate-500">
+                                Soal
+                              </p>
+                              <p className="mt-1 whitespace-pre-wrap text-xs text-slate-900">
+                                {soal.soal}
+                              </p>
+
+                              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                                <div>
+                                  <p className="text-[11px] font-semibold text-emerald-700">
+                                    Kunci — target output
+                                  </p>
+                                  <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-emerald-50 p-2 font-mono text-xs text-emerald-800 ring-1 ring-emerald-100">
+                                    {soal.keluaran_diharapkan ||
+                                      "(tidak diatur)"}
+                                  </pre>
+                                  {soal.masukan ? (
+                                    <p className="mt-1 text-[11px] text-slate-500">
+                                      Input:{" "}
+                                      <span className="font-mono text-slate-700">
+                                        {soal.masukan}
+                                      </span>
+                                    </p>
+                                  ) : null}
+                                </div>
+                                <div>
+                                  <p className="text-[11px] font-semibold text-slate-500">
+                                    Kunci — target output uji
+                                  </p>
+                                  <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-slate-50 p-2 font-mono text-xs text-slate-800 ring-1 ring-slate-200">
+                                    {soal.keluaran_uji || "(tidak diatur)"}
+                                  </pre>
+                                  {soal.masukan_uji ? (
+                                    <p className="mt-1 text-[11px] text-slate-500">
+                                      Input uji:{" "}
+                                      <span className="font-mono text-slate-700">
+                                        {soal.masukan_uji}
+                                      </span>
+                                    </p>
+                                  ) : null}
+                                </div>
+                              </div>
+
+                              {soal.aturan ? (
+                                <p className="mt-2 text-[11px] text-slate-500">
+                                  Ketentuan: {formatAturan(soal.aturan)}
+                                </p>
+                              ) : null}
+                            </div>
+                          ) : null}
+
+                          <p className="mt-3 text-[11px] font-semibold text-slate-500">
+                            Jawaban siswa
+                          </p>
+                          <pre className="mt-1 max-h-52 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-900 p-3 font-mono text-xs leading-5 text-slate-100">
                             {k.kode || "(kode kosong)"}
                           </pre>
 
                           <div className="mt-2 grid gap-2 sm:grid-cols-2">
                             <div className="rounded-lg bg-white p-2 ring-1 ring-slate-200">
                               <p className="text-[11px] font-semibold text-slate-500">
-                                Output
+                                Output siswa
                               </p>
                               <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap font-mono text-xs text-slate-800">
                                 {k.keluaran || "(kosong)"}
@@ -266,7 +446,7 @@ export function DaftarJawaban({
                             </div>
                             <div className="rounded-lg bg-white p-2 ring-1 ring-slate-200">
                               <p className="text-[11px] font-semibold text-slate-500">
-                                Output uji
+                                Output uji siswa
                               </p>
                               <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap font-mono text-xs text-slate-800">
                                 {k.keluaranUji ?? "(tidak diuji)"}
@@ -295,7 +475,8 @@ export function DaftarJawaban({
                             </div>
                           ) : null}
                         </div>
-                      ))}
+                        );
+                      })}
 
                       <form
                         action={formActionKode}

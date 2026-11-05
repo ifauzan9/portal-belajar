@@ -61,7 +61,7 @@ export default async function SoalUlanganPage({
   // Soal untuk ulangan ini
   const kolomSoalDasar = "id, soal, jenis, pilihan, kunci, poin, urutan";
   const kolomSoalLengkap =
-    "id, soal, jenis, pilihan, kunci, poin, urutan, keluaran_diharapkan, kode_awal, masukan, aturan";
+    "id, soal, jenis, pilihan, kunci, poin, urutan, keluaran_diharapkan, kode_awal, masukan, masukan_uji, keluaran_uji, aturan";
 
   const hasilSoal = await supabase
     .from("exam_questions")
@@ -91,7 +91,15 @@ export default async function SoalUlanganPage({
     keluaran_diharapkan?: string | null;
     kode_awal?: string | null;
     masukan?: string | null;
-    aturan?: { variabel_wajib?: string[] } | null;
+    masukan_uji?: string | null;
+    keluaran_uji?: string | null;
+    aturan?: {
+      variabel_wajib?: string[];
+      dari_input?: boolean;
+      min_input?: number;
+      min_print?: number;
+      izinkan_prompt?: boolean;
+    } | null;
   }[];
 
   const { daftarSubmit, daftarSesi, soalCount, probeCounts, daftarSoalEsai } =
@@ -277,6 +285,7 @@ export default async function SoalUlanganPage({
         soalCount={soalCount}
         probeCounts={probeCounts}
         daftarSoalEsai={daftarSoalEsai}
+        daftarSoal={daftarSoal}
       />
     </div>
   );

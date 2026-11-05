@@ -2,7 +2,10 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AreaInputNilai } from "@/components/area-input-nilai";
 import { KartuRanking } from "@/components/kartu-ranking";
-import { DaftarJawaban } from "@/app/guru/ulangan/[id]/soal/daftar-jawaban";
+import {
+  DaftarJawaban,
+  type SoalReview,
+} from "@/app/guru/ulangan/[id]/soal/daftar-jawaban";
 import { createClient } from "@/lib/supabase/server";
 import {
   ambilKelasUlangan,
@@ -93,18 +96,31 @@ export default async function InputNilaiPage({
   // Nama kelas per id (untuk kolom "Kelas" di tabel input nilai)
   const mapKelasIdKeNama = mapIdKeNama;
 
-  // Soal untuk review jawaban + penilaian sistem.
-  const { data: soalData } = await supabase
+  // Soal untuk review jawaban + penilaian sistem. Ambil kolom lengkap
+  // supaya teks soal dan kunci/target output bisa ditampilkan di samping
+  // jawaban siswa. Fallback ke kolom dasar kalau DDL Tahap 33 belum ada.
+  const kolomSoalDasar = "id, jenis, soal, urutan, pilihan, kunci, poin";
+  const kolomSoalLengkap =
+    "id, jenis, soal, urutan, pilihan, kunci, poin, keluaran_diharapkan, kode_awal, masukan, masukan_uji, keluaran_uji, aturan";
+
+  const hasilSoal = await supabase
     .from("exam_questions")
-    .select("id, jenis, soal, urutan")
+    .select(kolomSoalLengkap)
     .eq("exam_id", id)
     .order("urutan", { ascending: true });
 
-  const daftarSoal = (soalData ?? []) as {
-    id: string;
-    jenis: string;
-    soal: string;
-  }[];
+  let soalData: unknown[] | null = hasilSoal.data;
+
+  if (!soalData) {
+    const fallback = await supabase
+      .from("exam_questions")
+      .select(kolomSoalDasar)
+      .eq("exam_id", id)
+      .order("urutan", { ascending: true });
+    soalData = fallback.data;
+  }
+
+  const daftarSoal = (soalData ?? []) as SoalReview[];
 
   // Nilai resmi yang sudah diinput guru + nilai otomatis dari submission.
   // Submission dipakai sebagai cadangan supaya nilai ulangan online tetap
@@ -291,6 +307,7 @@ export default async function InputNilaiPage({
           soalCount={soalCount}
           probeCounts={probeCounts}
           daftarSoalEsai={daftarSoalEsai}
+          daftarSoal={daftarSoal}
         />
       ) : null}
     </div>
