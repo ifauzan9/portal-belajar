@@ -479,7 +479,7 @@ export async function mulaiUjianSiswa(
   const { data: ulangan, error: galatUlangan } = await supabase
     .from("exams")
     .select(
-      "id, status, tanggal, tenggat, dibuka, kelas_id, exam_classes(kelas_id)",
+      "id, status, tanggal, tenggat, dibuka, access_code, kelas_id, exam_classes(kelas_id)",
     )
     .eq("id", examId)
     .maybeSingle();
@@ -494,6 +494,7 @@ export async function mulaiUjianSiswa(
     tanggal: string | null;
     tenggat: string | null;
     dibuka: boolean | null;
+    access_code: string | null;
     kelas_id: string | null;
     exam_classes?: { kelas_id: string }[] | null;
   };
@@ -534,6 +535,19 @@ export async function mulaiUjianSiswa(
     new Date(dataUlangan.tenggat).getTime() < Date.now()
   ) {
     return { message: "Tenggat waktu sudah lewat." };
+  }
+
+  // Kode akses wajib cocok kalau guru mengaturnya. Pemeriksaan di server
+  // ini juga mencegah siswa memulai lewat request langsung tanpa kode.
+  const kodeTersimpan = (dataUlangan.access_code ?? "").trim().toUpperCase();
+  const kodeInput = String(formData.get("kode") ?? "").trim().toUpperCase();
+
+  if (kodeTersimpan && kodeInput !== kodeTersimpan) {
+    return {
+      message: kodeInput
+        ? "Kode akses salah. Cek lagi dengan guru."
+        : "Kode akses wajib diisi.",
+    };
   }
 
   // Sudah submit → jangan buat sesi baru.

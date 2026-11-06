@@ -42,7 +42,7 @@ export default async function KonfirmasiUlanganPage({
   const { data: ulangan, error: galatUlangan } = await supabase
     .from("exams")
     .select(
-      "id, judul, kelas_id, tanggal, status, tenggat, durasi, dibuka, exam_classes(kelas_id)",
+      "id, judul, kelas_id, tanggal, access_code, status, tenggat, durasi, dibuka, exam_classes(kelas_id)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -56,12 +56,15 @@ export default async function KonfirmasiUlanganPage({
     judul: string;
     kelas_id: string | null;
     tanggal: string | null;
+    access_code: string | null;
     status: "akan" | "sudah";
     tenggat: string | null;
     durasi: number | null;
     dibuka: boolean | null;
     exam_classes?: { kelas_id: string }[] | null;
   };
+
+  const butuhKode = Boolean((dataUlangan.access_code ?? "").trim());
 
   // Pastikan ulangan memang untuk kelas siswa.
   const daftarKelasId = ambilKelasUlangan(dataUlangan);
@@ -287,6 +290,12 @@ export default async function KonfirmasiUlanganPage({
             Informasi Pengerjaan
           </h2>
           <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-600">
+            {butuhKode ? (
+              <li>
+                Ulangan ini memerlukan <strong>kode akses</strong> dari guru.
+                Masukkan kode sebelum menekan <strong>Mulai Sekarang</strong>.
+              </li>
+            ) : null}
             <li>
               Timer mulai berjalan setelah kamu menekan{" "}
               <strong>Mulai Sekarang</strong> dan tidak bisa dijeda.
@@ -317,7 +326,9 @@ export default async function KonfirmasiUlanganPage({
             ) : null}
           </ul>
 
-          {bisaMulai ? <TombolMulaiUjian examId={id} /> : null}
+          {bisaMulai ? (
+            <TombolMulaiUjian examId={id} butuhKode={butuhKode} />
+          ) : null}
         </Kartu>
       ) : null}
     </div>
