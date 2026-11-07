@@ -4002,3 +4002,208 @@ where exercise_id in (
 -- Selesai Tahap 37. Modul persiapan ujian praktik kini berisi
 -- satu tantangan panjang: Kartu Peserta Ujian Praktik.
 -- ============================================================
+
+-- ============================================================
+-- TAHAP 38: TIGA INPUT + DUA VARIABEL TETAP
+-- ============================================================
+-- Menyesuaikan tantangan "Membuat Kartu Peserta Ujian Praktik":
+--   - input() hanya untuk nama, nis, dan kelas (tepat 3);
+--   - ruang dan tanggal ditulis langsung di kode sebagai nilai tetap;
+--   - instruksi menjelaskan perbedaan keduanya.
+--
+-- Jalankan bagian ini sekali di Supabase SQL Editor. Aman diulang.
+-- Kode dan riwayat percobaan lama tetap disimpan; status benar direset.
+
+-- 103. Pastikan modul tetap hanya punya satu tantangan (level 1).
+delete from public.coding_exercises e
+using public.coding_lessons l
+where e.lesson_id = l.id
+  and l.judul = $j38$Tugas Praktik — Persiapan Ujian Praktik Python$j38$
+  and e.level > 1;
+
+-- 104. Segarkan materi modul.
+update public.coding_lessons
+set isi = $i38$PERSIAPAN UJIAN PRAKTIK PYTHON
+
+Satu tantangan di modul ini melatih materi yang sudah dipelajari:
+print(), variabel, dan input(). Kerjakan mandiri dan teliti.
+
+Yang boleh dipakai
+- print() untuk menampilkan teks dan isi variabel.
+- Variabel untuk menyimpan setiap data.
+- input() untuk menerima data dari pengguna.
+
+Yang belum perlu dipakai
+- int(), float(), if/else, perulangan, dan operasi matematika.
+
+Pengingat singkat
+- Satu input() mengambil satu baris masukan. Tiga data berarti tiga input().
+- Beberapa data boleh ditulis langsung di kode kalau soalnya meminta
+  nilai tetap. Contoh:
+    nama = input("Nama: ")
+    ruang = "Lab Komputer 1"
+- Tanda koma di dalam print() menambah satu spasi otomatis:
+    print("Nama:", nama)   ->   Nama: Randi
+- Spasi di awal baris ikut dinilai. Judul yang menjorok ke kanan harus
+  ditulis dengan spasi di dalam tanda kutip.
+- Baris kosong juga bagian dari output. Pakai print() tanpa isi.
+
+Cara mengerjakan
+1. Baca instruksi dan target output sampai paham.
+2. Tulis program di editor.
+3. Tekan Run Python, lalu isi jendela input sesuai daftar "Input wajib"
+   dengan urutan yang sama.
+4. Baca pesan hasil. Kalau belum sesuai, perbaiki lalu jalankan lagi.
+5. Kode tersimpan setiap kali kamu menekan Run Python, jadi aman saat
+   berpindah halaman atau memuat ulang.
+
+Tantangan ini adalah satu-satunya tugas di modul. Setelah dinyatakan
+benar, modul selesai.$i38$
+where judul = $j38$Tugas Praktik — Persiapan Ujian Praktik Python$j38$;
+
+-- 105. Perbarui tantangan level 1: 3 input, 2 variabel tetap.
+insert into public.coding_exercises
+  (lesson_id, level, judul, penjelasan, instruksi, kode_awal,
+   keluaran_diharapkan, poin, jenis, aturan, masukan, masukan_uji,
+   keluaran_uji, contoh_kode)
+select
+  l.id, 1,
+  $j38$Membuat Kartu Peserta Ujian Praktik$j38$,
+  $p38$Tugas praktik akhir: meminta tiga data dengan input(), menulis dua data tetap langsung di kode, lalu menampilkan kartu peserta ujian yang lengkap dengan print().$p38$,
+  $t38$Membuat Kartu Peserta Ujian Praktik
+Tingkat kesulitan: Menengah
+
+Buat program Python untuk membuat kartu peserta ujian praktik.
+Program meminta TIGA data dengan input(), lalu menuliskan DUA data
+tetap langsung di dalam kode. Semua data disimpan di variabel dan
+ditampilkan dengan print().
+
+DATA YANG DIMINTA DENGAN INPUT (berurutan)
+1. Nama siswa
+2. NIS
+3. Kelas
+
+DATA TETAP YANG DITULIS LANGSUNG DI KODE (bukan input)
+- ruang = "Lab Komputer 1"
+- tanggal = "10 November 2026"
+
+Dua data terakhir adalah data tetap dari sekolah. Tulis nilainya
+langsung di dalam kode, jangan meminta lewat input(). Simpan di
+variabel bernama ruang dan tanggal, lalu tampilkan dengan print().
+
+KETENTUAN PENGERJAAN
+- Minimal 5 variabel: nama, nis, kelas, ruang, tanggal.
+- Tepat 3 perintah input(), yaitu untuk nama, nis, dan kelas.
+- Minimal 18 perintah print().
+- Minimal 18 baris output tidak kosong.
+- nama, nis, dan kelas harus berasal dari input().
+- ruang dan tanggal harus ditulis langsung di kode, bukan dari input().
+- Semua data ditampilkan kembali.
+- Gunakan print() untuk menampilkan label dan isi variabel.
+- Memiliki judul KARTU PESERTA UJIAN PRAKTIK.
+- Memiliki garis pembatas.
+- Memiliki subjudul TATA TERTIB UJIAN.
+- Memiliki lima poin tata tertib.
+- Memiliki pesan penutup.
+- Program berjalan tanpa error.
+- Jangan memakai perulangan for/while.
+
+NAMA VARIABEL YANG DINILAI
+nama, nis, kelas, ruang, tanggal
+Isi nama, nis, dan kelas dari input(). Tulis ruang dan tanggal
+langsung di kode dengan nilai yang sudah ditentukan.
+
+CATATAN
+- input("Teks: ") boleh dipakai; teks pertanyaannya hanya tampil di
+  jendela input dan tidak ikut menjadi output.
+- Spasi di dalam tanda kutip ikut dinilai. Samakan dengan target output,
+  termasuk spasi di awal baris.
+- Jangan menulis jawaban langsung di print(). Penilaian menjalankan
+  programmu sekali lagi dengan data berbeda.$t38$,
+  null,
+  $o38$============================================
+        KARTU PESERTA UJIAN PRAKTIK
+============================================
+
+Nama       : Randi
+NIS        : 24257001
+Kelas      : IX A
+Ruang      : Lab Komputer 1
+Tanggal    : 10 November 2026
+
+--------------------------------------------
+              TATA TERTIB UJIAN
+--------------------------------------------
+1. Hadir 15 menit sebelum ujian dimulai.
+2. Membawa kartu peserta ini.
+3. Tidak boleh membawa catatan atau alat bantu.
+4. Mengikuti instruksi pengawas.
+5. Menjaga ketenangan selama ujian.
+
+============================================
+   Selamat mengerjakan, semoga sukses!
+============================================$o38$,
+  250, 'output',
+  $a38${"variabel_wajib": ["nama", "nis", "kelas", "ruang", "tanggal"], "variabel_tetap": {"ruang": "Lab Komputer 1", "tanggal": "10 November 2026"}, "dari_input": true, "min_variabel": 5, "min_input": 3, "maks_input": 3, "min_print": 18, "min_baris": 18, "wajib_garis": true, "tanpa_loop": true, "izinkan_prompt": true, "pesan_benar": "Selamat! Kartu peserta berhasil dibuat dan seluruh ketentuan tugas telah terpenuhi.", "pesan_salah": "Program belum sesuai. Periksa kembali penggunaan input(), variabel, dan print().", "pesan_input_salah": "Input belum sesuai. Gunakan data yang diminta pada soal."}$a38$::jsonb,
+  $m38$Randi
+24257001
+IX A$m38$,
+  $m38$Rafa
+24257099
+IX B$m38$,
+  $o38$============================================
+        KARTU PESERTA UJIAN PRAKTIK
+============================================
+
+Nama       : Rafa
+NIS        : 24257099
+Kelas      : IX B
+Ruang      : Lab Komputer 1
+Tanggal    : 10 November 2026
+
+--------------------------------------------
+              TATA TERTIB UJIAN
+--------------------------------------------
+1. Hadir 15 menit sebelum ujian dimulai.
+2. Membawa kartu peserta ini.
+3. Tidak boleh membawa catatan atau alat bantu.
+4. Mengikuti instruksi pengawas.
+5. Menjaga ketenangan selama ujian.
+
+============================================
+   Selamat mengerjakan, semoga sukses!
+============================================$o38$,
+  null
+from public.coding_lessons l
+where l.judul = $j38$Tugas Praktik — Persiapan Ujian Praktik Python$j38$
+on conflict (lesson_id, level) do update set
+  judul = excluded.judul,
+  penjelasan = excluded.penjelasan,
+  instruksi = excluded.instruksi,
+  kode_awal = excluded.kode_awal,
+  keluaran_diharapkan = excluded.keluaran_diharapkan,
+  poin = excluded.poin,
+  jenis = excluded.jenis,
+  aturan = excluded.aturan,
+  masukan = excluded.masukan,
+  masukan_uji = excluded.masukan_uji,
+  keluaran_uji = excluded.keluaran_uji,
+  contoh_kode = excluded.contoh_kode;
+
+-- 106. Reset status level 1 agar siswa mengerjakan versi baru.
+--      Kode dan riwayat percobaan lama tetap disimpan.
+update public.coding_submissions
+set pernah_benar = false,
+    benar = false
+where exercise_id in (
+  select e.id
+  from public.coding_exercises e
+  join public.coding_lessons l on l.id = e.lesson_id
+  where l.judul = $j38$Tugas Praktik — Persiapan Ujian Praktik Python$j38$
+    and e.level = 1
+);
+
+-- ============================================================
+-- Selesai Tahap 38. Tantangan kini memakai 3 input dan 2 variabel
+-- tetap (ruang dan tanggal) yang ditulis langsung di kode.
+-- ============================================================

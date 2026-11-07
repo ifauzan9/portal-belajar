@@ -123,7 +123,8 @@ Setelah itu (opsional) samakan **Supabase → Authentication → URL Configurati
 | Siswa lupa password & sudah habis kuota hari ini | Guru membuka **Data Siswa** → tombol **Reset Kuota Password** pada baris siswa (atau centang beberapa siswa → **Reset kuota password**). Jatah 3x hari ini kembali. |
 | Modul "Tugas Praktik — Persiapan Ujian Praktik Python" tidak muncul di Lab | Schema Tahap 32 belum dijalankan di Supabase, atau tidak ada kelas dengan nama berawalan `9`/`IX` sehingga modul hanya tampil untuk semua kelas setelah relasi kelas dibuat. |
 | Tugas praktik masih menampilkan 2 tantangan (Pendaftaran & Perpustakaan) | Schema Tahap 37 belum dijalankan. Jalankan Tahap 37 di Supabase SQL Editor agar modul berisi satu tantangan panjang. |
-| Tugas praktik selalu "Input belum sesuai" padahal data sudah benar | Program memanggil `input()` kurang/lebih dari yang diminta (5 data: nama, NIS, kelas, ruang, tanggal), atau urutan/huruf besar-kecilnya diubah. |
+| Tugas praktik masih meminta 5 input | Schema Tahap 38 belum dijalankan. Jalankan Tahap 38 agar soal memakai 3 input (nama, NIS, kelas) dan 2 variabel tetap (`ruang`, `tanggal`) yang ditulis langsung di kode. |
+| Tugas praktik selalu "Input belum sesuai" padahal data sudah benar | Program memanggil `input()` bukan tepat 3 kali, atau urutan/huruf besar-kecilnya diubah. Data input: nama, NIS, kelas. `ruang` dan `tanggal` tidak boleh memakai `input()`. |
 | Tugas praktik selalu "Belum lengkap: minimal N perintah print()" | Jumlah `print()` belum mencapai 18, atau output belum mencapai 18 baris tidak kosong. Pastikan setiap bagian kartu ditampilkan dengan `print()`. |
 | Pesan "Dengan input berbeda, output tidak sesuai" | Program masih menulis jawaban langsung di `print()`. Nilai harus diambil dari `input()`, disimpan di variabel, lalu ditampilkan. |
 
@@ -137,5 +138,5 @@ Setelah itu (opsional) samakan **Supabase → Authentication → URL Configurati
 - [ ] Bucket Storage `tugas` sudah ada
 - [ ] Tabel `lokasi_terakhir_siswa` sudah ada (Tahap 30)
 - [ ] Kolom `password_kuota_tanggal` & `password_kuota_terpakai` sudah ada (Tahap 31)
-- [ ] Modul "Tugas Praktik — Persiapan Ujian Praktik Python" + 1 tantangan panjang sudah ada (Tahap 32 + Tahap 37)
+- [ ] Modul "Tugas Praktik - Persiapan Ujian Praktik Python" + 1 tantangan panjang sudah ada (Tahap 32 + Tahap 37 + Tahap 38)
 - [ ] Login guru & siswa sudah dicoba di URL produksi

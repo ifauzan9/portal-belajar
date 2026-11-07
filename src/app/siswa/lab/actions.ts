@@ -260,6 +260,7 @@ export async function simpanHasilLab(input: {
     const adaKetentuanJumlah =
       (aturan.min_variabel ?? 0) > 0 ||
       (aturan.min_input ?? 0) > 0 ||
+      (aturan.maks_input ?? 0) > 0 ||
       (aturan.min_print ?? 0) > 0 ||
       (aturan.min_baris ?? 0) > 0 ||
       aturan.wajib_garis === true;
@@ -270,14 +271,35 @@ export async function simpanHasilLab(input: {
       petunjuk = cekJumlah.petunjuk;
     }
 
-    // Pastikan variabel wajib benar-benar dibuat, diisi dari input(), dan
-    // ditampilkan dengan print().
+    // Pastikan semua variabel wajib dibuat dan ditampilkan. Variabel yang
+    // berasal dari input() dicek terpisah dari variabel yang nilainya
+    // ditulis langsung di kode (variabel_tetap).
     if (benarBaru) {
-      const cekVar = cekVariabelWajib(input.analisis, aturan.variabel_wajib ?? [], {
-        dariInput: aturan.dari_input === true,
+      const wajib = aturan.variabel_wajib ?? [];
+      const tetap = Object.keys(aturan.variabel_tetap ?? {});
+      const wajibDariInput = wajib.filter((nama) => !tetap.includes(nama));
+
+      const cekVar = cekVariabelWajib(input.analisis, wajib, {
+        dariInput: false,
       });
-      benarBaru = cekVar.benar;
-      petunjuk = cekVar.petunjuk;
+      if (!cekVar.benar) {
+        benarBaru = false;
+        petunjuk = cekVar.petunjuk;
+      } else {
+        const cekInput = cekVariabelWajib(input.analisis, wajibDariInput, {
+          dariInput: aturan.dari_input === true,
+        });
+        if (!cekInput.benar) {
+          benarBaru = false;
+          petunjuk = cekInput.petunjuk;
+        } else {
+          const cekTetap = cekVariabelWajib(input.analisis, tetap, {
+            bukanDariInput: true,
+          });
+          benarBaru = cekTetap.benar;
+          petunjuk = cekTetap.petunjuk;
+        }
+      }
     }
 
     // Larangan perulangan (mis. tantangan "PESAN BERULANG").

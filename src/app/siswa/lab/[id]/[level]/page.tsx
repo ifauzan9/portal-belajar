@@ -25,6 +25,7 @@ type LatihanRow = {
   masukan_uji: string | null;
   aturan: {
     variabel_wajib?: string[];
+    variabel_tetap?: Record<string, string>;
     final_boss?: boolean;
     badge?: string;
   } | null;
@@ -157,6 +158,17 @@ export default async function LevelLabSiswaPage(
     ].map((m) => m[1]);
     return [...new Set(cocok)];
   })();
+
+  // Variabel tetap adalah variabel yang nilainya ditulis langsung di kode,
+  // bukan diambil dari input(). Tampilkan bedanya supaya siswa tidak bingung.
+  const variabelTetap = exercise.aturan?.variabel_tetap ?? {};
+  const namaVariabelTetap = new Set(Object.keys(variabelTetap));
+  const variabelDariInput = variabelDiminta.filter(
+    (nama) => !namaVariabelTetap.has(nama),
+  );
+  const variabelLangsung = variabelDiminta.filter((nama) =>
+    namaVariabelTetap.has(nama),
+  );
 
   return (
     <div className="space-y-6">
@@ -333,14 +345,45 @@ export default async function LevelLabSiswaPage(
                     <code className="font-mono text-sm font-semibold text-indigo-950">
                       {nama}
                     </code>
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                        namaVariabelTetap.has(nama)
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-emerald-100 text-emerald-700"
+                      }`}
+                    >
+                      {namaVariabelTetap.has(nama) ? "nilai tetap" : "input"}
+                    </span>
                   </li>
                 ))}
               </ul>
+              {variabelDariInput.length > 0 ? (
+                <p className="mt-3 text-xs leading-5 text-indigo-900/80">
+                  Isi variabel{" "}
+                  <strong>{variabelDariInput.join(", ")}</strong> dari{" "}
+                  <code className="font-mono">input()</code>.
+                </p>
+              ) : null}
+              {variabelLangsung.length > 0 ? (
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950">
+                  <p className="font-semibold">
+                    Tulis langsung di kode (bukan dari input())
+                  </p>
+                  <ul className="mt-1 space-y-1">
+                    {variabelLangsung.map((nama) => (
+                      <li key={nama}>
+                        <code className="font-mono">
+                          {`${nama} = "${variabelTetap[nama]}"`}
+                        </code>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               <p className="mt-3 text-xs leading-5 text-indigo-900/80">
-                Buat variabel dengan nama di atas, isi dari{" "}
-                <code className="font-mono">input()</code>, lalu tampilkan dengan{" "}
+                Tampilkan semua variabel di atas dengan{" "}
                 <code className="font-mono">print()</code>. Penilaian mengecek
-                nama, isi dari input, dan urutannya.
+                nama variabel, asal nilainya, dan urutannya.
               </p>
             </div>
           ) : null}
@@ -360,6 +403,7 @@ export default async function LevelLabSiswaPage(
         jenis={exercise.jenis}
         bantuan={lesson.isi}
         variabelDiminta={variabelDiminta}
+        variabelTetap={variabelTetap}
         finalBoss={exercise.aturan?.final_boss ?? false}
         badge={exercise.aturan?.badge ?? null}
         contoh={exercise.contoh_kode}

@@ -53,6 +53,7 @@ export function LabRunner({
   jenis,
   bantuan,
   variabelDiminta,
+  variabelTetap = {},
   finalBoss = false,
   badge,
   contoh,
@@ -72,6 +73,8 @@ export function LabRunner({
   bantuan: string | null;
   /** Nama variabel yang diminta pada tantangan (ditampilkan ke siswa). */
   variabelDiminta: string[];
+  /** Variabel yang nilainya ditulis langsung di kode, bukan dari input(). */
+  variabelTetap?: Record<string, string>;
   /** Level puncak (mis. level 15 "FINAL BOSS"). */
   finalBoss?: boolean;
   /** Nama badge saat final boss berhasil (mis. "PRINT MASTER"). */
@@ -105,6 +108,14 @@ export function LabRunner({
   const pekerjaRef = useRef<Worker | null>(null);
   const hitungRef = useRef(0);
   const sibuk = status !== "siap" || modal !== null;
+
+  const namaVariabelTetap = new Set(Object.keys(variabelTetap));
+  const variabelDariInput = variabelDiminta.filter(
+    (nama) => !namaVariabelTetap.has(nama),
+  );
+  const variabelLangsung = variabelDiminta.filter((nama) =>
+    namaVariabelTetap.has(nama),
+  );
 
   // Mode fokus: kunci scroll halaman & keluar dengan Esc.
   useEffect(() => {
@@ -717,14 +728,47 @@ export function LabRunner({
                         <code className="font-mono text-sm font-semibold text-indigo-200">
                           {nama}
                         </code>
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                            namaVariabelTetap.has(nama)
+                              ? "bg-amber-400/20 text-amber-200"
+                              : "bg-emerald-400/20 text-emerald-200"
+                          }`}
+                        >
+                          {namaVariabelTetap.has(nama) ? "nilai tetap" : "input"}
+                        </span>
                       </li>
                     ))}
                   </ul>
+                  {variabelDariInput.length > 0 ? (
+                    <p className="mt-3 text-xs leading-5 text-slate-400">
+                      Isi variabel{" "}
+                      <strong className="text-slate-200">
+                        {variabelDariInput.join(", ")}
+                      </strong>{" "}
+                      dari <code className="font-mono">input()</code>.
+                    </p>
+                  ) : null}
+                  {variabelLangsung.length > 0 ? (
+                    <div className="mt-3 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-xs leading-5 text-amber-100">
+                      <p className="font-semibold">
+                        Tulis langsung di kode (bukan dari input())
+                      </p>
+                      <ul className="mt-1 space-y-1">
+                        {variabelLangsung.map((nama) => (
+                          <li key={nama}>
+                            <code className="font-mono">
+                              {`${nama} = "${variabelTetap[nama]}"`}
+                            </code>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                   <p className="mt-3 text-xs leading-5 text-slate-400">
-                    Buat variabel dengan nama di atas, isi dari{" "}
-                    <code className="font-mono">input()</code>, lalu tampilkan
-                    dengan <code className="font-mono">print()</code>. Penilaian
-                    mengecek nama, isi dari input, dan urutannya.
+                    Tampilkan semua variabel di atas dengan{" "}
+                    <code className="font-mono">print()</code>. Penilaian
+                    mengecek nama variabel, asal nilainya, dan urutannya.
                   </p>
                 </section>
               ) : null}

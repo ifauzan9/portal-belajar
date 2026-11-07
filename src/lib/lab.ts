@@ -198,7 +198,11 @@ export type AturanBebas = {
   min_print?: number;
   min_baris?: number;
   min_input?: number;
+  maks_input?: number;
   variabel_wajib?: string[];
+  // Variabel yang nilainya ditulis langsung di kode (bukan dari input()).
+  // Contoh: { ruang: "Lab Komputer 1", tanggal: "10 November 2026" }.
+  variabel_tetap?: Record<string, string>;
   // Setiap variabel wajib harus berasal dari input(), bukan nilai tetap.
   dari_input?: boolean;
   // Larangan perulangan (for/while) untuk tantangan yang memintanya.
@@ -262,7 +266,7 @@ export function adaGarisBingkai(teks: string): boolean {
 export function cekVariabelWajib(
   analisis: AnalisisBebas | null | undefined,
   wajib: string[],
-  opsi?: { dariInput?: boolean },
+  opsi?: { dariInput?: boolean; bukanDariInput?: boolean },
 ): { benar: boolean; petunjuk: string | null } {
   if (wajib.length === 0) return { benar: true, petunjuk: null };
 
@@ -290,6 +294,10 @@ export function cekVariabelWajib(
     opsi?.dariInput === true
       ? wajib.filter((nama) => terdefinisi.has(nama) && !dariInput.has(nama))
       : [];
+  const salahDariInput =
+    opsi?.bukanDariInput === true
+      ? wajib.filter((nama) => terdefinisi.has(nama) && dariInput.has(nama))
+      : [];
   // Aliran data: nilai dari input() harus tetap sampai ke print().
   const nilaiDitimpa = wajib.filter((nama) => ditimpa.has(nama));
   const urutanSalah = wajib.filter(
@@ -300,6 +308,7 @@ export function cekVariabelWajib(
     belumDibuat.length === 0 &&
     belumDitampilkan.length === 0 &&
     belumDariInput.length === 0 &&
+    salahDariInput.length === 0 &&
     nilaiDitimpa.length === 0 &&
     urutanSalah.length === 0
   ) {
@@ -313,6 +322,11 @@ export function cekVariabelWajib(
   if (belumDariInput.length > 0) {
     pesan.push(
       `isi variabel ini dari input(): ${belumDariInput.join(", ")}`,
+    );
+  }
+  if (salahDariInput.length > 0) {
+    pesan.push(
+      `tulis langsung nilai variabel ini di kode, jangan dari input(): ${salahDariInput.join(", ")}`,
     );
   }
   if (nilaiDitimpa.length > 0) {
@@ -370,12 +384,16 @@ export function cekKetentuanKode(
   const minPrint = aturan.min_print ?? 0;
   const minBaris = aturan.min_baris ?? 0;
   const minInput = aturan.min_input ?? 0;
+  const maksInput = aturan.maks_input ?? 0;
 
   if (analisis.jumlah_variabel < minVariabel) {
     gagal.push(`buat minimal ${minVariabel} variabel`);
   }
   if ((analisis.jumlah_input ?? 0) < minInput) {
     gagal.push(`pakai minimal ${minInput} perintah input()`);
+  }
+  if (maksInput > 0 && (analisis.jumlah_input ?? 0) > maksInput) {
+    gagal.push(`pakai maksimal ${maksInput} perintah input()`);
   }
   if (aturan.tanpa_loop && (analisis.jumlah_loop ?? 0) > 0) {
     gagal.push("jangan memakai perulangan (for/while)");
@@ -492,19 +510,30 @@ export function hitungNilaiKodeUjian(args: {
     : null;
 
   const wajib = aturan.variabel_wajib ?? [];
+  const tetap = Object.keys(aturan.variabel_tetap ?? {});
+  const wajibDariInput = wajib.filter((nama) => !tetap.includes(nama));
   const adaVariabel = wajib.length > 0;
-  const variabel = adaVariabel
-    ? cekVariabelWajib(args.analisis, wajib, {
+  const cekSemua = cekVariabelWajib(args.analisis, wajib, { dariInput: false });
+  const cekInput = wajibDariInput.length > 0
+    ? cekVariabelWajib(args.analisis, wajibDariInput, {
         dariInput: aturan.dari_input !== false,
-      }).benar
+      })
+    : { benar: true, petunjuk: null };
+  const cekTetap = tetap.length > 0
+    ? cekVariabelWajib(args.analisis, tetap, { bukanDariInput: true })
+    : { benar: true, petunjuk: null };
+  const variabel = adaVariabel
+    ? cekSemua.benar && cekInput.benar && cekTetap.benar
     : false;
 
   const minInput = aturan.min_input ?? 0;
+  const maksInput = aturan.maks_input ?? 0;
   const minPrint = aturan.min_print ?? 0;
-  const adaJumlah = minInput > 0 || minPrint > 0;
+  const adaJumlah = minInput > 0 || minPrint > 0 || maksInput > 0;
   const jumlah = adaJumlah
     ? Boolean(args.analisis?.ok) &&
       (args.analisis?.jumlah_input ?? 0) >= minInput &&
+      (maksInput === 0 || (args.analisis?.jumlah_input ?? 0) <= maksInput) &&
       (args.analisis?.jumlah_print ?? 0) >= minPrint
     : false;
 
