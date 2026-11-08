@@ -10,7 +10,7 @@ import { ambilMasukanUji, simpanHasilLab } from "@/app/siswa/lab/actions";
 import { BantuanLab } from "@/components/bantuan-lab";
 import { ModalInputLab, type ModalInputState } from "@/components/modal-input-lab";
 import { bacaInput } from "@/lib/input-lab";
-import type { AnalisisBebas } from "@/lib/lab";
+import { infoGarisKeluaran, type AnalisisBebas } from "@/lib/lab";
 
 const CodeMirror = dynamic(() => import("@uiw/react-codemirror"), {
   ssr: false,
@@ -116,6 +116,7 @@ export function LabRunner({
   const variabelLangsung = variabelDiminta.filter((nama) =>
     namaVariabelTetap.has(nama),
   );
+  const infoGaris = infoGarisKeluaran(keluaranDiharapkan);
 
   // Mode fokus: kunci scroll halaman & keluar dengan Esc.
   useEffect(() => {
@@ -704,7 +705,18 @@ export function LabRunner({
                 <section className="rounded-2xl bg-slate-900 p-4 ring-1 ring-slate-800">
                   <h3 className="text-sm font-semibold text-white">Target output</h3>
                   <p className="mt-1 text-xs text-slate-400">Lihat sebagai acuan, teks tidak dapat dipilih.</p>
-                  <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-xl bg-slate-950 p-4 font-mono text-sm leading-6 text-emerald-200 select-none">{keluaranDiharapkan}</pre>
+                  <pre className="mt-3 overflow-x-auto rounded-xl bg-slate-950 p-4 font-mono text-sm leading-6 whitespace-pre text-emerald-200 select-none">{keluaranDiharapkan}</pre>
+                  {infoGaris.length > 0 ? (
+                    <p className="mt-2 text-xs leading-5 text-slate-400">
+                      Garis pembatas:{" "}
+                      {infoGaris
+                        .map(
+                          (garis) =>
+                            `${garis.panjang.join("/")} karakter "${garis.simbol}"`,
+                        )
+                        .join(" dan ")}
+                    </p>
+                  ) : null}
                 </section>
               ) : null}
 

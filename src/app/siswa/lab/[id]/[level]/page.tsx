@@ -8,7 +8,7 @@ import { PetaLevel } from "@/components/peta-level";
 import { HeroSiswa } from "@/components/ui/hero-siswa";
 import { ProgresBar } from "@/components/ui/progres";
 import { IkonLab } from "@/components/ui/ikon-siswa";
-import { hitungLevelTerkunci } from "@/lib/lab";
+import { hitungLevelTerkunci, infoGarisKeluaran } from "@/lib/lab";
 
 type LatihanRow = {
   id: string;
@@ -143,6 +143,7 @@ export default async function LevelLabSiswaPage(
   const adaSebelum = levelNum > 1;
   const adaSesudah = levelNum < total;
   const barisMasukan = pecahMasukan(exercise.masukan);
+  const infoGaris = infoGarisKeluaran(exercise.keluaran_diharapkan);
 
   // Nama variabel yang dinilai pada tantangan ini. Untuk karya bebas
   // (level 15) daftar wajib kosong, jadi nama diambil dari instruksi lewat
@@ -320,6 +321,17 @@ export default async function LevelLabSiswaPage(
               <pre className="mt-3 max-h-72 overflow-auto rounded-lg bg-slate-950 p-4 font-mono text-sm leading-6 text-emerald-100 select-none whitespace-pre-wrap">
                 {exercise.keluaran_diharapkan}
               </pre>
+              {infoGaris.length > 0 ? (
+                <p className="mt-2 text-xs leading-5 text-emerald-800/80">
+                  Garis pembatas:{" "}
+                  {infoGaris
+                    .map(
+                      (garis) =>
+                        `${garis.panjang.join("/")} karakter "${garis.simbol}"`,
+                    )
+                    .join(" dan ")}
+                </p>
+              ) : null}
             </div>
           ) : null}
 

@@ -260,6 +260,36 @@ export function adaGarisBingkai(teks: string): boolean {
     });
 }
 
+// Panjang tiap garis pembatas pada target output (mis. "====" atau "----"),
+// dikelompokkan per simbol. Dipakai supaya siswa tahu berapa karakter yang
+// harus ditulis di print() tanpa menghitung manual.
+export type InfoGaris = {
+  simbol: string;
+  /** Panjang yang muncul, urut dari pendek ke panjang (unik). */
+  panjang: number[];
+};
+
+export function infoGarisKeluaran(teks: string): InfoGaris[] {
+  const peta = new Map<string, Set<number>>();
+  for (const baris of normalisasiKeluaran(teks).split("\n")) {
+    const isi = baris.trim();
+    if (
+      isi.length >= 5 &&
+      /^(.)\1+$/.test(isi) &&
+      /[^A-Za-z0-9\s]/.test(isi)
+    ) {
+      const simbol = isi[0];
+      const panjang = peta.get(simbol) ?? new Set<number>();
+      panjang.add(isi.length);
+      peta.set(simbol, panjang);
+    }
+  }
+  return [...peta.entries()].map(([simbol, panjang]) => ({
+    simbol,
+    panjang: [...panjang].sort((a, b) => a - b),
+  }));
+}
+
 // Cek variabel wajib: setiap nama harus dibuat dan dipakai di print().
 // Dipakai untuk tantangan 1-14 (selain output harus cocok).
 // Kalau `dariInput` aktif, isi variabel juga harus berasal dari input().
