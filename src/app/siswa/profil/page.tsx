@@ -26,6 +26,7 @@ import { IkonProfil } from "@/components/ui/ikon-siswa";
 //  2. Info kelas.
 //  3. Ganti password (tanpa password lama, kuota 3x/hari).
 //  4. Preferensi tampilan (tema & ukuran teks, disimpan di browser).
+//  5. Catatan privasi lokasi (informasi, tanpa kontrol tambahan).
 //
 // Catatan keamanan: halaman ini TIDAK pernah menampilkan atau menyimpan
 // password asli. Database hanya menyimpan hash PBKDF2.
@@ -87,7 +88,8 @@ export default async function ProfilSiswaPage() {
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Profil Saya</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Identitas akun, info kelas, keamanan password, dan tampilan.
+          Identitas akun, info kelas, keamanan password, tampilan, dan privasi
+          lokasi.
         </p>
       </div>
 
@@ -222,6 +224,21 @@ export default async function ProfilSiswaPage() {
         <div className="mt-4">
           <PreferensiTampilan awal={tampilan} />
         </div>
+      </Kartu>
+
+      {/* ----------------------- Privasi lokasi --------------------------- */}
+      <Kartu>
+        <KartuJudul
+          judul="Privasi Lokasi"
+          subjudul="Berlaku jika kamu mengizinkan akses lokasi di browser."
+        />
+        <p className="mt-4 text-sm text-slate-600">
+          Saat kamu membuka dashboard, aplikasi dapat menyimpan lokasi terakhir
+          dan riwayat lokasi perangkatmu. Data ini hanya dapat dilihat oleh
+          guru. Kalau kamu mencabut izin lokasi di pengaturan browser,
+          pencatatan baru berhenti, tetapi riwayat yang sudah tersimpan tetap
+          ada.
+        </p>
       </Kartu>
     </div>
   );

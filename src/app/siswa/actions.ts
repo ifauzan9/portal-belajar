@@ -1129,12 +1129,15 @@ export async function verifikasiKodeUlangan(
 }
 
 // ============================================================================
-// Simpan lokasi terakhir siswa (GPS perangkat) untuk PEMANTAUAN guru.
+// Simpan lokasi siswa (GPS perangkat) untuk PEMANTAUAN guru.
 //
 // Dipanggil dari browser setelah siswa login (halaman dashboard), bukan saat
 // login — browser hanya memberi lokasi setelah izin dikabulkan, dan itu butuh
 // interaksi di halaman. Sifatnya best-effort: kegagalan TIDAK pernah
 // menghalangi siswa memakai aplikasi.
+//
+// Setiap status "diizinkan" dicatat sebagai satu baris riwayat (satu baris
+// per pemuatan dashboard). Status lain hanya memperbarui lokasi terakhir.
 //
 // Data dari browser tidak dipercaya: koordinat divalidasi rentangnya, dan
 // penulisan dilakukan dengan service-role (siswa tidak bisa mengubah lokasi
@@ -1170,6 +1173,8 @@ export async function simpanLokasiSiswa(
   }
 
   const admin = createAdminClient();
+  const waktuSekarang = new Date().toISOString();
+
   await admin.from("lokasi_terakhir_siswa").upsert(
     {
       siswa_id: sesi.siswaId,
@@ -1177,10 +1182,23 @@ export async function simpanLokasiSiswa(
       lng: lngSimpan,
       akurasi_m: akurasiSimpan,
       status,
-      diperbarui_at: new Date().toISOString(),
+      diperbarui_at: waktuSekarang,
     },
     { onConflict: "siswa_id" },
   );
+
+  // Riwayat hanya untuk lokasi yang benar-benar berhasil dibaca. Kegagalan
+  // insert (mis. schema Tahap 40 belum dijalankan) sengaja diabaikan supaya
+  // dashboard siswa tetap berjalan.
+  if (status === "diizinkan" && latSimpan !== null && lngSimpan !== null) {
+    await admin.from("lokasi_riwayat_siswa").insert({
+      siswa_id: sesi.siswaId,
+      lat: latSimpan,
+      lng: lngSimpan,
+      akurasi_m: akurasiSimpan,
+      dicatat_at: waktuSekarang,
+    });
+  }
 
   return { ok: true };
 }

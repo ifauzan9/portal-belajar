@@ -4207,3 +4207,68 @@ where exercise_id in (
 -- Selesai Tahap 38. Tantangan kini memakai 3 input dan 2 variabel
 -- tetap (ruang dan tanggal) yang ditulis langsung di kode.
 -- ============================================================
+
+-- ============================================================
+-- TAHAP 39: SAKLAR BLOKIR COPY-PASTE EDITOR PYTHON
+-- ============================================================
+-- Guru bisa menyalakan/mematikan blokir paste & drop per ulangan
+-- dan per modul lab. Default nonaktif agar perilaku lama tidak
+-- berubah sampai guru menyalakannya.
+alter table public.exams
+  add column if not exists blokir_tempel boolean not null default false;
+
+alter table public.coding_lessons
+  add column if not exists blokir_tempel boolean not null default false;
+
+-- ============================================================
+-- Selesai Tahap 39.
+-- ============================================================
+
+
+-- ============================================================
+-- TAHAP 40: RIWAYAT LOKASI SISWA
+-- ============================================================
+-- Menyimpan riwayat koordinat perangkat siswa yang berhasil dibaca
+-- browser (status 'diizinkan'). Satu baris setiap siswa membuka
+-- dashboard. Izin lokasi browser adalah dasar pencatatan; kalau siswa
+-- menolak, baris riwayat tidak dibuat.
+--
+-- Privasi: hanya guru (authenticated) yang boleh membaca. Siswa tidak
+-- punya akses langsung; penulisan lewat service-role di Server Action.
+-- Riwayat lama tetap tersimpan bila izin browser dicabut.
+create table if not exists public.lokasi_riwayat_siswa (
+  id uuid primary key default gen_random_uuid(),
+  siswa_id uuid not null references public.students(id) on delete cascade,
+  lat double precision not null,
+  lng double precision not null,
+  akurasi_m double precision,
+  dicatat_at timestamptz not null default now(),
+  constraint lokasi_riwayat_koordinat_valid check (
+    lat >= -90 and lat <= 90 and
+    lng >= -180 and lng <= 180
+  ),
+  constraint lokasi_riwayat_akurasi_valid check (
+    akurasi_m is null or akurasi_m >= 0
+  )
+);
+
+create index if not exists idx_lokasi_riwayat_siswa_waktu
+  on public.lokasi_riwayat_siswa (siswa_id, dicatat_at desc);
+
+alter table public.lokasi_riwayat_siswa enable row level security;
+
+-- Cabut akses langsung; tulis hanya lewat service-role.
+revoke all privileges on table public.lokasi_riwayat_siswa from anon, authenticated, public;
+grant all privileges on table public.lokasi_riwayat_siswa to service_role;
+
+-- Guru (authenticated): hanya boleh baca, untuk halaman detail siswa.
+grant select on table public.lokasi_riwayat_siswa to authenticated;
+
+drop policy if exists "Guru baca riwayat lokasi siswa" on public.lokasi_riwayat_siswa;
+create policy "Guru baca riwayat lokasi siswa"
+  on public.lokasi_riwayat_siswa for select to authenticated
+  using (true);
+
+-- ============================================================
+-- Selesai Tahap 40. Tabel baru: "lokasi_riwayat_siswa".
+-- ============================================================

@@ -5,6 +5,7 @@ import {
   selesaiDinilai,
   batalkanSelesaiDinilai,
   toggleUlangan,
+  toggleBlokirTempelUlangan,
 } from "@/app/guru/ulangan/actions";
 import { FormSoal } from "./form-soal";
 import { FormJawabanAsli } from "./form-jawaban-asli";
@@ -36,14 +37,31 @@ export default async function SoalUlanganPage({
 
   const { id } = await params;
 
-  // Detail ulangan
-  const { data: ulangan, error: galatUlangan } = await supabase
+  // Detail ulangan. Kolom `blokir_tempel` baru ada setelah Tahap 39;
+  // kalau belum, fallback ke select lama dan anggap nonaktif.
+  const kolomUlanganDasar =
+    "id, judul, status, tenggat, tanggal, durasi, nilai_ditampilkan, nilai_selesai, dibuka";
+
+  const hasilUlanganLengkap = await supabase
     .from("exams")
-    .select("id, judul, status, tenggat, tanggal, durasi, nilai_ditampilkan, nilai_selesai, dibuka")
+    .select(`${kolomUlanganDasar}, blokir_tempel`)
     .eq("id", id)
     .maybeSingle();
 
-  if (galatUlangan || !ulangan) {
+  let ulangan: unknown = hasilUlanganLengkap.data;
+  let siapBlokir = !hasilUlanganLengkap.error;
+
+  if (hasilUlanganLengkap.error) {
+    const fallback = await supabase
+      .from("exams")
+      .select(kolomUlanganDasar)
+      .eq("id", id)
+      .maybeSingle();
+    ulangan = fallback.data;
+    siapBlokir = false;
+  }
+
+  if (!ulangan) {
     notFound();
   }
 
@@ -57,6 +75,7 @@ export default async function SoalUlanganPage({
     nilai_ditampilkan: boolean;
     nilai_selesai: boolean;
     dibuka: boolean | null;
+    blokir_tempel?: boolean | null;
   };
 
   // Soal untuk ulangan ini
@@ -263,6 +282,70 @@ export default async function SoalUlanganPage({
           </div>
         </div>
       </section>
+
+      {/* ==================== BLOKIR COPY-PASTE EDITOR ==================== */}
+      {/* Hanya relevan untuk ulangan bersoal kode. Kolom `blokir_tempel`
+          baru ada setelah Tahap 39; kalau belum, saklar dinonaktifkan. */}
+      {dataUlangan.status === "akan" && soalKode.length > 0 ? (
+        <section
+          className={`rounded-2xl p-5 ring-1 ${
+            dataUlangan.blokir_tempel === true
+              ? "bg-amber-50 ring-amber-200"
+              : "bg-slate-50 ring-slate-200"
+          }`}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p
+                className={`text-sm font-semibold ${
+                  dataUlangan.blokir_tempel === true
+                    ? "text-amber-800"
+                    : "text-slate-800"
+                }`}
+              >
+                {dataUlangan.blokir_tempel === true
+                  ? "🔒 Copy-paste diblokir di editor kode"
+                  : "🔓 Copy-paste diizinkan di editor kode"}
+              </p>
+              <p
+                className={`mt-0.5 text-xs ${
+                  dataUlangan.blokir_tempel === true
+                    ? "text-amber-700"
+                    : "text-slate-500"
+                }`}
+              >
+                {dataUlangan.blokir_tempel === true
+                  ? "Siswa tidak bisa menempel (paste) atau menyeret kode dari luar ke editor. Mengetik tetap bisa."
+                  : "Siswa bisa menempel kode dari luar ke editor jawaban kode."}
+              </p>
+              {!siapBlokir ? (
+                <p className="mt-1 text-xs text-amber-700">
+                  Jalankan <code>schema.sql</code> Tahap 39 untuk mengaktifkan
+                  saklar ini.
+                </p>
+              ) : null}
+            </div>
+            <div className="shrink-0">
+              <form action={toggleBlokirTempelUlangan}>
+                <input type="hidden" name="id" value={id} />
+                <button
+                  type="submit"
+                  disabled={!siapBlokir}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                    dataUlangan.blokir_tempel === true
+                      ? "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                      : "bg-amber-600 text-white hover:bg-amber-500"
+                  }`}
+                >
+                  {dataUlangan.blokir_tempel === true
+                    ? "Izinkan Copy-Paste"
+                    : "Blokir Copy-Paste"}
+                </button>
+              </form>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       {/* ======================= DAFTAR SOAL ======================= */}
       <section className="rounded-2xl bg-white p-5 ring-1 ring-slate-200">

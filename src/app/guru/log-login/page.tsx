@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Kartu, KartuJudul } from "@/components/ui/kartu";
@@ -12,6 +13,9 @@ import {
   tautanPeta,
   type StatusLokasi,
 } from "@/lib/lokasi";
+
+// Jumlah log per halaman. Data diambil bertahap dari server, bukan sekaligus.
+const PER_HALAMAN = 50;
 
 // Waktu log selalu ditampilkan dalam WIB (UTC+7), bukan zona server.
 function formatWaktu(iso: string | null): string {
@@ -36,7 +40,6 @@ type LogRow = {
   berhasil: boolean;
   alasan: string | null;
   ip: string | null;
-  user_agent: string | null;
   created_at: string | null;
   students?:
     | { nama_siswa: string; nis: string | null; kelas_id: string | null }
@@ -64,6 +67,44 @@ function bacaSiswa(log: LogRow): {
     return data[0] ?? { nama_siswa: "", nis: null, kelas_id: null };
   }
   return data;
+}
+
+// URL halaman ini dengan filter + nomor halaman yang sedang aktif.
+function buatUrlLog(opsi: {
+  kelas: string;
+  hasil: string;
+  lokasi: string;
+  halaman: number;
+}) {
+  const params = new URLSearchParams();
+  if (opsi.kelas) params.set("kelas", opsi.kelas);
+  if (opsi.hasil) params.set("hasil", opsi.hasil);
+  if (opsi.lokasi) params.set("lokasi", opsi.lokasi);
+  if (opsi.halaman > 1) params.set("halaman", String(opsi.halaman));
+  const query = params.toString();
+  return query ? `/guru/log-login?${query}` : "/guru/log-login";
+}
+
+// Nomor halaman yang ditampilkan: awal, akhir, dan sekitar halaman aktif.
+// Bagian yang terlewat ditandai dengan elipsis.
+function daftarHalaman(aktif: number, total: number): (number | "…")[] {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+
+  const nomor = new Set<number>([1, total, aktif - 1, aktif, aktif + 1]);
+  const urut = [...nomor]
+    .filter((n) => n >= 1 && n <= total)
+    .sort((a, b) => a - b);
+
+  const hasil: (number | "…")[] = [];
+  let sebelumnya = 0;
+  for (const n of urut) {
+    if (sebelumnya > 0 && n - sebelumnya > 1) hasil.push("…");
+    hasil.push(n);
+    sebelumnya = n;
+  }
+  return hasil;
 }
 
 // Bagian tabel "Lokasi": koordinat + akurasi + link Google Maps kalau
@@ -131,71 +172,200 @@ export default async function LogLoginPage(
     typeof searchParams.hasil === "string" ? searchParams.hasil : "";
   const lokasiFilter =
     typeof searchParams.lokasi === "string" ? searchParams.lokasi : "";
-
-  const [hasilKelas, hasilLog, hasilLokasi] = await Promise.all([
-    supabase
-      .from("classes")
-      .select("id, nama_kelas")
-      .order("nama_kelas", { ascending: true }),
-    supabase
-      .from("login_logs")
-      .select(
-        "id, siswa_id, username, berhasil, alasan, ip, user_agent, created_at, students(nama_siswa, nis, kelas_id)",
-      )
-      .order("created_at", { ascending: false })
-      .limit(500),
-    // Lokasi terakhir tiap siswa (satu baris per siswa). Tabel baru Tahap 30;
-    // kalau DDL belum dijalankan, hasilnya kosong dan kolom tampil "Belum dilacak".
-    supabase
-      .from("lokasi_terakhir_siswa")
-      .select("siswa_id, lat, lng, akurasi_m, status, diperbarui_at"),
-  ]);
-
-  const petaLokasi = new Map(
-    ((hasilLokasi.data ?? []) as LokasiRow[]).map((l) => [l.siswa_id, l]),
+  const halamanParam = Number(
+    typeof searchParams.halaman === "string" ? searchParams.halaman : "1",
   );
+  const halaman =
+    Number.isFinite(halamanParam) && halamanParam >= 1
+      ? Math.floor(halamanParam)
+      : 1;
 
-  // Tabel lokasi baru ada sejak Tahap 30. Kalau DDL belum dijalankan, beri
-  // catatan singkat supaya guru tidak mengira semua siswa belum dilacak.
-  const lokasiSiap = !hasilLokasi.error;
+  // Daftar kelas untuk dropdown (jumlahnya kecil, aman diambil semua).
+  const { data: kelasData } = await supabase
+    .from("classes")
+    .select("id, nama_kelas")
+    .order("nama_kelas", { ascending: true });
 
-  const kelasList = (hasilKelas.data ?? []) as {
+  const kelasList = (kelasData ?? []) as {
     id: string;
     nama_kelas: string;
   }[];
   const namaKelas = new Map(kelasList.map((k) => [k.id, k.nama_kelas]));
 
-  let logs = (hasilLog.data ?? []) as unknown as LogRow[];
-
+  // Filter kelas: ambil id siswa di kelas itu saja (bukan seluruh siswa).
+  let idsKelas: string[] = [];
   if (kelasFilter) {
-    logs = logs.filter((log) => bacaSiswa(log).kelas_id === kelasFilter);
-  }
-  if (hasilFilter === "berhasil") {
-    logs = logs.filter((log) => log.berhasil);
-  } else if (hasilFilter === "gagal") {
-    logs = logs.filter((log) => !log.berhasil);
-  }
-
-  // Filter lokasi: "terlacak" = koordinat ada; "tidak_terlacak" = belum ada
-  // baris lokasi atau statusnya izin ditolak/gagal.
-  if (lokasiFilter === "terlacak") {
-    logs = logs.filter((log) => {
-      const l = petaLokasi.get(log.siswa_id ?? "");
-      return l?.status === "diizinkan" && l.lat !== null && l.lng !== null;
-    });
-  } else if (lokasiFilter === "tidak_terlacak") {
-    logs = logs.filter((log) => {
-      const l = petaLokasi.get(log.siswa_id ?? "");
-      return !(l?.status === "diizinkan" && l.lat !== null && l.lng !== null);
-    });
+    const { data } = await supabase
+      .from("students")
+      .select("id")
+      .eq("kelas_id", kelasFilter);
+    idsKelas = ((data ?? []) as { id: string }[]).map((s) => s.id);
   }
 
-  const totalBerhasil = logs.filter((log) => log.berhasil).length;
-  const totalGagal = logs.length - totalBerhasil;
+  // Filter lokasi: cukup ambil kolom siswa_id dari siswa yang terlacak.
+  // Datanya kecil (satu kolom), bukan seluruh baris lokasi.
+  let lokasiSiap = true;
+  let idsTerlacak: string[] = [];
+  if (lokasiFilter) {
+    const { data, error } = await supabase
+      .from("lokasi_terakhir_siswa")
+      .select("siswa_id")
+      .eq("status", "diizinkan")
+      .not("lat", "is", null)
+      .not("lng", "is", null);
+
+    if (error) {
+      lokasiSiap = false;
+    } else {
+      idsTerlacak = ((data ?? []) as { siswa_id: string }[]).map(
+        (l) => l.siswa_id,
+      );
+    }
+  }
+
+  // Filter yang pasti tidak menghasilkan baris: lewati query ke server.
+  const kosongKarenaFilter =
+    (kelasFilter !== "" && idsKelas.length === 0) ||
+    (lokasiFilter === "terlacak" && idsTerlacak.length === 0);
+
+  // Query data log dengan filter yang sama. Hitungan diambil terpisah lewat
+  // queryHitung() agar halaman di luar batas tidak memicu error range.
+  function queryDataLog() {
+    let q = supabase
+      .from("login_logs")
+      .select(
+        "id, siswa_id, username, berhasil, alasan, ip, created_at, students(nama_siswa, nis, kelas_id)",
+      );
+
+    if (hasilFilter === "berhasil") q = q.eq("berhasil", true);
+    else if (hasilFilter === "gagal") q = q.eq("berhasil", false);
+
+    if (kelasFilter) q = q.in("siswa_id", idsKelas);
+
+    if (lokasiFilter === "terlacak") {
+      q = q.in("siswa_id", idsTerlacak);
+    } else if (lokasiFilter === "tidak_terlacak" && idsTerlacak.length > 0) {
+      q = q.or(
+        `siswa_id.is.null,siswa_id.not.in.(${idsTerlacak.join(",")})`,
+      );
+    }
+
+    return q;
+  }
+
+  // Query hitung: hanya mengembalikan angka, bukan baris data.
+  function queryHitung() {
+    let q = supabase
+      .from("login_logs")
+      .select("id", { count: "exact", head: true });
+
+    if (hasilFilter === "berhasil") q = q.eq("berhasil", true);
+    else if (hasilFilter === "gagal") q = q.eq("berhasil", false);
+
+    if (kelasFilter) q = q.in("siswa_id", idsKelas);
+
+    if (lokasiFilter === "terlacak") {
+      q = q.in("siswa_id", idsTerlacak);
+    } else if (lokasiFilter === "tidak_terlacak" && idsTerlacak.length > 0) {
+      q = q.or(
+        `siswa_id.is.null,siswa_id.not.in.(${idsTerlacak.join(",")})`,
+      );
+    }
+
+    return q;
+  }
+
+  const dari = (halaman - 1) * PER_HALAMAN;
+  const sampai = dari + PER_HALAMAN - 1;
+
+  let logs: LogRow[] = [];
+  let totalLogs = 0;
+  let galatLog: { message: string } | null = null;
+
+  // Hitung dulu totalnya, baru ambil rentang halaman. Kalau langsung memakai
+  // range di luar jumlah baris, PostgREST bisa membalas error "range not
+  // satisfiable" dan halaman akan salah menampilkan pesan gagal.
+  if (!kosongKarenaFilter) {
+    const hasilHitung = await queryHitung();
+    totalLogs = hasilHitung.count ?? 0;
+    galatLog = hasilHitung.error;
+  }
+
+  const totalHalaman = Math.max(1, Math.ceil(totalLogs / PER_HALAMAN));
+
+  // Kalau nomor halaman melewati batas (mis. URL lama), arahkan ke halaman
+  // terakhir yang valid sebelum data halaman itu diambil.
+  if (!galatLog && halaman > totalHalaman) {
+    redirect(
+      buatUrlLog({
+        kelas: kelasFilter,
+        hasil: hasilFilter,
+        lokasi: lokasiFilter,
+        halaman: totalHalaman,
+      }),
+    );
+  }
+
+  if (!galatLog && !kosongKarenaFilter) {
+    const { data, error } = await queryDataLog()
+      .order("created_at", { ascending: false })
+      .range(dari, sampai);
+
+    logs = (data ?? []) as unknown as LogRow[];
+    galatLog = error;
+  }
+
+  // Statistik: total diambil dari count query, berhasil/gagal lewat count
+  // terpisah supaya tidak perlu mengunduh semua baris.
+  let totalBerhasil = 0;
+  let totalGagal = 0;
+  if (!galatLog && !kosongKarenaFilter) {
+    if (hasilFilter === "berhasil") {
+      totalBerhasil = totalLogs;
+    } else if (hasilFilter === "gagal") {
+      totalGagal = totalLogs;
+    } else {
+      const [hBerhasil, hGagal] = await Promise.all([
+        queryHitung().eq("berhasil", true),
+        queryHitung().eq("berhasil", false),
+      ]);
+      totalBerhasil = hBerhasil.count ?? 0;
+      totalGagal = hGagal.count ?? 0;
+    }
+  }
+
+  // Detail lokasi hanya untuk siswa yang muncul di halaman aktif.
+  const siswaIdsHalaman = [
+    ...new Set(
+      logs
+        .map((log) => log.siswa_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+
+  let petaLokasi = new Map<string, LokasiRow>();
+  if (siswaIdsHalaman.length > 0) {
+    const { data, error } = await supabase
+      .from("lokasi_terakhir_siswa")
+      .select("siswa_id, lat, lng, akurasi_m, status, diperbarui_at")
+      .in("siswa_id", siswaIdsHalaman);
+
+    if (error) {
+      lokasiSiap = false;
+    } else {
+      petaLokasi = new Map(
+        ((data ?? []) as LokasiRow[]).map((l) => [l.siswa_id, l]),
+      );
+    }
+  }
+
+  // "Lokasi terlacak" dihitung untuk halaman aktif saja.
   const totalTerlacak = logs.filter((log) => {
     const l = petaLokasi.get(log.siswa_id ?? "");
-    return l?.status === "diizinkan" && l.lat !== null;
+    return l?.status === "diizinkan" && l.lat !== null && l.lng !== null;
   }).length;
+
+  const halamanAktif = Math.min(halaman, totalHalaman);
 
   return (
     <div className="space-y-6">
@@ -211,10 +381,10 @@ export default async function LogLoginPage(
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
           <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">
-            Total (tampil)
+            Total
           </p>
           <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">
-            {logs.length}
+            {totalLogs}
           </p>
         </div>
         <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
@@ -235,7 +405,7 @@ export default async function LogLoginPage(
         </div>
         <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
           <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">
-            Lokasi terlacak
+            Lokasi terlacak (halaman ini)
           </p>
           <p className="mt-1 text-2xl font-semibold tabular-nums text-blue-600">
             {totalTerlacak}
@@ -316,20 +486,21 @@ export default async function LogLoginPage(
       <Kartu>
         <KartuJudul
           judul="Riwayat Login"
-          subjudul="Waktu ditampilkan dalam WIB (UTC+7). Kolom Lokasi = lokasi terakhir perangkat siswa. Menampilkan maksimal 500 percobaan terbaru."
+          subjudul="Waktu ditampilkan dalam WIB (UTC+7). Kolom Lokasi = lokasi terakhir perangkat siswa. Menampilkan 50 percobaan per halaman."
         />
 
         {!lokasiSiap ? (
           <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200">
             Fitur lokasi belum aktif: jalankan <code>schema.sql</code> Tahap 30
-            (tabel <code>lokasi_terakhir_siswa</code>) di Supabase SQL Editor.
+            (tabel <code>lokasi_terakhir_siswa</code>) di Supabase SQL Editor,
+            lalu pastikan akun guru punya akses baca.
           </p>
         ) : null}
 
-        {hasilLog.error ? (
+        {galatLog ? (
           <p className="mt-3 text-sm text-red-600">
-            Gagal memuat log: {hasilLog.error.message}. Pastikan sudah
-            menjalankan schema.sql Tahap 18.
+            Gagal memuat log: {galatLog.message}. Pastikan schema.sql Tahap 18
+            sudah dijalankan dan akun guru punya akses baca.
           </p>
         ) : logs.length > 0 ? (
           <>
@@ -447,6 +618,86 @@ export default async function LogLoginPage(
                 })}
               </tbody>
             </table>
+            </div>
+
+            <div className="mt-4 flex flex-col items-center gap-2">
+              <p className="text-xs text-slate-500">
+                Halaman {halamanAktif} dari {totalHalaman} · {totalLogs} log
+              </p>
+              {totalHalaman > 1 ? (
+                <nav
+                  aria-label="Paginasi log login"
+                  className="flex flex-wrap items-center justify-center gap-1.5"
+                >
+                  {halamanAktif > 1 ? (
+                    <Link
+                      href={buatUrlLog({
+                        kelas: kelasFilter,
+                        hasil: hasilFilter,
+                        lokasi: lokasiFilter,
+                        halaman: halamanAktif - 1,
+                      })}
+                      prefetch={false}
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                    >
+                      ← Sebelumnya
+                    </Link>
+                  ) : (
+                    <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-300">
+                      ← Sebelumnya
+                    </span>
+                  )}
+
+                  {daftarHalaman(halamanAktif, totalHalaman).map((n, i) =>
+                    n === "…" ? (
+                      <span
+                        key={`elipsis-${i}`}
+                        className="px-1 text-sm text-slate-400"
+                      >
+                        …
+                      </span>
+                    ) : (
+                      <Link
+                        key={n}
+                        href={buatUrlLog({
+                          kelas: kelasFilter,
+                          hasil: hasilFilter,
+                          lokasi: lokasiFilter,
+                          halaman: n,
+                        })}
+                        aria-current={n === halamanAktif ? "page" : undefined}
+                        prefetch={false}
+                        className={`min-w-9 rounded-lg border px-3 py-1.5 text-center text-sm font-medium transition ${
+                          n === halamanAktif
+                            ? "border-emerald-600 bg-emerald-600 text-white"
+                            : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        {n}
+                      </Link>
+                    ),
+                  )}
+
+                  {halamanAktif < totalHalaman ? (
+                    <Link
+                      href={buatUrlLog({
+                        kelas: kelasFilter,
+                        hasil: hasilFilter,
+                        lokasi: lokasiFilter,
+                        halaman: halamanAktif + 1,
+                      })}
+                      prefetch={false}
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                    >
+                      Berikutnya →
+                    </Link>
+                  ) : (
+                    <span className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-300">
+                      Berikutnya →
+                    </span>
+                  )}
+                </nav>
+              ) : null}
             </div>
           </>
         ) : (

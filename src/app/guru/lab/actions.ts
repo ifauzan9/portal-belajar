@@ -51,3 +51,41 @@ export async function simpanKelasLab(
 
   return { message: null, sukses: true };
 }
+
+// ============================================================================
+// Saklar blokir paste/drop di editor Python untuk satu modul lab.
+// Default nonaktif (kolom Tahap 39). Kalau kolom belum ada, update gagal dan
+// hanya dicatat di log — halaman guru tetap tampil.
+// ============================================================================
+
+export async function toggleBlokirTempelLab(formData: FormData) {
+  const lessonId = String(formData.get("lesson_id") ?? "").trim();
+  if (!lessonId) return;
+
+  const supabase = await requireGuru();
+
+  const { data, error } = await supabase
+    .from("coding_lessons")
+    .select("blokir_tempel")
+    .eq("id", lessonId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Gagal membaca status blokir_tempel:", error.message);
+    return;
+  }
+
+  const blokirSekarang = data?.blokir_tempel === true;
+  const { error: galatUpdate } = await supabase
+    .from("coding_lessons")
+    .update({ blokir_tempel: !blokirSekarang })
+    .eq("id", lessonId);
+
+  if (galatUpdate) {
+    console.error("Gagal membalik status blokir_tempel:", galatUpdate.message);
+    return;
+  }
+
+  revalidatePath("/guru/lab");
+  revalidatePath("/siswa/lab");
+}

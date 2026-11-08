@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
@@ -11,6 +11,7 @@ import { BantuanLab } from "@/components/bantuan-lab";
 import { ModalInputLab, type ModalInputState } from "@/components/modal-input-lab";
 import { bacaInput } from "@/lib/input-lab";
 import { infoGarisKeluaran, type AnalisisBebas } from "@/lib/lab";
+import { buatEkstensiBlokirTempel } from "@/lib/editor-blokir-tempel";
 
 const CodeMirror = dynamic(() => import("@uiw/react-codemirror"), {
   ssr: false,
@@ -59,6 +60,7 @@ export function LabRunner({
   contoh,
   masukan = "",
   punyaUji = false,
+  blokirTempel = false,
 }: {
   exerciseId: string;
   kodeAwal: string | null;
@@ -85,6 +87,8 @@ export function LabRunner({
   masukan?: string;
   /** Ada uji internal dengan input berbeda (tidak ditampilkan). */
   punyaUji?: boolean;
+  /** Guru menyalakan blokir paste/drop di editor. */
+  blokirTempel?: boolean;
 }) {
   const router = useRouter();
   const [kode, setKode] = useState(kodeTersimpan ?? kodeAwal ?? "");
@@ -117,6 +121,12 @@ export function LabRunner({
     namaVariabelTetap.has(nama),
   );
   const infoGaris = infoGarisKeluaran(keluaranDiharapkan);
+
+  // Ekstensi CodeMirror stabil; hanya dibuat ulang kalau saklar berubah.
+  const ekstensiEditor = useMemo(
+    () => (blokirTempel ? [python(), buatEkstensiBlokirTempel()] : [python()]),
+    [blokirTempel],
+  );
 
   // Mode fokus: kunci scroll halaman & keluar dengan Esc.
   useEffect(() => {
@@ -413,7 +423,7 @@ export function LabRunner({
         value={kode}
         height={tinggi}
         theme="dark"
-        extensions={[python()]}
+        extensions={ekstensiEditor}
         onChange={(nilai) => setKode(nilai)}
         basicSetup={{
           lineNumbers: true,

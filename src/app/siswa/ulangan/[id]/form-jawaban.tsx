@@ -54,6 +54,7 @@ export function FormJawaban({
   tenggat,
   durasi,
   nilaiDitampilkan,
+  blokirTempel,
   mulaiAt,
 }: {
   examId: string;
@@ -64,6 +65,8 @@ export function FormJawaban({
   durasi: number | null;
   // Apakah nilai langsung kelihatan setelah submit
   nilaiDitampilkan: boolean;
+  // Guru menyalakan blokir paste/drop di editor kode.
+  blokirTempel: boolean;
   // Waktu mulai dari server (exam_sessions.mulai_at). Timer tidak reset
   // saat halaman di-refresh.
   mulaiAt: string;
@@ -509,6 +512,7 @@ export function FormJawaban({
                     kodeAwal={soal.kode_awal ?? null}
                     masukan={soal.masukan ?? ""}
                     nonaktif={lewatDurasi || lewatTenggat}
+                    blokirTempel={blokirTempel}
                   />
                 </div>
               ) : null}

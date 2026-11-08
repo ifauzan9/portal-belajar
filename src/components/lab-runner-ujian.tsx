@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { python } from "@codemirror/lang-python";
 import { ambilMasukanUjiUlangan } from "@/app/siswa/actions";
@@ -10,6 +10,7 @@ import {
 } from "@/components/modal-input-lab";
 import { bacaInput } from "@/lib/input-lab";
 import type { AnalisisBebas } from "@/lib/lab";
+import { buatEkstensiBlokirTempel } from "@/lib/editor-blokir-tempel";
 
 const CodeMirror = dynamic(() => import("@uiw/react-codemirror"), {
   ssr: false,
@@ -67,9 +68,11 @@ export const EditorKodeUjian = forwardRef<
     masukan: string;
     /** Timer habis atau sudah submit → editor dikunci. */
     nonaktif: boolean;
+    /** Guru menyalakan blokir paste/drop di editor. */
+    blokirTempel?: boolean;
   }
 >(function EditorKodeUjian(
-  { examId, soalId, kodeAwal, masukan, nonaktif },
+  { examId, soalId, kodeAwal, masukan, nonaktif, blokirTempel = false },
   ref,
 ) {
   const [kode, setKode] = useState(kodeAwal ?? "");
@@ -84,6 +87,12 @@ export const EditorKodeUjian = forwardRef<
   const hitungRef = useRef(0);
   const percobaanRef = useRef(0);
   const hasilRef = useRef<{ kode: string; hasil: HasilKode } | null>(null);
+
+  // Ekstensi CodeMirror stabil; hanya dibuat ulang kalau saklar berubah.
+  const ekstensiEditor = useMemo(
+    () => (blokirTempel ? [python(), buatEkstensiBlokirTempel()] : [python()]),
+    [blokirTempel],
+  );
 
   const sibuk = status !== "siap" || modal !== null || nonaktif;
 
@@ -281,7 +290,7 @@ export const EditorKodeUjian = forwardRef<
           value={kode}
           height="260px"
           theme="dark"
-          extensions={[python()]}
+          extensions={ekstensiEditor}
           onChange={(nilai) => setKode(nilai)}
           basicSetup={{
             lineNumbers: true,

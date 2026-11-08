@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { FormKelasLab } from "@/components/form-kelas-lab";
+import { toggleBlokirTempelLab } from "@/app/guru/lab/actions";
 import { createClient } from "@/lib/supabase/server";
 import { Kartu } from "@/components/ui/kartu";
 import { Badge } from "@/components/ui/badge";
@@ -15,17 +16,33 @@ export default async function GuruLabPage() {
 
   if (!user) redirect("/login");
 
-  const [hasilKelas, hasilLesson, hasilLatihan] = await Promise.all([
+  const [hasilKelas, hasilLessonAwal, hasilLatihan] = await Promise.all([
     supabase
       .from("classes")
       .select("id, nama_kelas")
       .order("nama_kelas", { ascending: true }),
     supabase
       .from("coding_lessons")
-      .select("id, judul, urutan, coding_lesson_classes(kelas_id)")
+      .select("id, judul, urutan, blokir_tempel, coding_lesson_classes(kelas_id)")
       .order("urutan", { ascending: true }),
     supabase.from("coding_exercises").select("id, lesson_id"),
   ]);
+
+  // Kolom `blokir_tempel` baru ada setelah Tahap 39. Kalau belum,
+  // fallback ke select lama dan matikan saklar.
+  let hasilLesson: {
+    data: unknown;
+    error: { message: string } | null;
+  } = hasilLessonAwal;
+  let siapBlokir = !hasilLessonAwal.error;
+
+  if (hasilLessonAwal.error) {
+    hasilLesson = await supabase
+      .from("coding_lessons")
+      .select("id, judul, urutan, coding_lesson_classes(kelas_id)")
+      .order("urutan", { ascending: true });
+    siapBlokir = false;
+  }
 
   const kelasList = (hasilKelas.data ?? []) as {
     id: string;
@@ -36,6 +53,7 @@ export default async function GuruLabPage() {
   const lessons = (hasilLesson.data ?? []) as {
     id: string;
     judul: string;
+    blokir_tempel?: boolean | null;
     coding_lesson_classes?: { kelas_id: string }[];
   }[];
   const latihan = (hasilLatihan.data ?? []) as {
@@ -65,6 +83,13 @@ export default async function GuruLabPage() {
 
       {galat ? (
         <p className="text-sm text-red-600">Gagal memuat modul: {galat}</p>
+      ) : null}
+
+      {!siapBlokir ? (
+        <p className="text-sm text-amber-700">
+          Jalankan <code>schema.sql</code> Tahap 39 untuk mengaktifkan saklar
+          blokir copy-paste.
+        </p>
       ) : null}
 
       {lessons.length > 0 ? (
@@ -108,6 +133,45 @@ export default async function GuruLabPage() {
                     kelasList={kelasList}
                     awalTerpilih={daftarKelasId}
                   />
+
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                    <div>
+                      <p className="text-xs font-medium text-slate-500">
+                        Copy-paste editor
+                      </p>
+                      <p
+                        className={`text-sm font-semibold ${
+                          lesson.blokir_tempel === true
+                            ? "text-amber-700"
+                            : "text-slate-700"
+                        }`}
+                      >
+                        {lesson.blokir_tempel === true
+                          ? "🔒 Diblokir"
+                          : "🔓 Diizinkan"}
+                      </p>
+                    </div>
+                    <form action={toggleBlokirTempelLab}>
+                      <input
+                        type="hidden"
+                        name="lesson_id"
+                        value={lesson.id}
+                      />
+                      <button
+                        type="submit"
+                        disabled={!siapBlokir}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                          lesson.blokir_tempel === true
+                            ? "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                            : "bg-amber-600 text-white hover:bg-amber-500"
+                        }`}
+                      >
+                        {lesson.blokir_tempel === true
+                          ? "Izinkan Copy-Paste"
+                          : "Blokir Copy-Paste"}
+                      </button>
+                    </form>
+                  </div>
                 </div>
               </Kartu>
             );

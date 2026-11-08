@@ -58,11 +58,26 @@ export default async function LevelLabSiswaPage(
   const supabase = await createClient();
   const admin = createAdminClient();
 
-  const { data: lessonData } = await supabase
+  // Kolom `blokir_tempel` baru ada setelah Tahap 39; kalau belum,
+  // fallback ke select lama dan anggap nonaktif.
+  const kolomLessonDasar = "id, judul, isi, coding_lesson_classes(kelas_id)";
+
+  const hasilLessonLengkap = await supabase
     .from("coding_lessons")
-    .select("id, judul, isi, coding_lesson_classes(kelas_id)")
+    .select(`${kolomLessonDasar}, blokir_tempel`)
     .eq("id", id)
     .maybeSingle();
+
+  let lessonData: unknown = hasilLessonLengkap.data;
+
+  if (hasilLessonLengkap.error) {
+    const fallback = await supabase
+      .from("coding_lessons")
+      .select(kolomLessonDasar)
+      .eq("id", id)
+      .maybeSingle();
+    lessonData = fallback.data;
+  }
 
   if (!lessonData) redirect("/siswa/lab");
 
@@ -71,6 +86,7 @@ export default async function LevelLabSiswaPage(
     judul: string;
     isi: string | null;
     coding_lesson_classes?: { kelas_id: string }[];
+    blokir_tempel?: boolean | null;
   };
 
   const daftarKelasId =
@@ -421,6 +437,7 @@ export default async function LevelLabSiswaPage(
         contoh={exercise.contoh_kode}
         masukan={exercise.masukan ?? ""}
         punyaUji={Boolean(exercise.masukan_uji?.trim())}
+        blokirTempel={lesson.blokir_tempel === true}
       />
 
       <div className="flex items-center justify-between gap-3">

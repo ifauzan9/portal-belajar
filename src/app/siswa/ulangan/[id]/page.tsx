@@ -40,14 +40,27 @@ export default async function KerjakanUlanganPage(
   const { siswa } = await requireSiswa();
   const supabase = await createClient();
 
-  // Ambil detail ulangan
-  const { data: ulangan } = await supabase
+  // Ambil detail ulangan. Kolom `blokir_tempel` baru ada setelah Tahap 39;
+  // kalau belum, fallback ke select lama dan anggap nonaktif.
+  const kolomUlanganDasar =
+    "id, judul, status, tenggat, durasi, nilai_ditampilkan, nilai_selesai, dibuka, kelas_id, exam_classes(kelas_id)";
+
+  const hasilUlanganLengkap = await supabase
     .from("exams")
-    .select(
-      "id, judul, status, tenggat, durasi, nilai_ditampilkan, nilai_selesai, dibuka, kelas_id, exam_classes(kelas_id)",
-    )
+    .select(`${kolomUlanganDasar}, blokir_tempel`)
     .eq("id", id)
     .maybeSingle();
+
+  let ulangan: unknown = hasilUlanganLengkap.data;
+
+  if (hasilUlanganLengkap.error) {
+    const fallback = await supabase
+      .from("exams")
+      .select(kolomUlanganDasar)
+      .eq("id", id)
+      .maybeSingle();
+    ulangan = fallback.data;
+  }
 
   if (!ulangan) {
     redirect("/siswa/nilai");
@@ -64,6 +77,7 @@ export default async function KerjakanUlanganPage(
     dibuka: boolean | null;
     kelas_id: string | null;
     exam_classes?: { kelas_id: string }[];
+    blokir_tempel?: boolean | null;
   };
 
   // Ambil soal terpisah (tanpa kunci jawaban — siswa tidak boleh lihat kunci).
@@ -323,6 +337,7 @@ export default async function KerjakanUlanganPage(
           tenggat={dataUlangan.tenggat}
           durasi={dataUlangan.durasi}
           nilaiDitampilkan={nilaiDitampilkan}
+          blokirTempel={dataUlangan.blokir_tempel === true}
           mulaiAt={mulaiAt}
         />
       )}

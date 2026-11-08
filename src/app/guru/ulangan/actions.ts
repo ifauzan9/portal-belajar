@@ -331,6 +331,44 @@ export async function toggleUlangan(formData: FormData) {
   revalidatePath("/siswa");
 }
 
+// Membalik saklar blokir paste/drop di editor kode ulangan.
+// `blokir_tempel=true` → siswa tidak bisa menempel/men-drop kode ke editor.
+// `false` (default) → copy-paste seperti biasa.
+// Kalau kolom Tahap 39 belum ada, update akan gagal dan hanya dicatat di log;
+// halaman guru tetap tampil dengan status "nonaktif".
+export async function toggleBlokirTempelUlangan(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+
+  const supabase = await requireGuru();
+
+  const { data, error } = await supabase
+    .from("exams")
+    .select("blokir_tempel")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Gagal membaca status blokir_tempel:", error.message);
+    return;
+  }
+
+  const blokirSekarang = data?.blokir_tempel === true;
+  const { error: galatUpdate } = await supabase
+    .from("exams")
+    .update({ blokir_tempel: !blokirSekarang })
+    .eq("id", id);
+
+  if (galatUpdate) {
+    console.error("Gagal membalik status blokir_tempel:", galatUpdate.message);
+    return;
+  }
+
+  revalidatePath("/guru/ulangan");
+  revalidatePath(`/guru/ulangan/${id}/soal`);
+  revalidatePath(`/siswa/ulangan/${id}`);
+}
+
 // Menyimpan nilai siswa untuk satu ulangan.
 // Input form bernama `nilai_{siswaId}`. Siswa yang inputnya kosong
 // dianggap belum dinilai — baris lamanya dihapus kalau tadinya ada.

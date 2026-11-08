@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
 import { HapusSiswaButton } from "@/components/hapus-siswa-button";
 import { AturKredensialSiswa, ResetKuotaSiswa, ToggleAkunSiswa } from "@/components/atur-kredensial-siswa";
@@ -91,6 +92,13 @@ export function BarisSiswa({
   const aksi = (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
+        <Link
+          href={`/guru/siswa/${id}`}
+          aria-label={`Lihat detail ${nama}`}
+          className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100"
+        >
+          Detail
+        </Link>
         <button
           type="button"
           onClick={() => setEditing(true)}
@@ -202,7 +210,12 @@ export function BarisSiswa({
               formUbah
             ) : (
               <>
-                <p className="font-medium text-slate-900">{nama}</p>
+                <Link
+                  href={`/guru/siswa/${id}`}
+                  className="font-medium text-slate-900 hover:underline"
+                >
+                  {nama}
+                </Link>
                 <p className="mt-0.5 text-xs text-slate-500">
                   {nis ? `NIS: ${nis}` : "Tanpa NIS"} · {namaKelas}
                 </p>
@@ -231,7 +244,11 @@ export function BarisSiswa({
         <td className="px-4 py-3 text-slate-600">
           {nis || <span className="text-slate-400">Tanpa NIS</span>}
         </td>
-        <td className="px-4 py-3 font-medium text-slate-900">{nama}</td>
+        <td className="px-4 py-3 font-medium text-slate-900">
+          <Link href={`/guru/siswa/${id}`} className="hover:underline">
+            {nama}
+          </Link>
+        </td>
         <td className="px-4 py-3 text-slate-500">{namaKelas}</td>
         <td className="px-4 py-3">{infoAkun}</td>
         <td className="px-4 py-3">{aksi}</td>
