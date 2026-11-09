@@ -8,6 +8,7 @@ import { python } from "@codemirror/lang-python";
 import { Badge } from "@/components/ui/badge";
 import { ambilMasukanUji, simpanHasilLab } from "@/app/siswa/lab/actions";
 import { BantuanLab } from "@/components/bantuan-lab";
+import { TeksSoalTerlindungi } from "@/components/teks-soal-terlindungi";
 import { ModalInputLab, type ModalInputState } from "@/components/modal-input-lab";
 import { bacaInput } from "@/lib/input-lab";
 import { infoGarisKeluaran, type AnalisisBebas } from "@/lib/lab";
@@ -675,123 +676,136 @@ export function LabRunner({
 
             <aside className="order-1 flex flex-col gap-3 lg:order-2 lg:min-h-0 lg:overflow-y-auto lg:pr-2 lg:pb-6">
               <section className="rounded-2xl bg-slate-900 p-4 ring-1 ring-slate-800">
-                <p className="text-xs font-semibold tracking-wide text-emerald-300 uppercase">Tantangan {levelNumber}</p>
-                <p className="mt-2 whitespace-pre-wrap text-base leading-7 text-slate-100">{instruksi}</p>
+                <TeksSoalTerlindungi aktif={blokirTempel}>
+                  <p className="text-xs font-semibold tracking-wide text-emerald-300 uppercase">Tantangan {levelNumber}</p>
+                  <p className="mt-2 whitespace-pre-wrap text-base leading-7 text-slate-100">{instruksi}</p>
+                  {blokirTempel ? (
+                    <p className="mt-2 text-xs font-medium text-amber-300">
+                      🔒 Teks soal tidak dapat disalin.
+                    </p>
+                  ) : null}
+                </TeksSoalTerlindungi>
               </section>
 
               {masukan.trim() ? (
                 <section className="rounded-2xl bg-slate-900 p-4 ring-1 ring-slate-800">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <h3 className="text-sm font-semibold text-white">
-                      {jenis === "bebas" ? "Contoh input" : "Input wajib"}
-                    </h3>
-                    <p className="text-xs text-slate-400">
+                  <TeksSoalTerlindungi aktif={blokirTempel}>
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <h3 className="text-sm font-semibold text-white">
+                        {jenis === "bebas" ? "Contoh input" : "Input wajib"}
+                      </h3>
+                      <p className="text-xs text-slate-400">
+                        {jenis === "bebas"
+                          ? `${barisInput(masukan).length} baris`
+                          : `${barisInput(masukan).length} input`}
+                      </p>
+                    </div>
+                    <ol className="mt-3 space-y-1.5">
+                      {barisInput(masukan).map((isi, urutan) => (
+                        <li key={urutan} className="flex items-start gap-2">
+                          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded bg-slate-800 text-[11px] font-semibold text-slate-400">
+                            {urutan + 1}
+                          </span>
+                          <code className="font-mono text-sm break-words text-emerald-200">
+                            {isi === "" ? "(kosong)" : isi}
+                          </code>
+                        </li>
+                      ))}
+                    </ol>
+                    <p className="mt-3 text-xs leading-5 text-slate-400">
                       {jenis === "bebas"
-                        ? `${barisInput(masukan).length} baris`
-                        : `${barisInput(masukan).length} input`}
+                        ? "Isi jawaban modal sesuai contoh ini. Pakai minimal 5 baris pertama."
+                        : "Ketik jawaban modal persis seperti ini dengan urutan yang sama. Menulis input(\"Teks: \") tidak masalah — teksnya hanya tampil di modal."}
                     </p>
-                  </div>
-                  <ol className="mt-3 space-y-1.5">
-                    {barisInput(masukan).map((isi, urutan) => (
-                      <li key={urutan} className="flex items-start gap-2">
-                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded bg-slate-800 text-[11px] font-semibold text-slate-400">
-                          {urutan + 1}
-                        </span>
-                        <code className="font-mono text-sm break-words text-emerald-200">
-                          {isi === "" ? "(kosong)" : isi}
-                        </code>
-                      </li>
-                    ))}
-                  </ol>
-                  <p className="mt-3 text-xs leading-5 text-slate-400">
-                    {jenis === "bebas"
-                      ? "Isi jawaban modal sesuai contoh ini. Pakai minimal 5 baris pertama."
-                      : "Ketik jawaban modal persis seperti ini dengan urutan yang sama. Menulis input(\"Teks: \") tidak masalah — teksnya hanya tampil di modal."}
-                  </p>
+                  </TeksSoalTerlindungi>
                 </section>
               ) : null}
 
               {jenis !== "bebas" ? (
                 <section className="rounded-2xl bg-slate-900 p-4 ring-1 ring-slate-800">
-                  <h3 className="text-sm font-semibold text-white">Target output</h3>
-                  <p className="mt-1 text-xs text-slate-400">Lihat sebagai acuan, teks tidak dapat dipilih.</p>
-                  <pre className="mt-3 overflow-x-auto rounded-xl bg-slate-950 p-4 font-mono text-sm leading-6 whitespace-pre text-emerald-200 select-none">{keluaranDiharapkan}</pre>
-                  {infoGaris.length > 0 ? (
-                    <p className="mt-2 text-xs leading-5 text-slate-400">
-                      Garis pembatas:{" "}
-                      {infoGaris
-                        .map(
-                          (garis) =>
-                            `${garis.panjang.join("/")} karakter "${garis.simbol}"`,
-                        )
-                        .join(" dan ")}
-                    </p>
-                  ) : null}
+                  <TeksSoalTerlindungi aktif={blokirTempel}>
+                    <h3 className="text-sm font-semibold text-white">Target output</h3>
+                    <p className="mt-1 text-xs text-slate-400">Lihat sebagai acuan, teks tidak dapat dipilih.</p>
+                    <pre className="mt-3 overflow-x-auto rounded-xl bg-slate-950 p-4 font-mono text-sm leading-6 whitespace-pre text-emerald-200 select-none">{keluaranDiharapkan}</pre>
+                    {infoGaris.length > 0 ? (
+                      <p className="mt-2 text-xs leading-5 text-slate-400">
+                        Garis pembatas:{" "}
+                        {infoGaris
+                          .map(
+                            (garis) =>
+                              `${garis.panjang.join("/")} karakter "${garis.simbol}"`,
+                          )
+                          .join(" dan ")}
+                      </p>
+                    ) : null}
+                  </TeksSoalTerlindungi>
                 </section>
               ) : null}
 
               {variabelDiminta.length > 0 ? (
                 <section className="rounded-2xl bg-slate-900 p-4 ring-1 ring-slate-800">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <h3 className="text-sm font-semibold text-white">
-                      Variabel yang diminta
-                    </h3>
-                    <p className="text-xs text-slate-400">Nama harus sama persis</p>
-                  </div>
-                  <ul className="mt-3 flex flex-wrap gap-2">
-                    {variabelDiminta.map((nama, urutan) => (
-                      <li
-                        key={nama}
-                        className="inline-flex items-center gap-2 rounded-lg border border-indigo-500/30 bg-slate-800 px-2.5 py-1.5 shadow-sm"
-                      >
-                        <span className="flex h-5 w-5 items-center justify-center rounded bg-indigo-500/20 text-[11px] font-semibold text-indigo-300">
-                          {urutan + 1}
-                        </span>
-                        <code className="font-mono text-sm font-semibold text-indigo-200">
-                          {nama}
-                        </code>
-                        <span
-                          className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                            namaVariabelTetap.has(nama)
-                              ? "bg-amber-400/20 text-amber-200"
-                              : "bg-emerald-400/20 text-emerald-200"
-                          }`}
-                        >
-                          {namaVariabelTetap.has(nama) ? "nilai tetap" : "input"}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                  {variabelDariInput.length > 0 ? (
-                    <p className="mt-3 text-xs leading-5 text-slate-400">
-                      Isi variabel{" "}
-                      <strong className="text-slate-200">
-                        {variabelDariInput.join(", ")}
-                      </strong>{" "}
-                      dari <code className="font-mono">input()</code>.
-                    </p>
-                  ) : null}
-                  {variabelLangsung.length > 0 ? (
-                    <div className="mt-3 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-xs leading-5 text-amber-100">
-                      <p className="font-semibold">
-                        Tulis langsung di kode (bukan dari input())
-                      </p>
-                      <ul className="mt-1 space-y-1">
-                        {variabelLangsung.map((nama) => (
-                          <li key={nama}>
-                            <code className="font-mono">
-                              {`${nama} = "${variabelTetap[nama]}"`}
-                            </code>
-                          </li>
-                        ))}
-                      </ul>
+                  <TeksSoalTerlindungi aktif={blokirTempel}>
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <h3 className="text-sm font-semibold text-white">
+                        Variabel yang diminta
+                      </h3>
+                      <p className="text-xs text-slate-400">Nama harus sama persis</p>
                     </div>
-                  ) : null}
-                  <p className="mt-3 text-xs leading-5 text-slate-400">
-                    Tampilkan semua variabel di atas dengan{" "}
-                    <code className="font-mono">print()</code>. Penilaian
-                    mengecek nama variabel, asal nilainya, dan urutannya.
-                  </p>
+                    <ul className="mt-3 flex flex-wrap gap-2">
+                      {variabelDiminta.map((nama, urutan) => (
+                        <li
+                          key={nama}
+                          className="inline-flex items-center gap-2 rounded-lg border border-indigo-500/30 bg-slate-800 px-2.5 py-1.5 shadow-sm"
+                        >
+                          <span className="flex h-5 w-5 items-center justify-center rounded bg-indigo-500/20 text-[11px] font-semibold text-indigo-300">
+                            {urutan + 1}
+                          </span>
+                          <code className="font-mono text-sm font-semibold text-indigo-200">
+                            {nama}
+                          </code>
+                          <span
+                            className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                              namaVariabelTetap.has(nama)
+                                ? "bg-amber-400/20 text-amber-200"
+                                : "bg-emerald-400/20 text-emerald-200"
+                            }`}
+                          >
+                            {namaVariabelTetap.has(nama) ? "nilai tetap" : "input"}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    {variabelDariInput.length > 0 ? (
+                      <p className="mt-3 text-xs leading-5 text-slate-400">
+                        Isi variabel{" "}
+                        <strong className="text-slate-200">
+                          {variabelDariInput.join(", ")}
+                        </strong>{" "}
+                        dari <code className="font-mono">input()</code>.
+                      </p>
+                    ) : null}
+                    {variabelLangsung.length > 0 ? (
+                      <div className="mt-3 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-xs leading-5 text-amber-100">
+                        <p className="font-semibold">
+                          Tulis langsung di kode (bukan dari input())
+                        </p>
+                        <ul className="mt-1 space-y-1">
+                          {variabelLangsung.map((nama) => (
+                            <li key={nama}>
+                              <code className="font-mono">
+                                {`${nama} = "${variabelTetap[nama]}"`}
+                              </code>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                    <p className="mt-3 text-xs leading-5 text-slate-400">
+                      Tampilkan semua variabel di atas dengan{" "}
+                      <code className="font-mono">print()</code>. Penilaian
+                      mengecek nama variabel, asal nilainya, dan urutannya.
+                    </p>
+                  </TeksSoalTerlindungi>
                 </section>
               ) : null}
 
@@ -800,7 +814,9 @@ export function LabRunner({
                   <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold text-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400">
                     Bantuan materi
                   </summary>
-                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-300">{bantuan}</p>
+                  <TeksSoalTerlindungi aktif={blokirTempel}>
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-300">{bantuan}</p>
+                  </TeksSoalTerlindungi>
                 </details>
               ) : null}
 
@@ -841,6 +857,7 @@ export function LabRunner({
         materi={bantuan}
         contoh={contoh ?? null}
         salahCount={salahCount}
+        lindungiTeks={blokirTempel}
       />
 
       {modal ? (

@@ -283,7 +283,7 @@ export default async function SoalUlanganPage({
         </div>
       </section>
 
-      {/* ==================== BLOKIR COPY-PASTE EDITOR ==================== */}
+      {/* ================= BLOKIR COPY-PASTE EDITOR & SOAL ================= */}
       {/* Hanya relevan untuk ulangan bersoal kode. Kolom `blokir_tempel`
           baru ada setelah Tahap 39; kalau belum, saklar dinonaktifkan. */}
       {dataUlangan.status === "akan" && soalKode.length > 0 ? (
@@ -304,8 +304,8 @@ export default async function SoalUlanganPage({
                 }`}
               >
                 {dataUlangan.blokir_tempel === true
-                  ? "🔒 Copy-paste diblokir di editor kode"
-                  : "🔓 Copy-paste diizinkan di editor kode"}
+                  ? "🔒 Copy-paste diblokir di editor & teks soal"
+                  : "🔓 Copy-paste diizinkan di editor & teks soal"}
               </p>
               <p
                 className={`mt-0.5 text-xs ${
@@ -315,8 +315,8 @@ export default async function SoalUlanganPage({
                 }`}
               >
                 {dataUlangan.blokir_tempel === true
-                  ? "Siswa tidak bisa menempel (paste) atau menyeret kode dari luar ke editor. Mengetik tetap bisa."
-                  : "Siswa bisa menempel kode dari luar ke editor jawaban kode."}
+                  ? "Siswa tidak bisa menempel (paste) atau menyeret kode dari luar ke editor, dan teks soal kode tidak bisa disalin. Mengetik tetap bisa."
+                  : "Siswa bisa menempel kode dari luar ke editor jawaban kode dan menyalin teks soal."}
               </p>
               {!siapBlokir ? (
                 <p className="mt-1 text-xs text-amber-700">

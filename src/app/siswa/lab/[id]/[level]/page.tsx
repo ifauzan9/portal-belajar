@@ -8,6 +8,7 @@ import { PetaLevel } from "@/components/peta-level";
 import { HeroSiswa } from "@/components/ui/hero-siswa";
 import { ProgresBar } from "@/components/ui/progres";
 import { IkonLab } from "@/components/ui/ikon-siswa";
+import { TeksSoalTerlindungi } from "@/components/teks-soal-terlindungi";
 import { hitungLevelTerkunci, infoGarisKeluaran } from "@/lib/lab";
 
 type LatihanRow = {
@@ -88,6 +89,7 @@ export default async function LevelLabSiswaPage(
     coding_lesson_classes?: { kelas_id: string }[];
     blokir_tempel?: boolean | null;
   };
+  const lindungiSoal = lesson.blokir_tempel === true;
 
   const daftarKelasId =
     lesson.coding_lesson_classes?.map((hub) => hub.kelas_id) ?? [];
@@ -276,12 +278,23 @@ export default async function LevelLabSiswaPage(
           </div>
         </div>
         <div className="space-y-5 px-5 py-5 sm:px-6">
-          <div className="max-w-3xl whitespace-pre-wrap text-base leading-7 text-slate-800">
+          <TeksSoalTerlindungi
+            aktif={lindungiSoal}
+            className="max-w-3xl whitespace-pre-wrap text-base leading-7 text-slate-800"
+          >
             {exercise.instruksi}
-          </div>
+          </TeksSoalTerlindungi>
+          {lindungiSoal ? (
+            <p className="text-xs font-medium text-amber-700">
+              🔒 Teks soal tidak dapat disalin.
+            </p>
+          ) : null}
 
           {barisMasukan.length > 0 ? (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <TeksSoalTerlindungi
+              aktif={lindungiSoal}
+              className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+            >
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <h3 className="text-sm font-semibold text-slate-900">
                   {exercise.jenis === "bebas" ? "Contoh input" : "Input wajib"}
@@ -321,11 +334,14 @@ export default async function LevelLabSiswaPage(
                   </>
                 )}
               </p>
-            </div>
+            </TeksSoalTerlindungi>
           ) : null}
 
           {exercise.jenis !== "bebas" ? (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
+            <TeksSoalTerlindungi
+              aktif={lindungiSoal}
+              className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4"
+            >
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <h3 className="text-sm font-semibold text-emerald-900">
                   Target output
@@ -348,11 +364,14 @@ export default async function LevelLabSiswaPage(
                     .join(" dan ")}
                 </p>
               ) : null}
-            </div>
+            </TeksSoalTerlindungi>
           ) : null}
 
           {variabelDiminta.length > 0 ? (
-            <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4">
+            <TeksSoalTerlindungi
+              aktif={lindungiSoal}
+              className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4"
+            >
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <h3 className="text-sm font-semibold text-indigo-950">
                   Variabel yang diminta
@@ -413,7 +432,7 @@ export default async function LevelLabSiswaPage(
                 <code className="font-mono">print()</code>. Penilaian mengecek
                 nama variabel, asal nilainya, dan urutannya.
               </p>
-            </div>
+            </TeksSoalTerlindungi>
           ) : null}
         </div>
       </section>

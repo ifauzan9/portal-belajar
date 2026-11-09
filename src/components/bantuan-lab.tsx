@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { TeksSoalTerlindungi } from "@/components/teks-soal-terlindungi";
 
 // Tombol bantuan yang menetap di kanan bawah halaman tantangan.
 // Berisi penjelasan singkat + materi konsep + contoh pola (bukan jawaban).
@@ -14,6 +15,7 @@ export function BantuanLab({
   contoh,
   salahCount = 0,
   ambangPetunjuk = 5,
+  lindungiTeks = false,
 }: {
   penjelasan: string;
   materi: string | null;
@@ -22,6 +24,8 @@ export function BantuanLab({
   salahCount?: number;
   /** Tombol petunjuk muncul setelah salah sebanyak ini. */
   ambangPetunjuk?: number;
+  /** Ikut blokir copy-paste teks bantuan saat fitur aktif. */
+  lindungiTeks?: boolean;
 }) {
   const [buka, setBuka] = useState(false);
   const [lihatContoh, setLihatContoh] = useState(false);
@@ -59,7 +63,10 @@ export function BantuanLab({
             </button>
           </div>
 
-          <div className="space-y-5 overflow-y-auto px-5 py-4">
+          <TeksSoalTerlindungi
+            aktif={lindungiTeks}
+            className="space-y-5 overflow-y-auto px-5 py-4"
+          >
             <section>
               <h3 className="text-sm font-semibold text-emerald-800">Penjelasan singkat</h3>
               <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
@@ -117,7 +124,7 @@ export function BantuanLab({
                 </p>
               )}
             </section>
-          </div>
+          </TeksSoalTerlindungi>
         </div>
       ) : null}
 

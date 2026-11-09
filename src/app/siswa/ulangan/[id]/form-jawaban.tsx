@@ -10,6 +10,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Notifikasi } from "@/components/ui/notifikasi";
 import { IkonJam } from "@/components/ui/ikon-siswa";
+import { TeksSoalTerlindungi } from "@/components/teks-soal-terlindungi";
 import {
   EditorKodeUjian,
   type PeganganEditorKode,
@@ -380,6 +381,7 @@ export function FormJawaban({
               : soal.jenis === "pg"
                 ? Boolean(jawaban[soal.id])
                 : false;
+          const lindungiSoal = blokirTempel && soal.jenis === "kode";
           return (
             <div
               key={soal.id}
@@ -397,9 +399,19 @@ export function FormJawaban({
                 >
                   {i + 1}
                 </span>
-                <p className="flex-1 pt-0.5 text-sm font-medium text-slate-900">
-                  {soal.soal}
-                </p>
+                <TeksSoalTerlindungi
+                  aktif={lindungiSoal}
+                  className="flex-1 pt-0.5"
+                >
+                  <p className="text-sm font-medium text-slate-900">
+                    {soal.soal}
+                  </p>
+                  {lindungiSoal ? (
+                    <p className="mt-1 text-xs font-medium text-amber-700">
+                      🔒 Teks soal tidak dapat disalin.
+                    </p>
+                  ) : null}
+                </TeksSoalTerlindungi>
                 <span className="shrink-0 pt-0.5 text-xs text-slate-400">
                   {soal.poin} poin
                 </span>
@@ -456,52 +468,57 @@ export function FormJawaban({
 
               {soal.jenis === "kode" ? (
                 <div className="mt-3 space-y-3">
-                  {barisTeks(soal.masukan).length > 0 ? (
-                    <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
-                      <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
-                        Input wajib
-                      </p>
-                      <ol className="mt-2 flex flex-wrap gap-2">
-                        {barisTeks(soal.masukan).map((isi, urutan) => (
-                          <li
-                            key={urutan}
-                            className="rounded-lg bg-white px-2.5 py-1 font-mono text-xs text-slate-800 ring-1 ring-slate-200"
-                          >
-                            {isi === "" ? "(kosong)" : isi}
-                          </li>
-                        ))}
-                      </ol>
-                    </div>
-                  ) : null}
+                  <TeksSoalTerlindungi
+                    aktif={lindungiSoal}
+                    className="space-y-3"
+                  >
+                    {barisTeks(soal.masukan).length > 0 ? (
+                      <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+                        <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+                          Input wajib
+                        </p>
+                        <ol className="mt-2 flex flex-wrap gap-2">
+                          {barisTeks(soal.masukan).map((isi, urutan) => (
+                            <li
+                              key={urutan}
+                              className="rounded-lg bg-white px-2.5 py-1 font-mono text-xs text-slate-800 ring-1 ring-slate-200"
+                            >
+                              {isi === "" ? "(kosong)" : isi}
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    ) : null}
 
-                  {soal.keluaran_diharapkan ? (
-                    <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
-                      <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
-                        Target output
-                      </p>
-                      <pre className="mt-2 overflow-x-auto rounded-lg bg-slate-900 p-3 font-mono text-xs leading-5 text-emerald-200">
-                        {soal.keluaran_diharapkan}
-                      </pre>
-                    </div>
-                  ) : null}
+                    {soal.keluaran_diharapkan ? (
+                      <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+                        <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+                          Target output
+                        </p>
+                        <pre className="mt-2 overflow-x-auto rounded-lg bg-slate-900 p-3 font-mono text-xs leading-5 text-emerald-200">
+                          {soal.keluaran_diharapkan}
+                        </pre>
+                      </div>
+                    ) : null}
 
-                  {(soal.aturan?.variabel_wajib?.length ?? 0) > 0 ? (
-                    <div className="rounded-xl bg-indigo-50/60 p-3 ring-1 ring-indigo-100">
-                      <p className="text-xs font-semibold tracking-wide text-indigo-700 uppercase">
-                        Variabel yang diminta
-                      </p>
-                      <ul className="mt-2 flex flex-wrap gap-2">
-                        {soal.aturan!.variabel_wajib!.map((nama) => (
-                          <li
-                            key={nama}
-                            className="rounded-lg bg-white px-2.5 py-1 font-mono text-xs font-semibold text-indigo-700 ring-1 ring-indigo-200"
-                          >
-                            {nama}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
+                    {(soal.aturan?.variabel_wajib?.length ?? 0) > 0 ? (
+                      <div className="rounded-xl bg-indigo-50/60 p-3 ring-1 ring-indigo-100">
+                        <p className="text-xs font-semibold tracking-wide text-indigo-700 uppercase">
+                          Variabel yang diminta
+                        </p>
+                        <ul className="mt-2 flex flex-wrap gap-2">
+                          {soal.aturan!.variabel_wajib!.map((nama) => (
+                            <li
+                              key={nama}
+                              className="rounded-lg bg-white px-2.5 py-1 font-mono text-xs font-semibold text-indigo-700 ring-1 ring-indigo-200"
+                            >
+                              {nama}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                  </TeksSoalTerlindungi>
 
                   <EditorKodeUjian
                     ref={(el) => {

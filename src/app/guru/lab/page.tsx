@@ -137,7 +137,7 @@ export default async function GuruLabPage() {
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
                     <div>
                       <p className="text-xs font-medium text-slate-500">
-                        Copy-paste editor
+                        Copy-paste editor & teks soal
                       </p>
                       <p
                         className={`text-sm font-semibold ${
