@@ -62,6 +62,32 @@ export default async function RekapPage(props: PageProps<"/guru/rekap">) {
   const cari =
     typeof searchParams.cari === "string" ? searchParams.cari.trim() : "";
 
+  // PostgREST membatasi satu respons (bawaan 1000 baris). Hasil lab sudah
+  // lebih dari itu, jadi ambil bertahap supaya hitungan rekap tidak terpotong.
+  const ambilSemuaLabSub = async () => {
+    const hasil: { siswa_id: string; exercise_id: string }[] = [];
+    let dari = 0;
+
+    while (true) {
+      const { data, error } = await supabase
+        .from("coding_submissions")
+        .select("siswa_id, exercise_id")
+        .order("id", { ascending: true })
+        .range(dari, dari + 999);
+      if (error) return { data: hasil, error };
+
+      const batch = (data ?? []) as {
+        siswa_id: string;
+        exercise_id: string;
+      }[];
+      hasil.push(...batch);
+      if (batch.length < 1000) break;
+      dari += 1000;
+    }
+
+    return { data: hasil, error: null };
+  };
+
   const [
     hasilKelas,
     hasilSiswa,
@@ -90,7 +116,7 @@ export default async function RekapPage(props: PageProps<"/guru/rekap">) {
       .from("coding_lessons")
       .select("id, coding_lesson_classes(kelas_id)"),
     supabase.from("coding_exercises").select("id, lesson_id"),
-    supabase.from("coding_submissions").select("siswa_id, exercise_id"),
+    ambilSemuaLabSub(),
     supabase
       .from("komputer_lessons")
       .select("id, komputer_lesson_classes(kelas_id)"),
@@ -229,6 +255,7 @@ export default async function RekapPage(props: PageProps<"/guru/rekap">) {
     hasilSiswa.error?.message ??
     hasilTugas.error?.message ??
     hasilUlangan.error?.message ??
+    hasilLabSub.error?.message ??
     null;
 
   return (

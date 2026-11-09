@@ -66,24 +66,7 @@ type SubmissionRow = {
   pernah_benar: boolean;
   percobaan: number;
   updated_at: string | null;
-  students?:
-    | { nama_siswa: string; nis: string | null; kelas_id: string | null }
-    | { nama_siswa: string; nis: string | null; kelas_id: string | null }[]
-    | null;
 };
-
-function bacaSiswa(sub: SubmissionRow): {
-  nama_siswa: string;
-  nis: string | null;
-  kelas_id: string | null;
-} {
-  const data = sub.students;
-  if (!data) return { nama_siswa: "Siswa", nis: null, kelas_id: null };
-  if (Array.isArray(data)) {
-    return data[0] ?? { nama_siswa: "Siswa", nis: null, kelas_id: null };
-  }
-  return data;
-}
 
 export default async function HasilLabPage(
   props: PageProps<"/guru/lab/hasil">,
@@ -108,7 +91,7 @@ export default async function HasilLabPage(
   const [hasilLesson, hasilKelas, hasilSiswa] = await Promise.all([
     supabase
       .from("coding_lessons")
-      .select("id, judul, urutan")
+      .select("id, judul, urutan, coding_lesson_classes(kelas_id)")
       .order("urutan", { ascending: true }),
     supabase
       .from("classes")
@@ -117,10 +100,18 @@ export default async function HasilLabPage(
     supabase.from("students").select("id, nama_siswa, nis, kelas_id"),
   ]);
 
-  const lessons = (hasilLesson.data ?? []) as {
-    id: string;
-    judul: string;
-  }[];
+  const lessons = (
+    (hasilLesson.data ?? []) as {
+      id: string;
+      judul: string;
+      coding_lesson_classes?: { kelas_id: string }[] | null;
+    }[]
+  ).map((lesson) => ({
+    id: lesson.id,
+    judul: lesson.judul,
+    // Kosong = modul untuk semua kelas.
+    kelasIds: (lesson.coding_lesson_classes ?? []).map((k) => k.kelas_id),
+  }));
   if (lessons.length === 0) {
     return (
       <div className="space-y-6">
@@ -146,14 +137,32 @@ export default async function HasilLabPage(
     );
   }
 
-  const lessonTerpilih =
-    lessons.find((l) => l.id === lessonParam) ?? lessons[0];
-
   const kelasList = (hasilKelas.data ?? []) as {
     id: string;
     nama_kelas: string;
   }[];
   const namaKelas = new Map(kelasList.map((k) => [k.id, k.nama_kelas]));
+
+  const modulUntukKelas = (kelasId: string) =>
+    lessons.find(
+      (lesson) =>
+        lesson.kelasIds.length === 0 || lesson.kelasIds.includes(kelasId),
+    );
+
+  // Tanpa parameter modul, pilih modul pertama yang relevan untuk kelas yang
+  // sedang difilter. Kalau guru memilih modul secara eksplisit, hormati pilihan
+  // itu (walaupun modul tersebut bukan untuk kelas yang difilter).
+  const lessonTerpilih =
+    lessons.find((l) => l.id === lessonParam) ??
+    (kelasParam ? modulUntukKelas(kelasParam) : undefined) ??
+    lessons[0];
+
+  // Modul terpilih tidak ditujukan untuk kelas yang difilter. Tampilkan
+  // peringatan supaya angka 0 tidak disalahartikan sebagai "tidak ada hasil".
+  const modulTidakUntukKelas =
+    kelasParam !== "" &&
+    lessonTerpilih.kelasIds.length > 0 &&
+    !lessonTerpilih.kelasIds.includes(kelasParam);
 
   const semuaSiswa = (hasilSiswa.data ?? []) as {
     id: string;
@@ -177,28 +186,62 @@ export default async function HasilLabPage(
 
   const exerciseIds = latihan.map((l) => l.id);
 
+  // PostgREST membatasi satu respons (bawaan 1000 baris). Satu modul bisa
+  // punya ribuan submission, jadi ambil bertahap. Tanpa ini, siswa yang
+  // barisnya jatuh di luar 1000 pertama tampil seolah belum mengerjakan.
   let submissions: SubmissionRow[] = [];
+  let galatSubmissions: string | null = null;
   if (exerciseIds.length > 0) {
-    const { data } = await supabase
-      .from("coding_submissions")
-      .select(
-        "id, exercise_id, siswa_id, kode, keluaran, benar, pernah_benar, percobaan, updated_at, students(nama_siswa, nis, kelas_id)",
-      )
-      .in("exercise_id", exerciseIds)
-      .order("updated_at", { ascending: false });
-    submissions = (data ?? []) as unknown as SubmissionRow[];
+    let dari = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("coding_submissions")
+        .select(
+          "id, exercise_id, siswa_id, kode, keluaran, benar, pernah_benar, percobaan, updated_at",
+        )
+        .in("exercise_id", exerciseIds)
+        .order("updated_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(dari, dari + 999);
+      if (error) {
+        galatSubmissions = error.message;
+        break;
+      }
+
+      const batch = (data ?? []) as unknown as SubmissionRow[];
+      submissions.push(...batch);
+      if (batch.length < 1000) break;
+      dari += 1000;
+    }
   }
 
-  // Filter kelas (opsional).
+  // Filter kelas (opsional). Relasi `students` di dalam select di atas bisa
+  // tidak terbaca; nama/kelas siswa lalu diambil dari daftar `semuaSiswa`.
+  const petaSiswa = new Map(semuaSiswa.map((s) => [s.id, s]));
+  const siswaDariSub = (sub: SubmissionRow) =>
+    petaSiswa.get(sub.siswa_id) ?? {
+      nama_siswa: "Siswa",
+      nis: null,
+      kelas_id: null,
+    };
+
   if (kelasParam) {
     submissions = submissions.filter(
-      (sub) => bacaSiswa(sub).kelas_id === kelasParam,
+      (sub) => siswaDariSub(sub).kelas_id === kelasParam,
     );
   }
 
-  const siswaTampil = semuaSiswa.filter(
-    (s) => !kelasParam || s.kelas_id === kelasParam,
-  );
+  const namaKelasTerpilih = kelasParam
+    ? (namaKelas.get(kelasParam) ?? "kelas ini")
+    : null;
+
+  // Hanya siswa dari kelas yang menjadi target modul. Tanpa filter ini, siswa
+  // dari kelas lain ikut tampil dan seolah-olah "tidak punya progres".
+  const siswaTampil = semuaSiswa.filter((s) => {
+    if (kelasParam && s.kelas_id !== kelasParam) return false;
+    if (lessonTerpilih.kelasIds.length === 0) return true;
+    return s.kelas_id !== null && lessonTerpilih.kelasIds.includes(s.kelas_id);
+  });
 
   // Ringkasan per siswa: berapa level pernah benar.
   const ringkasan = urutkanHasilLab(
@@ -240,6 +283,20 @@ export default async function HasilLabPage(
         </p>
       </div>
 
+      {galatSubmissions ? (
+        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-red-200">
+          Gagal memuat hasil pengerjaan: {galatSubmissions}
+        </p>
+      ) : null}
+
+      {modulTidakUntukKelas ? (
+        <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-amber-200">
+          Modul <strong>{lessonTerpilih.judul}</strong> tidak ditujukan untuk
+          kelas {namaKelasTerpilih}. Pilih modul lain, atau kosongkan filter
+          kelas untuk melihat semua siswa.
+        </p>
+      ) : null}
+
       <form
         method="get"
         action="/guru/lab/hasil"
@@ -264,6 +321,15 @@ export default async function HasilLabPage(
               </option>
             ))}
           </select>
+          <p className="mt-1 max-w-xs text-xs text-slate-500">
+            Untuk:{" "}
+            {lessonTerpilih.kelasIds.length === 0
+              ? "semua kelas"
+              : lessonTerpilih.kelasIds
+                  .map((idK) => namaKelas.get(idK) ?? "-")
+                  .sort((a, b) => a.localeCompare(b, "id", { numeric: true }))
+                  .join(", ")}
+          </p>
         </div>
         <div>
           <label
@@ -485,16 +551,29 @@ export default async function HasilLabPage(
             </div>
           </>
         ) : (
-          <EmptyState padat judul="Belum ada siswa" />
+          <EmptyState
+            padat
+            judul="Belum ada siswa"
+            keterangan={
+              modulTidakUntukKelas
+                ? `Modul ini tidak ditujukan untuk kelas ${namaKelasTerpilih ?? "yang dipilih"}.`
+                : "Tidak ada siswa yang cocok dengan filter saat ini."
+            }
+          />
         )}
       </Kartu>
 
       {/* Detail per level */}
       <div className="space-y-3">
         {latihan.map((soal) => {
-          const subsSoal = submissions.filter(
-            (s) => s.exercise_id === soal.id,
-          );
+          const subsSoal = submissions.filter((s) => {
+            if (s.exercise_id !== soal.id) return false;
+            // Samakan cakupan detail dengan ringkasan (target modul + filter).
+            const kelasId = siswaDariSub(s).kelas_id;
+            if (kelasParam && kelasId !== kelasParam) return false;
+            if (lessonTerpilih.kelasIds.length === 0) return true;
+            return kelasId !== null && lessonTerpilih.kelasIds.includes(kelasId);
+          });
           const berhasil = subsSoal.filter((s) => s.pernah_benar).length;
           return (
             <details
@@ -523,7 +602,7 @@ export default async function HasilLabPage(
               <div className="space-y-3 border-t border-slate-100 px-5 py-4">
                 {subsSoal.length > 0 ? (
                   subsSoal.map((sub) => {
-                    const siswaSub = bacaSiswa(sub);
+                    const siswaSub = siswaDariSub(sub);
                     return (
                       <div
                         key={sub.id}
