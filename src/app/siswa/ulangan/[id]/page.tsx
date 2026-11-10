@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { ambilKelasUlangan } from "@/lib/ambil-kelas-ulangan";
 import { tenggatSudahLewat } from "@/lib/deadline";
 import { formatWaktuWib } from "@/lib/waktu";
+import { ambilPengaturanSoal } from "@/lib/pengaturan-soal";
+import { PemberitahuanSoalDitutup } from "@/components/pemberitahuan-soal";
 import { FormJawaban } from "./form-jawaban";
 import { Kartu } from "@/components/ui/kartu";
 import { Badge } from "@/components/ui/badge";
@@ -126,12 +128,20 @@ export default async function KerjakanUlanganPage(
   const deadlineLewat = tenggatSudahLewat(dataUlangan.tenggat);
 
   // Cek apakah siswa sudah submit
-  const hasilSubmitLama = await supabase
-    .from("exam_submissions")
-    .select("id, nilai_pg, nilai_esai, nilai_kode, nilai_total, disubmit_at")
-    .eq("exam_id", id)
-    .eq("siswa_id", siswa.id)
-    .maybeSingle();
+  const [hasilSubmitLama, hasilSesiAwal] = await Promise.all([
+    supabase
+      .from("exam_submissions")
+      .select("id, nilai_pg, nilai_esai, nilai_kode, nilai_total, disubmit_at")
+      .eq("exam_id", id)
+      .eq("siswa_id", siswa.id)
+      .maybeSingle(),
+    supabase
+      .from("exam_sessions")
+      .select("mulai_at")
+      .eq("exam_id", id)
+      .eq("siswa_id", siswa.id)
+      .maybeSingle(),
+  ]);
 
   let submitLama: unknown = hasilSubmitLama.data;
 
@@ -144,6 +154,14 @@ export default async function KerjakanUlanganPage(
       .maybeSingle();
     submitLama = fallbackSubmit.data;
   }
+
+  const sesiRow = hasilSesiAwal.data as { mulai_at: string } | null;
+  const punyaSesi = Boolean(sesiRow?.mulai_at);
+
+  // Saklar global dari guru (Tahap 41). Siswa yang sudah memulai tetap
+  // dilanjutkan agar jawabannya tidak hilang.
+  const pengaturanSoal = await ambilPengaturanSoal(supabase);
+  const soalDitutupGlobal = pengaturanSoal.tutupUlangan && !punyaSesi;
 
   // Cek apakah nilai boleh ditampilkan (guru menahan / sudah selesai dinilai)
   const nilaiDitampilkan =
@@ -261,16 +279,24 @@ export default async function KerjakanUlanganPage(
     );
   }
 
-  // Jika ulangan ditutup guru + belum submit → tampilkan pesan
-  if (!dibukaUlangan && !submitLama) {
+  // Jika ulangan ditutup guru (per ulangan atau saklar global) + belum submit
+  // → tampilkan pesan.
+  if ((!dibukaUlangan || soalDitutupGlobal) && !submitLama) {
     return (
       <div className="space-y-6">
         <Kepala judul={dataUlangan.judul} />
 
-        <Notifikasi varian="gagal" judul="Ulangan ditutup oleh guru">
-          Ulangan ini sementara tidak bisa dikerjakan. Nanti guru akan
-          membukanya kembali.
-        </Notifikasi>
+        {soalDitutupGlobal ? (
+          <PemberitahuanSoalDitutup
+            jenis="ulangan"
+            pesan={pengaturanSoal.pesan}
+          />
+        ) : (
+          <Notifikasi varian="gagal" judul="Ulangan ditutup oleh guru">
+            Ulangan ini sementara tidak bisa dikerjakan. Nanti guru akan
+            membukanya kembali.
+          </Notifikasi>
+        )}
       </div>
     );
   }
@@ -292,14 +318,6 @@ export default async function KerjakanUlanganPage(
   // Timer baru dimulai setelah siswa mengonfirmasi di halaman konfirmasi.
   // Kalau belum ada sesi, kembalikan ke halaman konfirmasi (jangan buat sesi
   // di sini) supaya membuka URL langsung tidak memulai timer.
-  const { data: sesiLama } = await supabase
-    .from("exam_sessions")
-    .select("mulai_at")
-    .eq("exam_id", id)
-    .eq("siswa_id", siswa.id)
-    .maybeSingle();
-
-  const sesiRow = sesiLama as { mulai_at: string } | null;
   if (!sesiRow?.mulai_at) {
     redirect(`/siswa/ulangan/${id}/konfirmasi`);
   }
@@ -321,6 +339,14 @@ export default async function KerjakanUlanganPage(
           </span>
         ) : null}
       </div>
+
+      {pengaturanSoal.tutupUlangan && punyaSesi ? (
+        <Notifikasi varian="info" judul="Akses soal baru sedang ditutup">
+          Kamu sudah memulai ulangan ini, jadi tetap bisa menyelesaikan dan
+          mengumpulkan jawaban. Setelah dikumpulkan, kamu tidak bisa memulai
+          ulangan lain sampai guru membuka aksesnya kembali.
+        </Notifikasi>
+      ) : null}
 
       {soalList.length === 0 ? (
         <Kartu>

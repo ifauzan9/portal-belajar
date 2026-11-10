@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { HeroSiswa, TombolHero } from "@/components/ui/hero-siswa";
 import { ProgresBar } from "@/components/ui/progres";
 import { IkonBuku } from "@/components/ui/ikon-siswa";
+import { ambilPengaturanSoal } from "@/lib/pengaturan-soal";
 
 export default async function ModulLabSiswaPage(
   props: PageProps<"/siswa/lab/[id]">,
@@ -19,22 +20,48 @@ export default async function ModulLabSiswaPage(
   const supabase = await createClient();
   const admin = createAdminClient();
 
-  const { data: lessonData } = await supabase
-    .from("coding_lessons")
-    .select("id, judul, isi, coding_lesson_classes(kelas_id)")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (!lessonData) {
+  // Saklar global "tutup akses soal" (Tahap 41). Modul lab tidak bisa dibuka
+  // selama guru menutup akses.
+  const pengaturanSoal = await ambilPengaturanSoal(supabase);
+  if (pengaturanSoal.tutupLab) {
     redirect("/siswa/lab");
   }
 
-  const lesson = lessonData as {
+  const hasilLesson = await supabase
+    .from("coding_lessons")
+    .select("id, judul, isi, dibuka, coding_lesson_classes(kelas_id)")
+    .eq("id", id)
+    .maybeSingle();
+
+  // Kolom `dibuka` baru ada setelah Tahap 42; kalau belum, fallback ke select
+  // lama dan anggap modul terbuka.
+  let dataLesson: unknown = hasilLesson.data;
+  if (hasilLesson.error) {
+    const fallback = await supabase
+      .from("coding_lessons")
+      .select("id, judul, isi, coding_lesson_classes(kelas_id)")
+      .eq("id", id)
+      .maybeSingle();
+    dataLesson = fallback.data;
+  }
+
+  if (!dataLesson) {
+    redirect("/siswa/lab");
+  }
+
+  const lesson = dataLesson as {
     id: string;
     judul: string;
     isi: string;
+    dibuka?: boolean | null;
     coding_lesson_classes?: { kelas_id: string }[];
   };
+
+  // Saklar tutup per modul (Tahap 42): modul yang ditutup guru tidak bisa
+  // dibuka siswa, termasuk lewat URL langsung.
+  if (lesson.dibuka === false) {
+    redirect("/siswa/lab");
+  }
 
   const daftarKelasId =
     lesson.coding_lesson_classes?.map((hub) => hub.kelas_id) ?? [];

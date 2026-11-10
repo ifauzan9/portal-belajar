@@ -10,6 +10,7 @@ import { ProgresBar } from "@/components/ui/progres";
 import { IkonLab } from "@/components/ui/ikon-siswa";
 import { TeksSoalTerlindungi } from "@/components/teks-soal-terlindungi";
 import { hitungLevelTerkunci, infoGarisKeluaran } from "@/lib/lab";
+import { ambilPengaturanSoal } from "@/lib/pengaturan-soal";
 
 type LatihanRow = {
   id: string;
@@ -59,25 +60,44 @@ export default async function LevelLabSiswaPage(
   const supabase = await createClient();
   const admin = createAdminClient();
 
-  // Kolom `blokir_tempel` baru ada setelah Tahap 39; kalau belum,
-  // fallback ke select lama dan anggap nonaktif.
+  // Saklar global "tutup akses soal" (Tahap 41). Level lab tidak bisa dibuka
+  // selama guru menutup akses.
+  const pengaturanSoal = await ambilPengaturanSoal(supabase);
+  if (pengaturanSoal.tutupLab) {
+    redirect("/siswa/lab");
+  }
+
+  // Kolom `blokir_tempel` (Tahap 39) & `dibuka` (Tahap 42) baru ada setelah
+  // DDL dijalankan; turun bertahap supaya modul yang kolomnya sudah ada tetap
+  // bisa dibuka/ditutup walau tahap lainnya belum.
   const kolomLessonDasar = "id, judul, isi, coding_lesson_classes(kelas_id)";
 
   const hasilLessonLengkap = await supabase
     .from("coding_lessons")
-    .select(`${kolomLessonDasar}, blokir_tempel`)
+    .select(`${kolomLessonDasar}, blokir_tempel, dibuka`)
     .eq("id", id)
     .maybeSingle();
 
   let lessonData: unknown = hasilLessonLengkap.data;
 
   if (hasilLessonLengkap.error) {
-    const fallback = await supabase
+    // Coba tanpa `blokir_tempel` (Tahap 39 belum jalan).
+    const tanpaBlokir = await supabase
       .from("coding_lessons")
-      .select(kolomLessonDasar)
+      .select(`${kolomLessonDasar}, dibuka`)
       .eq("id", id)
       .maybeSingle();
-    lessonData = fallback.data;
+
+    if (!tanpaBlokir.error) {
+      lessonData = tanpaBlokir.data;
+    } else {
+      const fallback = await supabase
+        .from("coding_lessons")
+        .select(kolomLessonDasar)
+        .eq("id", id)
+        .maybeSingle();
+      lessonData = fallback.data;
+    }
   }
 
   if (!lessonData) redirect("/siswa/lab");
@@ -88,8 +108,12 @@ export default async function LevelLabSiswaPage(
     isi: string | null;
     coding_lesson_classes?: { kelas_id: string }[];
     blokir_tempel?: boolean | null;
+    dibuka?: boolean | null;
   };
   const lindungiSoal = lesson.blokir_tempel === true;
+
+  // Saklar tutup per modul (Tahap 42): semua level modul ini ikut ditutup.
+  if (lesson.dibuka === false) redirect("/siswa/lab");
 
   const daftarKelasId =
     lesson.coding_lesson_classes?.map((hub) => hub.kelas_id) ?? [];

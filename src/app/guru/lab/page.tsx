@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { FormKelasLab } from "@/components/form-kelas-lab";
+import { SaklarModulLab } from "@/components/saklar-modul-lab";
 import { toggleBlokirTempelLab } from "@/app/guru/lab/actions";
 import { createClient } from "@/lib/supabase/server";
 import { Kartu } from "@/components/ui/kartu";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { IkonBuku } from "@/components/ui/ikon-siswa";
+import { Notifikasi } from "@/components/ui/notifikasi";
+import { ambilPengaturanSoal } from "@/lib/pengaturan-soal";
 
 export default async function GuruLabPage() {
   const supabase = await createClient();
@@ -16,32 +19,66 @@ export default async function GuruLabPage() {
 
   if (!user) redirect("/login");
 
-  const [hasilKelas, hasilLessonAwal, hasilLatihan] = await Promise.all([
-    supabase
-      .from("classes")
-      .select("id, nama_kelas")
-      .order("nama_kelas", { ascending: true }),
-    supabase
-      .from("coding_lessons")
-      .select("id, judul, urutan, blokir_tempel, coding_lesson_classes(kelas_id)")
-      .order("urutan", { ascending: true }),
-    supabase.from("coding_exercises").select("id, lesson_id"),
-  ]);
+  const [hasilKelas, hasilLessonAwal, hasilLatihan, pengaturanSoal] =
+    await Promise.all([
+      supabase
+        .from("classes")
+        .select("id, nama_kelas")
+        .order("nama_kelas", { ascending: true }),
+      supabase
+        .from("coding_lessons")
+        .select(
+          "id, judul, urutan, dibuka, blokir_tempel, coding_lesson_classes(kelas_id)",
+        )
+        .order("urutan", { ascending: true }),
+      supabase.from("coding_exercises").select("id, lesson_id"),
+      ambilPengaturanSoal(supabase),
+    ]);
 
-  // Kolom `blokir_tempel` baru ada setelah Tahap 39. Kalau belum,
-  // fallback ke select lama dan matikan saklar.
-  let hasilLesson: {
+  // Kolom `blokir_tempel` (Tahap 39) & `dibuka` (Tahap 42) baru ada setelah
+  // DDL dijalankan. Turun bertahap supaya saklar yang kolomnya sudah ada tetap
+  // bisa dipakai walau tahap lainnya belum dijalankan.
+  const KOLOM_DASAR = "id, judul, urutan, coding_lesson_classes(kelas_id)";
+
+  type HasilLesson = {
     data: unknown;
     error: { message: string } | null;
-  } = hasilLessonAwal;
-  let siapBlokir = !hasilLessonAwal.error;
+  };
+
+  let hasilLesson: HasilLesson = hasilLessonAwal;
+  let siapBlokir = true;
+  let siapTutupModul = true;
 
   if (hasilLessonAwal.error) {
-    hasilLesson = await supabase
+    // Coba tanpa `dibuka` (Tahap 42 belum jalan).
+    const tanpaTutup: HasilLesson = await supabase
       .from("coding_lessons")
-      .select("id, judul, urutan, coding_lesson_classes(kelas_id)")
+      .select(`${KOLOM_DASAR}, blokir_tempel`)
       .order("urutan", { ascending: true });
-    siapBlokir = false;
+
+    if (!tanpaTutup.error) {
+      hasilLesson = tanpaTutup;
+      siapTutupModul = false;
+    } else {
+      // Coba tanpa `blokir_tempel` (Tahap 39 belum jalan, Tahap 42 sudah).
+      const tanpaBlokir: HasilLesson = await supabase
+        .from("coding_lessons")
+        .select(`${KOLOM_DASAR}, dibuka`)
+        .order("urutan", { ascending: true });
+
+      if (!tanpaBlokir.error) {
+        hasilLesson = tanpaBlokir;
+        siapBlokir = false;
+      } else {
+        // Kedua tahap belum jalan.
+        hasilLesson = await supabase
+          .from("coding_lessons")
+          .select(KOLOM_DASAR)
+          .order("urutan", { ascending: true });
+        siapBlokir = false;
+        siapTutupModul = false;
+      }
+    }
   }
 
   const kelasList = (hasilKelas.data ?? []) as {
@@ -53,6 +90,7 @@ export default async function GuruLabPage() {
   const lessons = (hasilLesson.data ?? []) as {
     id: string;
     judul: string;
+    dibuka?: boolean | null;
     blokir_tempel?: boolean | null;
     coding_lesson_classes?: { kelas_id: string }[];
   }[];
@@ -81,6 +119,22 @@ export default async function GuruLabPage() {
         </Link>
       </div>
 
+      {pengaturanSoal.tutupLab ? (
+        <Notifikasi varian="peringatan" judul="Akses Lab Coding sedang ditutup">
+          <p>
+            Saklar global di{" "}
+            <Link
+              href="/guru/pengaturan"
+              className="font-medium underline hover:no-underline"
+            >
+              Pengaturan
+            </Link>{" "}
+            menyala, jadi siswa tidak bisa membuka modul maupun level. Hasil
+            yang sudah tersimpan tetap aman.
+          </p>
+        </Notifikasi>
+      ) : null}
+
       {galat ? (
         <p className="text-sm text-red-600">Gagal memuat modul: {galat}</p>
       ) : null}
@@ -92,6 +146,13 @@ export default async function GuruLabPage() {
         </p>
       ) : null}
 
+      {!siapTutupModul ? (
+        <p className="text-sm text-amber-700">
+          Jalankan <code>schema.sql</code> Tahap 42 untuk mengaktifkan tombol
+          tutup/buka per modul.
+        </p>
+      ) : null}
+
       {lessons.length > 0 ? (
         <div className="space-y-3">
           {lessons.map((lesson) => {
@@ -100,6 +161,7 @@ export default async function GuruLabPage() {
             const jumlahLatihan = latihan.filter(
               (l) => l.lesson_id === lesson.id,
             ).length;
+            const dibukaModul = lesson.dibuka !== false;
             return (
               <Kartu key={lesson.id}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -124,7 +186,18 @@ export default async function GuruLabPage() {
                       </p>
                     </div>
                   </div>
-                  <Badge varian="netral">{jumlahLatihan} level</Badge>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge varian="netral">{jumlahLatihan} level</Badge>
+                    {dibukaModul ? null : (
+                      <Badge varian="bahaya">Ditutup guru</Badge>
+                    )}
+                    <SaklarModulLab
+                      lessonId={lesson.id}
+                      judul={lesson.judul}
+                      dibuka={dibukaModul}
+                      siap={siapTutupModul}
+                    />
+                  </div>
                 </div>
 
                 <div className="mt-4 border-t border-slate-100 pt-3">

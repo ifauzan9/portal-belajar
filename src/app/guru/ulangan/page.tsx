@@ -20,6 +20,8 @@ import {
 } from "@/lib/urutkan-ulangan";
 import { tenggatSudahLewat } from "@/lib/deadline";
 import { formatTanggalWib } from "@/lib/waktu";
+import { ambilPengaturanSoal } from "@/lib/pengaturan-soal";
+import { Notifikasi } from "@/components/ui/notifikasi";
 
 type KelasRow = { id: string; nama_kelas: string };
 type UlanganRow = {
@@ -173,6 +175,8 @@ export default async function UlanganPage(
     arah,
   );
 
+  const pengaturanSoal = await ambilPengaturanSoal(supabase);
+
   const urlTanpaCari = buatUrl(urut, arah, "");
 
   return (
@@ -182,6 +186,22 @@ export default async function UlanganPage(
           Ulangan
         </h1>
       </div>
+
+      {pengaturanSoal.tutupUlangan ? (
+        <Notifikasi varian="peringatan" judul="Akses soal ulangan sedang ditutup">
+          <p>
+            Saklar global di{" "}
+            <Link
+              href="/guru/pengaturan"
+              className="font-medium underline hover:no-underline"
+            >
+              Pengaturan
+            </Link>{" "}
+            sedang menyala, jadi semua siswa tidak bisa membuka soal ulangan
+            walau ulangan di bawah dibuka.
+          </p>
+        </Notifikasi>
+      ) : null}
 
       <TambahUlanganForm kelasList={kelasList} />
 

@@ -9,24 +9,48 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { HeroSiswa } from "@/components/ui/hero-siswa";
 import { ProgresBar } from "@/components/ui/progres";
 import { IkonBuku, IkonLab } from "@/components/ui/ikon-siswa";
+import { ambilPengaturanSoal, labBolehDiakses } from "@/lib/pengaturan-soal";
+import { PemberitahuanSoalDitutup } from "@/components/pemberitahuan-soal";
 
 export default async function LabSiswaPage() {
   const { siswa, kelas } = await requireSiswa();
   const supabase = await createClient();
   const admin = createAdminClient();
 
-  const [hasilLesson, hasilLatihan, hasilHasil] = await Promise.all([
-    supabase
+  const [hasilLesson, hasilLatihan, hasilHasil, pengaturanSoal] =
+    await Promise.all([
+      supabase
+        .from("coding_lessons")
+        .select("id, judul, isi, urutan, dibuka, coding_lesson_classes(kelas_id)")
+        .order("urutan", { ascending: true }),
+      supabase.from("coding_exercises").select("id, lesson_id"),
+      admin
+        .from("coding_submissions")
+        .select("exercise_id, pernah_benar")
+        .eq("siswa_id", siswa.id)
+        .eq("pernah_benar", true),
+      ambilPengaturanSoal(supabase),
+    ]);
+
+  // Kolom `dibuka` baru ada setelah Tahap 42. Kalau belum, fallback ke select
+  // lama dan anggap semua modul terbuka.
+  let dataLesson: unknown = hasilLesson.data;
+  let galatLesson = hasilLesson.error;
+
+  if (hasilLesson.error) {
+    const fallback = await supabase
       .from("coding_lessons")
       .select("id, judul, isi, urutan, coding_lesson_classes(kelas_id)")
-      .order("urutan", { ascending: true }),
-    supabase.from("coding_exercises").select("id, lesson_id"),
-    admin
-      .from("coding_submissions")
-      .select("exercise_id, pernah_benar")
-      .eq("siswa_id", siswa.id)
-      .eq("pernah_benar", true),
-  ]);
+      .order("urutan", { ascending: true });
+    dataLesson = fallback.data;
+    galatLesson = fallback.error;
+  }
+
+  const modulDitutup = new Set(
+    ((dataLesson ?? []) as { id: string; dibuka?: boolean | null }[])
+      .filter((lesson) => lesson.dibuka === false)
+      .map((lesson) => lesson.id),
+  );
 
   const selesaiIds = new Set(
     (hasilHasil.data ?? []).map(
@@ -35,7 +59,7 @@ export default async function LabSiswaPage() {
   );
 
   const progres = hitungProgresLab(
-    (hasilLesson.data ?? []) as {
+    (dataLesson ?? []) as {
       id: string;
       judul: string;
       urutan: number;
@@ -47,7 +71,7 @@ export default async function LabSiswaPage() {
   );
 
   const daftar = progres.modul;
-  const galat = hasilLesson.error?.message ?? null;
+  const galat = galatLesson?.message ?? null;
 
   return (
     <div className="space-y-6">
@@ -82,6 +106,10 @@ export default async function LabSiswaPage() {
           </div>
         ) : null}
       </HeroSiswa>
+
+      {pengaturanSoal.tutupLab ? (
+        <PemberitahuanSoalDitutup jenis="lab" pesan={pengaturanSoal.pesan} />
+      ) : null}
 
       {galat ? (
         <p className="text-sm text-red-600">Gagal memuat modul: {galat}</p>
@@ -122,35 +150,49 @@ export default async function LabSiswaPage() {
               const persen = lesson.persen;
               const tuntas = lesson.total > 0 && lesson.selesai === lesson.total;
               const berjalan = lesson.selesai > 0 && !tuntas;
+              const ditutupModul = modulDitutup.has(lesson.id);
+              const terkunci = !labBolehDiakses(
+                pengaturanSoal,
+                !ditutupModul,
+              );
+              const alasanKunci = pengaturanSoal.tutupLab
+                ? "Akses Lab Coding ditutup oleh guru."
+                : "Modul ini ditutup oleh guru.";
 
-              const labelStatus = tuntas
-                ? "Selesai"
-                : berjalan
-                  ? "Sedang berjalan"
-                  : "Belum dimulai";
+              const labelStatus = terkunci
+                ? "Ditutup guru"
+                : tuntas
+                  ? "Selesai"
+                  : berjalan
+                    ? "Sedang berjalan"
+                    : "Belum dimulai";
 
-              const cta = tuntas
-                ? "Ulangi"
-                : berjalan
-                  ? "Lanjutkan"
-                  : "Mulai";
+              const cta = terkunci
+                ? "Ditutup sementara"
+                : tuntas
+                  ? "Ulangi"
+                  : berjalan
+                    ? "Lanjutkan"
+                    : "Mulai";
 
-              return (
-                <Link
-                  key={lesson.id}
-                  href={`/siswa/lab/${lesson.id}`}
-                  className={`group flex flex-col rounded-2xl p-5 ring-1 transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-emerald-900/5 hover:ring-emerald-300 ${
-                    tuntas
-                      ? "bg-emerald-50 ring-emerald-200"
-                      : "bg-white ring-slate-200"
-                  }`}
-                >
+              const isi = (
+                <>
                   <div className="flex items-start justify-between gap-3">
                     <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm shadow-emerald-600/20">
                       <IkonBuku className="h-5 w-5" />
                     </span>
-                    <Badge varian={tuntas ? "sukses" : berjalan ? "info" : "netral"}>
-                      {tuntas ? "✓ " : ""}
+                    <Badge
+                      varian={
+                        terkunci
+                          ? "bahaya"
+                          : tuntas
+                            ? "sukses"
+                            : berjalan
+                              ? "info"
+                              : "netral"
+                      }
+                    >
+                      {tuntas && !terkunci ? "✓ " : ""}
                       {labelStatus}
                     </Badge>
                   </div>
@@ -170,15 +212,48 @@ export default async function LabSiswaPage() {
                     </p>
                   </div>
 
-                  <div className="mt-4 flex items-center justify-between border-t border-slate-200/80 pt-3 text-sm font-semibold text-emerald-700">
+                  <div
+                    className={`mt-4 flex items-center justify-between border-t border-slate-200/80 pt-3 text-sm font-semibold ${
+                      terkunci ? "text-slate-400" : "text-emerald-700"
+                    }`}
+                  >
                     <span>{cta}</span>
                     <span
                       aria-hidden="true"
-                      className="transition group-hover:translate-x-0.5"
+                      className={
+                        terkunci ? "" : "transition group-hover:translate-x-0.5"
+                      }
                     >
-                      →
+                      {terkunci ? "🔒" : "→"}
                     </span>
                   </div>
+                </>
+              );
+
+              if (terkunci) {
+                return (
+                  <div
+                    key={lesson.id}
+                    aria-disabled="true"
+                    title={alasanKunci}
+                    className="flex cursor-not-allowed flex-col rounded-2xl bg-slate-50 p-5 opacity-80 ring-1 ring-slate-200"
+                  >
+                    {isi}
+                  </div>
+                );
+              }
+
+              return (
+                <Link
+                  key={lesson.id}
+                  href={`/siswa/lab/${lesson.id}`}
+                  className={`group flex flex-col rounded-2xl p-5 ring-1 transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-emerald-900/5 hover:ring-emerald-300 ${
+                    tuntas
+                      ? "bg-emerald-50 ring-emerald-200"
+                      : "bg-white ring-slate-200"
+                  }`}
+                >
+                  {isi}
                 </Link>
               );
             })}

@@ -66,6 +66,12 @@ exists`, seed `where not exists`), jadi aman dijalankan berulang.
 
 Hal yang disiapkan di database:
 - Bucket Storage bernama **`tugas`** untuk berkas tugas (dibuat di Tahap 16).
+- Tabel **`pengaturan_guru`** (Tahap 41) untuk saklar global "Tutup akses soal"
+  di halaman **/guru/pengaturan**. Tanpa tabel ini, halaman pengaturan tetap
+  tampil tetapi menyimpan akan gagal dan akses soal tetap terbuka.
+- Kolom **`coding_lessons.dibuka`** (Tahap 42) untuk tombol **Tutup modul** /
+  **Buka modul** per modul di halaman **/guru/lab**. Tanpa kolom ini, tombol
+  tidak muncul dan semua modul dianggap terbuka.
 
 ## Batasan Penting
 
@@ -127,6 +133,11 @@ Setelah itu (opsional) samakan **Supabase → Authentication → URL Configurati
 | Tugas praktik selalu "Input belum sesuai" padahal data sudah benar | Program memanggil `input()` bukan tepat 3 kali, atau urutan/huruf besar-kecilnya diubah. Data input: nama, NIS, kelas. `ruang` dan `tanggal` tidak boleh memakai `input()`. |
 | Tugas praktik selalu "Belum lengkap: minimal N perintah print()" | Jumlah `print()` belum mencapai 18, atau output belum mencapai 18 baris tidak kosong. Pastikan setiap bagian kartu ditampilkan dengan `print()`. |
 | Pesan "Dengan input berbeda, output tidak sesuai" | Program masih menulis jawaban langsung di `print()`. Nilai harus diambil dari `input()`, disimpan di variabel, lalu ditampilkan. |
+| Saklar "Tutup akses soal" di Pengaturan tidak berpengaruh | Schema Tahap 41 belum dijalankan (tabel `pengaturan_guru` belum ada). Jalankan Tahap 41 di Supabase SQL Editor; form akan menampilkan peringatan selama tabel belum ada. |
+| Halaman /guru/pengaturan error "relation does not exist" | Sama seperti di atas — jalankan Tahap 41. |
+| Soal ulangan masih bisa dibuka walau saklar global menyala | Kemungkinan siswa sudah memulai ulangan sebelum saklar dinyalakan (sesi berjalan sengaja diizinkan agar jawaban tidak hilang), atau saklar per ulangan masih terbuka. Cek juga menu titik-tiga di halaman Ulangan. |
+| Tombol "Tutup modul" di /guru/lab tidak muncul / tidak berpengaruh | Schema Tahap 42 belum dijalankan (kolom `coding_lessons.dibuka` belum ada). Jalankan Tahap 42 di Supabase SQL Editor; halaman akan menampilkan peringatan selama kolom belum ada. |
+| Modul lab masih bisa dibuka siswa walau sudah "Ditutup guru" | Cek juga saklar global di /guru/pengaturan — modul hanya bisa dibuka kalau kolom `dibuka` dan saklar global sama-sama terbuka. Kalau halaman level masih terbuka di tab lama, muat ulang: penjagaan sebenarnya ada di server. |
 
 ## Checklist Cepat
 
@@ -139,4 +150,6 @@ Setelah itu (opsional) samakan **Supabase → Authentication → URL Configurati
 - [ ] Tabel `lokasi_terakhir_siswa` sudah ada (Tahap 30)
 - [ ] Kolom `password_kuota_tanggal` & `password_kuota_terpakai` sudah ada (Tahap 31)
 - [ ] Modul "Tugas Praktik - Persiapan Ujian Praktik Python" + 1 tantangan panjang sudah ada (Tahap 32 + Tahap 37 + Tahap 38)
+- [ ] Tabel `pengaturan_guru` sudah ada (Tahap 41) — untuk saklar "Tutup akses soal"
+- [ ] Kolom `coding_lessons.dibuka` sudah ada (Tahap 42) — untuk tombol "Tutup modul" di Lab Coding
 - [ ] Login guru & siswa sudah dicoba di URL produksi

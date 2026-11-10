@@ -5,6 +5,11 @@ import { hitungRataRata, tampilkanRataRata } from "@/lib/rata-rata";
 import { ambilKelasUlangan } from "@/lib/ambil-kelas-ulangan";
 import { tenggatSudahLewat } from "@/lib/deadline";
 import { belumWaktunyaMulai } from "@/lib/jadwal-ulangan";
+import {
+  ambilPengaturanSoal,
+  ulanganBolehDiakses,
+} from "@/lib/pengaturan-soal";
+import { PemberitahuanSoalDitutup } from "@/components/pemberitahuan-soal";
 import { Kartu, KartuJudul } from "@/components/ui/kartu";
 import { KartuStat } from "@/components/ui/kartu-stat";
 import { Badge } from "@/components/ui/badge";
@@ -22,15 +27,19 @@ type StatusView = { label: string; varian: "bahaya" | "netral" | "sukses" | "inf
 function statusUlangan(u: {
   status: "akan" | "sudah";
   dibuka: boolean;
+  bolehSoal: boolean;
   deadlineLewat: boolean;
   sudahSubmit: boolean;
+  punyaSesi: boolean;
   belumWaktunya: boolean;
   tenggat: string | null;
 }): StatusView {
   if (u.status === "akan") {
     if (!u.dibuka) return { label: "Ditutup guru", varian: "bahaya" };
-    if (u.deadlineLewat) return { label: "Ditutup", varian: "netral" };
     if (u.sudahSubmit) return { label: "Sudah dijawab", varian: "sukses" };
+    if (u.punyaSesi) return { label: "Sedang dikerjakan", varian: "info" };
+    if (!u.bolehSoal) return { label: "Ditutup guru", varian: "bahaya" };
+    if (u.deadlineLewat) return { label: "Ditutup", varian: "netral" };
     if (u.belumWaktunya)
       return { label: "Dijadwalkan", varian: "peringatan" };
     const tgl = u.tenggat
@@ -50,9 +59,15 @@ function bisaDikerjakan(u: {
   sudahSubmit: boolean;
   deadlineLewat: boolean;
   dibuka: boolean;
+  bolehSoal: boolean;
+  punyaSesi: boolean;
 }): boolean {
   return (
-    u.status === "akan" && !u.sudahSubmit && !u.deadlineLewat && u.dibuka
+    u.status === "akan" &&
+    !u.sudahSubmit &&
+    !u.deadlineLewat &&
+    u.dibuka &&
+    (u.bolehSoal || u.punyaSesi)
   );
 }
 
@@ -60,11 +75,23 @@ export default async function NilaiSiswaPage() {
   const { siswa, kelas } = await requireSiswa();
   const supabase = await createClient();
 
-  const { data: ulanganData } = await supabase
-    .from("exams")
-    .select(
-      "id, judul, kelas_id, tanggal, status, tenggat, durasi, nilai_ditampilkan, nilai_selesai, dibuka, exam_scores(nilai, siswa_id), exam_classes(kelas_id), exam_submissions(nilai_total, siswa_id)",
-    );
+  const [{ data: ulanganData }, { data: sesiData }, pengaturanSoal] =
+    await Promise.all([
+      supabase
+        .from("exams")
+        .select(
+          "id, judul, kelas_id, tanggal, status, tenggat, durasi, nilai_ditampilkan, nilai_selesai, dibuka, exam_scores(nilai, siswa_id), exam_classes(kelas_id), exam_submissions(nilai_total, siswa_id)",
+        ),
+      supabase
+        .from("exam_sessions")
+        .select("exam_id")
+        .eq("siswa_id", siswa.id),
+      ambilPengaturanSoal(supabase),
+    ]);
+
+  const setSesi = new Set(
+    (sesiData ?? []).map((s) => (s as { exam_id: string }).exam_id),
+  );
 
   // Cek submit per siswa untuk ulangan bersoal
   const { data: submitData } = await supabase
@@ -142,6 +169,8 @@ export default async function NilaiSiswaPage() {
         deadlineLewat,
         belumWaktunya,
         dibuka: dibukaRow,
+        bolehSoal: ulanganBolehDiakses(pengaturanSoal, dibukaRow),
+        punyaSesi: setSesi.has(row.id),
         sudahSubmit,
       },
     ];
@@ -168,6 +197,13 @@ export default async function NilaiSiswaPage() {
           {nilaiTerisi.length} ulangan dinilai
         </p>
       </div>
+
+      {pengaturanSoal.tutupUlangan ? (
+        <PemberitahuanSoalDitutup
+          jenis="ulangan"
+          pesan={pengaturanSoal.pesan}
+        />
+      ) : null}
 
       <div className="grid grid-cols-3 gap-3">
         <KartuStat

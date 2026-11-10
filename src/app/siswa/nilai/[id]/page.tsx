@@ -9,6 +9,8 @@ import {
 import { tenggatSudahLewat } from "@/lib/deadline";
 import { belumWaktunyaMulai } from "@/lib/jadwal-ulangan";
 import { formatTanggalWib, formatWaktuWib } from "@/lib/waktu";
+import { ambilPengaturanSoal } from "@/lib/pengaturan-soal";
+import { PemberitahuanSoalDitutup } from "@/components/pemberitahuan-soal";
 
 // ============================================================================
 // Detail nilai ulangan per siswa.
@@ -27,13 +29,17 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
   const searchParams = await props.searchParams;
   const kodeTerbuka = searchParams.kode === "1";
 
-  const { data: ulangan, error: galatUlangan } = await supabase
-    .from("exams")
-    .select(
-      "id, judul, tanggal, kelas_id, access_code, status, tenggat, durasi, nilai_ditampilkan, nilai_selesai, dibuka, exam_classes(kelas_id)",
-    )
-    .eq("id", id)
-    .maybeSingle();
+  const [{ data: ulangan, error: galatUlangan }, pengaturanSoal] =
+    await Promise.all([
+      supabase
+        .from("exams")
+        .select(
+          "id, judul, tanggal, kelas_id, access_code, status, tenggat, durasi, nilai_ditampilkan, nilai_selesai, dibuka, exam_classes(kelas_id)",
+        )
+        .eq("id", id)
+        .maybeSingle(),
+      ambilPengaturanSoal(supabase),
+    ]);
 
   if (galatUlangan || !ulangan) {
     redirect("/siswa/nilai");
@@ -125,6 +131,25 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
   // Ulangan ditutup guru (kolom baru; null = DDL belum jalan → anggap dibuka)
   const dibukaUlangan = dataUlangan.dibuka !== false;
 
+  // Siswa yang sudah memulai ulangan tetap boleh melanjutkan walau saklar
+  // global ditutup (soft close) supaya jawabannya tidak hilang.
+  let punyaSesiUjian = false;
+  if (dataUlangan.status === "akan" && !sudahSubmit) {
+    const { data: sesiUjian } = await supabase
+      .from("exam_sessions")
+      .select("id")
+      .eq("exam_id", id)
+      .eq("siswa_id", siswa.id)
+      .maybeSingle();
+    punyaSesiUjian = Boolean(sesiUjian);
+  }
+
+  // Saklar global "tutup akses soal" (Tahap 41). Nilai yang sudah ada tetap
+  // ditampilkan; hanya tombol mengerjakan yang dinonaktifkan.
+  const soalDitutupGlobal = pengaturanSoal.tutupUlangan;
+  const bolehKerjakan =
+    dibukaUlangan && (!soalDitutupGlobal || punyaSesiUjian);
+
   // Nama kelas untuk subtitle: gabung kolom lama + relasi baru.
   // [] berarti "Semua kelas".
   const daftarKelasId = ambilKelasUlangan(dataUlangan);
@@ -155,7 +180,7 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
   // Badge status
   const badgeStatus =
     dataUlangan.status === "akan" ? (
-      !dibukaUlangan ? (
+      !bolehKerjakan ? (
         <span className="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 ring-1 ring-red-200">
           Ditutup guru
         </span>
@@ -166,6 +191,10 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
       ) : sudahSubmit ? (
         <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
           Sudah dijawab
+        </span>
+      ) : punyaSesiUjian ? (
+        <span className="inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-blue-200">
+          Sedang dikerjakan
         </span>
       ) : (
         <span className="inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-blue-200">
@@ -184,7 +213,7 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
   // Kalau ulangan "akan" dan belum submit → tampilkan form jawaban
   // (hanya kalau ulangan dibuka oleh guru; kalau ditutup, tampilkan pesan)
   if (dataUlangan.status === "akan" && !sudahSubmit) {
-    if (!dibukaUlangan) {
+    if (!bolehKerjakan) {
       return (
         <div className="space-y-6">
           <div>
@@ -203,15 +232,22 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
             </div>
           </div>
 
-          <div className="rounded-2xl bg-red-50 p-5 ring-1 ring-red-100">
-            <p className="text-sm font-medium text-red-700">
-              Ulangan ditutup oleh guru
-            </p>
-            <p className="mt-1 text-xs text-red-600">
-              Ulangan ini sementara tidak bisa dikerjakan. Nanti guru akan
-              membukanya kembali.
-            </p>
-          </div>
+          {soalDitutupGlobal && dibukaUlangan ? (
+            <PemberitahuanSoalDitutup
+              jenis="ulangan"
+              pesan={pengaturanSoal.pesan}
+            />
+          ) : (
+            <div className="rounded-2xl bg-red-50 p-5 ring-1 ring-red-100">
+              <p className="text-sm font-medium text-red-700">
+                Ulangan ditutup oleh guru
+              </p>
+              <p className="mt-1 text-xs text-red-600">
+                Ulangan ini sementara tidak bisa dikerjakan. Nanti guru akan
+                membukanya kembali.
+              </p>
+            </div>
+          )}
         </div>
       );
     }
@@ -265,6 +301,13 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
           </div>
         </div>
 
+        {soalDitutupGlobal && punyaSesiUjian ? (
+          <PemberitahuanSoalDitutup
+            jenis="ulangan"
+            pesan={pengaturanSoal.pesan}
+          />
+        ) : null}
+
         <div className="rounded-2xl bg-white p-5 ring-1 ring-slate-200">
           <h2 className="text-sm font-semibold text-slate-900">
             Mengerjakan Ulangan
@@ -283,7 +326,11 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
             href={`/siswa/ulangan/${id}/konfirmasi`}
             className="mt-3 inline-block rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
           >
-            {belumWaktunya ? "Lihat jadwal →" : "Kerjakan Sekarang →"}
+            {belumWaktunya
+              ? "Lihat jadwal →"
+              : punyaSesiUjian
+                ? "Lanjutkan Pengerjaan →"
+                : "Kerjakan Sekarang →"}
           </Link>
         </div>
       </div>

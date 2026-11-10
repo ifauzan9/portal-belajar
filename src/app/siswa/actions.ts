@@ -31,6 +31,7 @@ import {
 } from "@/lib/lab";
 import { ambilKelasUlangan } from "@/lib/ambil-kelas-ulangan";
 import { belumWaktunyaMulai } from "@/lib/jadwal-ulangan";
+import { ambilPengaturanSoal } from "@/lib/pengaturan-soal";
 
 // ============================================================================
 // Aksi auth siswa (login, logout, ganti password).
@@ -524,6 +525,24 @@ export async function mulaiUjianSiswa(
     return { message: "Ulangan ini sedang ditutup oleh guru." };
   }
 
+  // Saklar global "tutup akses soal" (Tahap 41). Siswa yang sudah punya sesi
+  // tetap boleh lanjut (timer berjalan); yang belum mulai ditolak.
+  const pengaturanSoal = await ambilPengaturanSoal(supabase);
+  if (pengaturanSoal.tutupUlangan) {
+    const { data: sesiAktif } = await supabase
+      .from("exam_sessions")
+      .select("id")
+      .eq("exam_id", examId)
+      .eq("siswa_id", sesi.siswaId)
+      .maybeSingle();
+
+    if (!sesiAktif) {
+      return {
+        message: pengaturanSoal.pesan || "Akses soal sedang ditutup oleh guru.",
+      };
+    }
+  }
+
   if (belumWaktunyaMulai(dataUlangan.tanggal)) {
     return {
       message: "Ulangan belum dimulai. Cek jadwal mulai terlebih dahulu.",
@@ -658,13 +677,30 @@ export async function ambilMasukanUjiUlangan(
   examId: string,
   soalId: string,
 ): Promise<{ masukan: string } | null> {
-  await ambilSesiSiswa();
+  const sesi = await ambilSesiSiswa();
 
   const idExam = String(examId ?? "").trim();
   const idSoal = String(soalId ?? "").trim();
   if (!idExam || !idSoal) return null;
 
   const supabase = await createClient();
+
+  // Saklar global (Tahap 41): input uji hanya boleh diambil siswa yang sudah
+  // punya sesi pengerjaan (sedang mengerjakan). Selebihnya tolak.
+  const pengaturanSoal = await ambilPengaturanSoal(supabase);
+  if (pengaturanSoal.tutupUlangan) {
+    if (!sesi) return null;
+
+    const { data: sesiUjian } = await supabase
+      .from("exam_sessions")
+      .select("id")
+      .eq("exam_id", idExam)
+      .eq("siswa_id", sesi.siswaId)
+      .maybeSingle();
+
+    if (!sesiUjian) return null;
+  }
+
   const { data, error } = await supabase
     .from("exam_questions")
     .select("masukan_uji, jenis, exam_id")

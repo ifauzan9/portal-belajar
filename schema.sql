@@ -4272,3 +4272,84 @@ create policy "Guru baca riwayat lokasi siswa"
 -- ============================================================
 -- Selesai Tahap 40. Tabel baru: "lokasi_riwayat_siswa".
 -- ============================================================
+
+-- ============================================================
+-- TAHAP 41: SAKLAR GLOBAL "TUTUP AKSES SOAL" DI AKUN GURU
+-- ============================================================
+-- Guru bisa menutup akses soal untuk SEMUA siswa sekaligus dari
+-- halaman /guru/pengaturan. Cakupannya:
+--   - tutup_soal_ulangan = true → siswa tidak bisa membuka/memulai soal
+--     ulangan (nilai yang sudah ada tetap bisa dilihat).
+--   - tutup_soal_lab     = true → siswa tidak bisa membuka modul/level
+--     Lab Coding.
+--
+-- Saklar ini TIDAK menghapus saklar per ulangan ("exams.dibuka").
+-- Soal ulangan baru bisa diakses bila KEDUANYA terbuka.
+--
+-- Tabel sengaja satu baris (id = 1) karena portal ini dipakai satu
+-- sekolah. Default false agar perilaku lama tidak berubah.
+--
+-- Catatan keamanan: siswa (anon) hanya boleh membaca status supaya
+-- banner di portal siswa bisa ditampilkan. Perubahan hanya lewat guru
+-- yang login (authenticated).
+create table if not exists public.pengaturan_guru (
+  id integer primary key default 1,
+  tutup_soal_ulangan boolean not null default false,
+  tutup_soal_lab boolean not null default false,
+  pesan_tutup text,
+  diperbarui_at timestamptz not null default now(),
+  constraint pengaturan_guru_satu_baris check (id = 1)
+);
+
+insert into public.pengaturan_guru (id)
+values (1)
+on conflict (id) do nothing;
+
+alter table public.pengaturan_guru enable row level security;
+
+-- Guru (authenticated): baca & ubah pengaturan.
+drop policy if exists "Guru kelola pengaturan" on public.pengaturan_guru;
+create policy "Guru kelola pengaturan"
+  on public.pengaturan_guru for all
+  to authenticated
+  using (true)
+  with check (true);
+
+-- Siswa (anon): hanya baca, untuk banner "akses soal ditutup".
+drop policy if exists "Anon baca pengaturan" on public.pengaturan_guru;
+create policy "Anon baca pengaturan"
+  on public.pengaturan_guru for select
+  to anon
+  using (true);
+
+grant select, insert, update on table public.pengaturan_guru
+  to authenticated;
+grant select on table public.pengaturan_guru to anon;
+grant all privileges on table public.pengaturan_guru to service_role;
+
+-- ============================================================
+-- Selesai Tahap 41. Tabel baru: "pengaturan_guru".
+-- ============================================================
+
+-- ============================================================
+-- TAHAP 42: SAKLAR TUTUP PER MODUL LAB CODING
+-- ============================================================
+-- Tombol "Tutup modul" / "Buka modul" di /guru/lab (per modul), seperti
+-- saklar per ulangan di /guru/ulangan.
+--
+--   dibuka = true  (default) → modul & semua levelnya bisa dibuka siswa.
+--   dibuka = false           → siswa tidak bisa membuka modul maupun levelnya
+--                              (termasuk lewat URL langsung). Progres dan
+--                              hasil yang sudah tersimpan tetap aman.
+--
+-- Saklar global "tutup akses soal" (pengaturan_guru.tutup_soal_lab) tetap
+-- berlaku: modul bisa dibuka siswa hanya kalau KEDUANYA terbuka.
+alter table public.coding_lessons
+  add column if not exists dibuka boolean not null default true;
+
+comment on column public.coding_lessons.dibuka is
+  'false = modul lab ditutup guru; siswa tidak bisa membuka modul/level';
+
+-- ============================================================
+-- Selesai Tahap 42. Kolom baru: "coding_lessons.dibuka".
+-- ============================================================

@@ -9,6 +9,11 @@ import { belumWaktunyaMulai } from "@/lib/jadwal-ulangan";
 import { sudahTampil } from "@/lib/jadwal-pengumuman";
 import { tugasDibuka } from "@/lib/tugas";
 import {
+  ambilPengaturanSoal,
+  ulanganBolehDiakses,
+} from "@/lib/pengaturan-soal";
+import { PemberitahuanSoalDitutup } from "@/components/pemberitahuan-soal";
+import {
   formatTanggalJamPendekWib,
   formatTanggalWib,
 } from "@/lib/waktu";
@@ -52,12 +57,14 @@ export default async function DashboardSiswaPage() {
   const [
     hasilUlangan,
     hasilSubmit,
+    hasilSesi,
     hasilTugas,
     hasilTugasSubmit,
     hasilPengumuman,
     hasilLessonLab,
     hasilLatihanLab,
     hasilSelesaiLab,
+    pengaturanSoal,
   ] = await Promise.all([
     supabase
       .from("exams")
@@ -67,6 +74,10 @@ export default async function DashboardSiswaPage() {
     supabase
       .from("exam_submissions")
       .select("exam_id, nilai_total")
+      .eq("siswa_id", siswa.id),
+    supabase
+      .from("exam_sessions")
+      .select("exam_id")
       .eq("siswa_id", siswa.id),
     supabase
       .from("assignments")
@@ -83,13 +94,14 @@ export default async function DashboardSiswaPage() {
       ),
     supabase
       .from("coding_lessons")
-      .select("id, judul, urutan, coding_lesson_classes(kelas_id)"),
+      .select("id, judul, urutan, dibuka, coding_lesson_classes(kelas_id)"),
     supabase.from("coding_exercises").select("id, lesson_id"),
     admin
       .from("coding_submissions")
       .select("exercise_id")
       .eq("siswa_id", siswa.id)
       .eq("pernah_benar", true),
+    ambilPengaturanSoal(supabase),
   ]);
 
   const mapSubmit = new Map(
@@ -97,6 +109,10 @@ export default async function DashboardSiswaPage() {
       (s as { exam_id: string }).exam_id,
       s as { nilai_total: number },
     ]),
+  );
+
+  const setSesi = new Set(
+    (hasilSesi.data ?? []).map((s) => (s as { exam_id: string }).exam_id),
   );
 
   const daftarUlangan = (hasilUlangan.data ?? [])
@@ -156,16 +172,22 @@ export default async function DashboardSiswaPage() {
           deadlineLewat,
           belumWaktunya,
           dibuka: dibukaRow,
+          bolehSoal: ulanganBolehDiakses(pengaturanSoal, dibukaRow),
+          punyaSesi: setSesi.has(row.id),
           sudahSubmit,
         },
       ];
     });
 
   // Ulangan yang bisa dikerjakan (status "akan", belum submit, belum lewat,
-  // dan dibuka oleh guru)
+  // serta masih dibuka oleh guru — baik saklar per ulangan maupun global).
   const ulanganAktif = daftarUlangan.filter(
     (u) =>
-      u.status === "akan" && !u.sudahSubmit && !u.deadlineLewat && u.dibuka,
+      u.status === "akan" &&
+      !u.sudahSubmit &&
+      !u.deadlineLewat &&
+      u.dibuka &&
+      (u.bolehSoal || u.punyaSesi),
   );
 
   const nilaiTerisi = daftarUlangan.filter((u) => u.nilai !== null);
@@ -241,8 +263,25 @@ export default async function DashboardSiswaPage() {
     ),
   );
 
+  // Kolom `dibuka` baru ada setelah Tahap 42. Kalau belum, fallback ke select
+  // lama supaya dashboard tetap jalan dan semua modul dianggap terbuka.
+  let dataLessonLab: unknown = hasilLessonLab.data;
+  if (hasilLessonLab.error) {
+    const fallbackLesson = await supabase
+      .from("coding_lessons")
+      .select("id, judul, urutan, coding_lesson_classes(kelas_id)");
+    dataLessonLab = fallbackLesson.data;
+  }
+
+  // Modul yang ditutup guru (Tahap 42) tidak ditawarkan di dashboard.
+  const modulLabDitutup = new Set(
+    ((dataLessonLab ?? []) as { id: string; dibuka?: boolean | null }[])
+      .filter((lesson) => lesson.dibuka === false)
+      .map((lesson) => lesson.id),
+  );
+
   const progresLab = hitungProgresLab(
-    (hasilLessonLab.data ?? []) as {
+    (dataLessonLab ?? []) as {
       id: string;
       judul: string;
       urutan: number;
@@ -253,12 +292,16 @@ export default async function DashboardSiswaPage() {
     siswa.kelas_id,
   );
 
+  const modulTerbuka = progresLab.modul.filter(
+    (modul) => !modulLabDitutup.has(modul.id),
+  );
+
   // Modul yang sedang dikerjakan (sudah mulai, belum tuntas), maksimal 2.
-  const modulBerjalan = progresLab.modul
+  const modulBerjalan = modulTerbuka
     .filter((modul) => modul.total > 0 && modul.selesai > 0 && modul.selesai < modul.total)
     .slice(0, 2);
 
-  const modulPertama = progresLab.modul.find((modul) => modul.total > 0) ?? null;
+  const modulPertama = modulTerbuka.find((modul) => modul.total > 0) ?? null;
 
   const inisial = siswa.nama_siswa
     .split(/\s+/)
@@ -293,13 +336,24 @@ export default async function DashboardSiswaPage() {
               <IkonTugas className="h-4 w-4" />
               Kerjakan Tugas
             </TombolHero>
-            <Link
-              href="/siswa/lab"
-              className="inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-emerald-800/40 px-4 py-2 text-sm font-semibold text-white ring-1 ring-white/30 transition hover:bg-emerald-800/60"
-            >
-              <IkonLab className="h-4 w-4" />
-              Lab Coding
-            </Link>
+            {pengaturanSoal.tutupLab ? (
+              <span
+                aria-disabled="true"
+                title="Akses Lab Coding ditutup oleh guru."
+                className="inline-flex min-h-10 cursor-not-allowed items-center gap-1.5 rounded-xl bg-emerald-950/30 px-4 py-2 text-sm font-semibold text-emerald-100/70 ring-1 ring-white/20"
+              >
+                <IkonLab className="h-4 w-4" />
+                Lab Coding ditutup
+              </span>
+            ) : (
+              <Link
+                href="/siswa/lab"
+                className="inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-emerald-800/40 px-4 py-2 text-sm font-semibold text-white ring-1 ring-white/30 transition hover:bg-emerald-800/60"
+              >
+                <IkonLab className="h-4 w-4" />
+                Lab Coding
+              </Link>
+            )}
           </>
         }
       >
@@ -318,6 +372,20 @@ export default async function DashboardSiswaPage() {
           </span>
         </div>
       </HeroSiswa>
+
+      {pengaturanSoal.tutupUlangan && pengaturanSoal.tutupLab ? (
+        <PemberitahuanSoalDitutup
+          jenis="keduanya"
+          pesan={pengaturanSoal.pesan}
+        />
+      ) : pengaturanSoal.tutupUlangan ? (
+        <PemberitahuanSoalDitutup
+          jenis="ulangan"
+          pesan={pengaturanSoal.pesan}
+        />
+      ) : pengaturanSoal.tutupLab ? (
+        <PemberitahuanSoalDitutup jenis="lab" pesan={pengaturanSoal.pesan} />
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <KartuStat
@@ -381,7 +449,12 @@ export default async function DashboardSiswaPage() {
           />
 
           <div className="mt-4 space-y-2">
-            {modulBerjalan.length > 0 ? (
+            {pengaturanSoal.tutupLab ? (
+              <p className="rounded-xl bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-800 ring-1 ring-amber-200">
+                🔒 Modul lab sementara ditutup oleh guru. Progresmu tetap
+                tersimpan.
+              </p>
+            ) : modulBerjalan.length > 0 ? (
               modulBerjalan.map((modul) => (
                 <Link
                   key={modul.id}
@@ -404,9 +477,14 @@ export default async function DashboardSiswaPage() {
                   </span>
                 </Link>
               ))
-            ) : progresLab.persen === 100 ? (
+            ) : modulTerbuka.length === 0 ? (
+              <p className="rounded-xl bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-800 ring-1 ring-amber-200">
+                🔒 Semua modul lab sedang ditutup oleh guru. Progresmu tetap
+                tersimpan.
+              </p>
+            ) : modulTerbuka.every((m) => m.total > 0 && m.selesai === m.total) ? (
               <p className="rounded-xl bg-emerald-50 px-3 py-2.5 text-sm font-medium text-emerald-800 ring-1 ring-emerald-200">
-                🎉 Semua modul lab sudah tuntas. Kerja bagus!
+                🎉 Semua modul lab yang dibuka sudah tuntas. Kerja bagus!
               </p>
             ) : modulPertama ? (
               <Link
@@ -464,7 +542,11 @@ export default async function DashboardSiswaPage() {
                   ) : null}
                 </span>
                 <span className="shrink-0 text-xs font-semibold text-blue-700">
-                  {u.belumWaktunya ? "Lihat jadwal →" : "Kerjakan →"}
+                  {u.belumWaktunya
+                    ? "Lihat jadwal →"
+                    : u.punyaSesi
+                      ? "Lanjutkan →"
+                      : "Kerjakan →"}
                 </span>
               </Link>
             ))}
@@ -541,6 +623,10 @@ export default async function DashboardSiswaPage() {
                 </span>
                 <span className="flex shrink-0 items-center gap-2">
                   {u.status === "akan" && !u.dibuka ? (
+                    <Badge varian="bahaya">Ditutup guru</Badge>
+                  ) : u.status === "akan" && u.punyaSesi ? (
+                    <Badge varian="info">Sedang dikerjakan</Badge>
+                  ) : u.status === "akan" && !u.bolehSoal ? (
                     <Badge varian="bahaya">Ditutup guru</Badge>
                   ) : u.status === "akan" &&
                     !u.sudahSubmit &&
@@ -667,26 +753,49 @@ export default async function DashboardSiswaPage() {
             </span>
           </Link>
 
-          <Link
-            href="/siswa/lab"
-            className="group flex items-center gap-3 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 p-5 text-white transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-emerald-600/25"
-          >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15">
-              <IkonLab className="h-5 w-5" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold">Lab Coding</span>
-              <span className="mt-0.5 block text-xs text-emerald-50">
-                Latihan Python bertingkat di browser.
-              </span>
-            </span>
-            <span
-              aria-hidden="true"
-              className="shrink-0 text-emerald-100 transition group-hover:translate-x-0.5 group-hover:text-white"
+          {pengaturanSoal.tutupLab ? (
+            <div
+              aria-disabled="true"
+              title="Akses Lab Coding ditutup oleh guru."
+              className="flex cursor-not-allowed items-center gap-3 rounded-2xl bg-slate-200 p-5 text-slate-500 ring-1 ring-slate-300"
             >
-              →
-            </span>
-          </Link>
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-300/70">
+                <IkonLab className="h-5 w-5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold">
+                  Lab Coding ditutup
+                </span>
+                <span className="mt-0.5 block text-xs">
+                  Guru menutup akses sementara.
+                </span>
+              </span>
+              <span aria-hidden="true" className="shrink-0 text-slate-400">
+                🔒
+              </span>
+            </div>
+          ) : (
+            <Link
+              href="/siswa/lab"
+              className="group flex items-center gap-3 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 p-5 text-white transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-emerald-600/25"
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15">
+                <IkonLab className="h-5 w-5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold">Lab Coding</span>
+                <span className="mt-0.5 block text-xs text-emerald-50">
+                  Latihan Python bertingkat di browser.
+                </span>
+              </span>
+              <span
+                aria-hidden="true"
+                className="shrink-0 text-emerald-100 transition group-hover:translate-x-0.5 group-hover:text-white"
+              >
+                →
+              </span>
+            </Link>
+          )}
 
           <Link
             href="/siswa/komputer"

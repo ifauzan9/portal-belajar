@@ -4,6 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { ambilKelasUlangan } from "@/lib/ambil-kelas-ulangan";
 import { tenggatSudahLewat } from "@/lib/deadline";
 import { belumWaktunyaMulai } from "@/lib/jadwal-ulangan";
+import {
+  ambilPengaturanSoal,
+  ulanganBolehDiakses,
+} from "@/lib/pengaturan-soal";
+import { PemberitahuanSoalDitutup } from "@/components/pemberitahuan-soal";
 import { Kartu, KartuJudul } from "@/components/ui/kartu";
 import { KartuStat } from "@/components/ui/kartu-stat";
 import { Badge } from "@/components/ui/badge";
@@ -28,12 +33,17 @@ type StatusView = {
 function statusUlangan(u: {
   status: "akan" | "sudah";
   dibuka: boolean;
+  bolehSoal: boolean;
   deadlineLewat: boolean;
   sudahSubmit: boolean;
   belumWaktunya: boolean;
+  punyaSesi: boolean;
 }): StatusView {
   if (u.status === "akan") {
     if (!u.dibuka) return { label: "Ditutup guru", varian: "bahaya" };
+    if (u.punyaSesi && !u.deadlineLewat)
+      return { label: "Sedang dikerjakan", varian: "info" };
+    if (!u.bolehSoal) return { label: "Ditutup guru", varian: "bahaya" };
     if (u.deadlineLewat) return { label: "Lewat tenggat", varian: "netral" };
     if (u.sudahSubmit)
       return { label: "Sudah dikerjakan", varian: "sukses" };
@@ -52,9 +62,15 @@ function bisaDikerjakan(u: {
   sudahSubmit: boolean;
   deadlineLewat: boolean;
   dibuka: boolean;
+  bolehSoal: boolean;
+  punyaSesi: boolean;
 }): boolean {
   return (
-    u.status === "akan" && !u.sudahSubmit && !u.deadlineLewat && u.dibuka
+    u.status === "akan" &&
+    !u.sudahSubmit &&
+    !u.deadlineLewat &&
+    (u.bolehSoal || u.punyaSesi) &&
+    u.dibuka
   );
 }
 
@@ -62,20 +78,29 @@ export default async function UlanganSiswaPage() {
   const { siswa, kelas } = await requireSiswa();
   const supabase = await createClient();
 
-  const [hasilUlangan, hasilSubmit] = await Promise.all([
-    supabase
-      .from("exams")
-      .select(
-        "id, judul, kelas_id, tanggal, status, tenggat, durasi, dibuka, exam_classes(kelas_id)",
-      ),
-    supabase
-      .from("exam_submissions")
-      .select("exam_id")
-      .eq("siswa_id", siswa.id),
-  ]);
+  const [hasilUlangan, hasilSubmit, hasilSesi, pengaturanSoal] =
+    await Promise.all([
+      supabase
+        .from("exams")
+        .select(
+          "id, judul, kelas_id, tanggal, status, tenggat, durasi, dibuka, exam_classes(kelas_id)",
+        ),
+      supabase
+        .from("exam_submissions")
+        .select("exam_id")
+        .eq("siswa_id", siswa.id),
+      supabase
+        .from("exam_sessions")
+        .select("exam_id")
+        .eq("siswa_id", siswa.id),
+      ambilPengaturanSoal(supabase),
+    ]);
 
   const setSubmit = new Set(
     (hasilSubmit.data ?? []).map((s) => (s as { exam_id: string }).exam_id),
+  );
+  const setSesi = new Set(
+    (hasilSesi.data ?? []).map((s) => (s as { exam_id: string }).exam_id),
   );
 
   const daftar = (hasilUlangan.data ?? []).flatMap((u) => {
@@ -116,6 +141,8 @@ export default async function UlanganSiswaPage() {
         tenggat: row.tenggat,
         durasi: row.durasi,
         dibuka: dibukaRow,
+        bolehSoal: ulanganBolehDiakses(pengaturanSoal, dibukaRow),
+        punyaSesi: setSesi.has(row.id),
         deadlineLewat,
         belumWaktunya,
         sudahSubmit: setSubmit.has(row.id),
@@ -150,13 +177,22 @@ export default async function UlanganSiswaPage() {
         <h1 className="text-2xl font-semibold text-slate-900">Ulangan</h1>
         <p className="mt-1 text-sm text-slate-500">
           {kelas?.nama_kelas ?? "Belum ada kelas"} ·{" "}
-          {jumlahBisa > 0
-            ? `${jumlahBisa} ulangan bisa dikerjakan`
-            : jumlahTerjadwal > 0
-              ? `${jumlahTerjadwal} ulangan dijadwalkan`
-              : "Tidak ada ulangan yang menunggu"}
+          {pengaturanSoal.tutupUlangan
+            ? "Akses soal ditutup guru"
+            : jumlahBisa > 0
+              ? `${jumlahBisa} ulangan bisa dikerjakan`
+              : jumlahTerjadwal > 0
+                ? `${jumlahTerjadwal} ulangan dijadwalkan`
+                : "Tidak ada ulangan yang menunggu"}
         </p>
       </div>
+
+      {pengaturanSoal.tutupUlangan ? (
+        <PemberitahuanSoalDitutup
+          jenis="ulangan"
+          pesan={pengaturanSoal.pesan}
+        />
+      ) : null}
 
       <div className="grid grid-cols-3 gap-3">
         <KartuStat
@@ -231,7 +267,11 @@ export default async function UlanganSiswaPage() {
                           href={`/siswa/ulangan/${u.id}/konfirmasi`}
                           className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-blue-500"
                         >
-                          {u.belumWaktunya ? "Lihat jadwal" : "Kerjakan"}
+                          {u.belumWaktunya
+                            ? "Lihat jadwal"
+                            : u.punyaSesi
+                              ? "Lanjutkan"
+                              : "Kerjakan"}
                         </Link>
                       ) : u.sudahSubmit ? (
                         <Link

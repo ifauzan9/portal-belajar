@@ -6,6 +6,8 @@ import { ambilKelasUlangan } from "@/lib/ambil-kelas-ulangan";
 import { tenggatSudahLewat } from "@/lib/deadline";
 import { belumWaktunyaMulai, sisaMenitUjian } from "@/lib/jadwal-ulangan";
 import { formatTanggalWib, formatWaktuWib } from "@/lib/waktu";
+import { ambilPengaturanSoal } from "@/lib/pengaturan-soal";
+import { PemberitahuanSoalDitutup } from "@/components/pemberitahuan-soal";
 import { Badge } from "@/components/ui/badge";
 import { Kartu } from "@/components/ui/kartu";
 import { Notifikasi } from "@/components/ui/notifikasi";
@@ -76,7 +78,7 @@ export default async function KonfirmasiUlanganPage({
     redirect("/siswa/ulangan");
   }
 
-  const [hasilSoal, hasilSubmit, hasilSesi] = await Promise.all([
+  const [hasilSoal, hasilSubmit, hasilSesi, pengaturanSoal] = await Promise.all([
     supabase
       .from("exam_questions")
       .select("*", { count: "exact", head: true })
@@ -93,6 +95,7 @@ export default async function KonfirmasiUlanganPage({
       .eq("exam_id", id)
       .eq("siswa_id", siswa.id)
       .maybeSingle(),
+    ambilPengaturanSoal(supabase),
   ]);
 
   const jumlahSoal = hasilSoal.count ?? 0;
@@ -110,9 +113,14 @@ export default async function KonfirmasiUlanganPage({
     status === "akan" && belumWaktunyaMulai(dataUlangan.tanggal);
   const sudahSubmit = Boolean(submit);
   const sedangMengerjakan = Boolean(sesi) && !sudahSubmit;
+  // Saklar global (Tahap 41): menutup untuk siswa yang BELUM memulai.
+  // Siswa yang sudah memulai tetap boleh melanjutkan agar tidak kehilangan
+  // jawaban yang sudah ditulis.
+  const ditutupGlobal = pengaturanSoal.tutupUlangan && !sesi;
   const bisaMulai =
     status === "akan" &&
     dibuka &&
+    !ditutupGlobal &&
     !deadlineLewat &&
     !belumMulai &&
     !sudahSubmit &&
@@ -133,6 +141,9 @@ export default async function KonfirmasiUlanganPage({
       return { label: "Selesai", varian: "sukses" as const };
     }
     if (!dibuka) {
+      return { label: "Ditutup guru", varian: "bahaya" as const };
+    }
+    if (ditutupGlobal) {
       return { label: "Ditutup guru", varian: "bahaya" as const };
     }
     if (deadlineLewat) {
@@ -229,6 +240,11 @@ export default async function KonfirmasiUlanganPage({
           Ulangan ini sementara tidak bisa dikerjakan. Nanti guru akan
           membukanya kembali.
         </Notifikasi>
+      ) : ditutupGlobal ? (
+        <PemberitahuanSoalDitutup
+          jenis="ulangan"
+          pesan={pengaturanSoal.pesan}
+        />
       ) : deadlineLewat ? (
         <Notifikasi varian="gagal" judul="Tenggat sudah lewat">
           Waktu pengumpulan sudah habis. Hubungi gurumu kalau ada masalah.

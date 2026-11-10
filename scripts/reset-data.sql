@@ -7,6 +7,12 @@
 --   - coding_lessons, coding_exercises
 --   - komputer_lessons, komputer_challenges
 --
+-- DIPERTAHANKAN (konfigurasi):
+--   - pengaturan_guru (saklar "tutup akses soal", Tahap 41)
+--     Sengaja TIDAK dihapus: ini pengaturan, bukan data operasional.
+--     Baris 1 direset ke default (akses soal terbuka) supaya siswa tidak
+--     terjebak "ditutup guru" setelah reset.
+--
 -- DIHAPUS:
 --   - siswa & akun siswa, kelas
 --   - ulangan + soal + jawaban + nilai + probe
@@ -60,6 +66,31 @@ delete from public.students;
 
 -- Kelas (terakhir; target kelas modul lab ikut terhapus)
 delete from public.classes;
+
+-- Pengaturan portal: bukan data operasional, jadi barisnya dipertahankan.
+-- Cukup kembalikan saklar ke default "terbuka".
+do $$
+begin
+  if to_regclass('public.pengaturan_guru') is not null then
+    update public.pengaturan_guru
+       set tutup_soal_ulangan = false,
+           tutup_soal_lab = false,
+           pesan_tutup = null,
+           diperbarui_at = now()
+     where id = 1;
+  end if;
+
+  -- Modul lab: pastikan semua terbuka lagi setelah reset (Tahap 42).
+  if exists (
+    select 1
+      from information_schema.columns
+     where table_schema = 'public'
+       and table_name = 'coding_lessons'
+       and column_name = 'dibuka'
+  ) then
+    update public.coding_lessons set dibuka = true;
+  end if;
+end $$;
 
 commit;
 

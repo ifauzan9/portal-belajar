@@ -20,6 +20,7 @@ import {
   type AnalisisBebas,
   type AturanBebas,
 } from "@/lib/lab";
+import { ambilPengaturanSoal } from "@/lib/pengaturan-soal";
 
 // ============================================================================
 // Simpan hasil terakhir siswa untuk satu latihan lab. Dipanggil setiap kali
@@ -91,6 +92,16 @@ export async function simpanHasilLab(input: {
   const supabase = await createClient();
   const admin = createAdminClient();
 
+  // Saklar global "tutup akses soal" (Tahap 41): tolak penyimpanan hasil
+  // lab selama guru menutup akses, walau request dikirim langsung.
+  const pengaturanSoal = await ambilPengaturanSoal(supabase);
+  if (pengaturanSoal.tutupLab) {
+    return {
+      ...HASIL_GAGAL,
+      message: pengaturanSoal.pesan || "Akses Lab Coding sedang ditutup oleh guru.",
+    };
+  }
+
   // Ambil latihan (jenis, target output, aturan, level, modul, input wajib).
   // Kolom input baru ada setelah SQL Tahap 29 dijalankan.
   const KOLOM_LATIHAN = "lesson_id, level, jenis, keluaran_diharapkan, aturan";
@@ -138,6 +149,22 @@ export async function simpanHasilLab(input: {
 
   if (!relevan) {
     return { ...HASIL_GAGAL, message: "Latihan ini tidak tersedia untuk kelasmu." };
+  }
+
+  // Saklar tutup per modul (Tahap 42): modul yang ditutup guru tidak bisa
+  // dikerjakan walau request dikirim langsung. Kalau kolom belum ada, query
+  // gagal dan dianggap terbuka.
+  const { data: aksesModul } = await supabase
+    .from("coding_lessons")
+    .select("dibuka")
+    .eq("id", exerciseRow.lesson_id)
+    .maybeSingle();
+
+  if ((aksesModul as { dibuka?: boolean | null } | null)?.dibuka === false) {
+    return {
+      ...HASIL_GAGAL,
+      message: "Modul Lab Coding ini sedang ditutup oleh guru.",
+    };
   }
 
   // Kunci berurutan: semua level sebelumnya harus sudah pernah benar.
@@ -424,14 +451,38 @@ export async function ambilMasukanUji(
   if (!id) return null;
 
   const supabase = await createClient();
+
+  // Saklar global (Tahap 41): jangan bocorkan input uji saat akses ditutup.
+  const pengaturanSoal = await ambilPengaturanSoal(supabase);
+  if (pengaturanSoal.tutupLab) return null;
+
   const { data } = await supabase
     .from("coding_exercises")
-    .select("masukan_uji")
+    .select("masukan_uji, lesson_id")
     .eq("id", id)
     .maybeSingle();
 
+  const baris = data as {
+    masukan_uji?: string | null;
+    lesson_id?: string | null;
+  } | null;
+
+  // Saklar tutup per modul (Tahap 42): jangan bocorkan input uji modul yang
+  // sedang ditutup guru.
+  if (baris?.lesson_id) {
+    const { data: aksesModul } = await supabase
+      .from("coding_lessons")
+      .select("dibuka")
+      .eq("id", baris.lesson_id)
+      .maybeSingle();
+
+    if ((aksesModul as { dibuka?: boolean | null } | null)?.dibuka === false) {
+      return null;
+    }
+  }
+
   // Kolom bisa belum ada sebelum SQL Tahap 29 dijalankan → data null.
-  const masukan = (data as { masukan_uji?: string | null } | null)?.masukan_uji;
+  const masukan = baris?.masukan_uji;
   if (!masukan || !masukan.trim()) return null;
 
   return { masukan };
