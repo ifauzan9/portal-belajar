@@ -139,6 +139,29 @@ export default async function KelasPage(props: PageProps<"/guru/kelas">) {
     );
   }
 
+  // Informasi login token (Tahap 47). Dibaca terpisah supaya kontrol lain
+  // tetap bisa dipakai walau kolom informasi belum ada.
+  let infoTokenLogin = "";
+  let infoTokenLoginAktif = true;
+  let infoTokenSiap = true;
+  const { data: dataInfoToken, error: errorInfoToken } = await supabase
+    .from("pengaturan_guru")
+    .select("info_token_login, info_token_login_aktif")
+    .eq("id", 1)
+    .maybeSingle();
+
+  if (errorInfoToken) {
+    infoTokenSiap = false;
+  } else {
+    infoTokenLogin = (
+      (dataInfoToken as { info_token_login: string | null } | null)
+        ?.info_token_login ?? ""
+    ).trim();
+    infoTokenLoginAktif =
+      (dataInfoToken as { info_token_login_aktif: boolean | null } | null)
+        ?.info_token_login_aktif !== false;
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -278,6 +301,9 @@ export default async function KelasPage(props: PageProps<"/guru/kelas">) {
           siap={pengaturanTokenSiap}
           modeSiap={modeTokenSiap}
           waktuSiap={waktuTokenSiap}
+          infoTokenLogin={infoTokenLogin}
+          infoTokenLoginAktif={infoTokenLoginAktif}
+          infoTokenSiap={infoTokenSiap}
         />
 
         {semuaKelas.length > 0 ? (

@@ -47,6 +47,8 @@ export function LoginSiswaTabs({
   lewatBatasJam = false,
   infoLogin = "",
   infoLoginAktif = false,
+  infoTokenLogin = "",
+  infoTokenLoginAktif = false,
 }: {
   kelasList: Kelas[];
   siswaList: Siswa[];
@@ -61,6 +63,9 @@ export function LoginSiswaTabs({
   /** Informasi bebas dari guru (Tahap 44). */
   infoLogin?: string;
   infoLoginAktif?: boolean;
+  /** Kalimat guru pengganti keterangan status token (Tahap 47). */
+  infoTokenLogin?: string;
+  infoTokenLoginAktif?: boolean;
 }) {
   const [tab, setTab] = useState<"password" | "token">("password");
 
@@ -86,6 +91,17 @@ export function LoginSiswaTabs({
 
   const teksInfo = infoLoginAktif ? infoLogin.trim() : "";
 
+  // Kalimat guru menggantikan keterangan otomatis. Kalau kalimat sudah diisi
+  // tetapi tidak dipublish, banner disembunyikan sepenuhnya. Bila guru belum
+  // pernah mengisi kalimat, keterangan otomatis tetap dipakai agar info status
+  // token tidak hilang.
+  const teksInfoToken = infoTokenLogin.trim();
+  const teksBannerToken = teksInfoToken
+    ? infoTokenLoginAktif
+      ? teksInfoToken
+      : ""
+    : infoToken;
+
   return (
     <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-sm ring-1 ring-slate-200">
       <h1 className="text-2xl font-semibold text-slate-900">Portal Siswa</h1>
@@ -93,18 +109,22 @@ export function LoginSiswaTabs({
         Masuk untuk mengakses tugas, ulangan, dan materi.
       </p>
 
-      {/* Info batas waktu login token, selalu terlihat. */}
-      <p
-        className={`mt-3 rounded-lg px-3 py-2 text-xs leading-5 ring-1 ${
-          !bolehIsiToken
-            ? "bg-red-50 text-red-700 ring-red-200"
-            : otomatis
-              ? "bg-amber-50 text-amber-800 ring-amber-200"
-              : "bg-emerald-50 text-emerald-700 ring-emerald-200"
-        }`}
-      >
-        {infoToken}
-      </p>
+      {/* Info batas waktu login token. Kalau guru mempublish kalimat sendiri
+          (Tahap 47), kalimat itu yang tampil. Kalau kalimat sudah diisi tetapi
+          tidak dipublish, banner ini kosong sama sekali. */}
+      {teksBannerToken ? (
+        <p
+          className={`mt-3 whitespace-pre-line break-words rounded-lg px-3 py-2 text-xs leading-5 ring-1 ${
+            !bolehIsiToken
+              ? "bg-red-50 text-red-700 ring-red-200"
+              : otomatis
+                ? "bg-amber-50 text-amber-800 ring-amber-200"
+                : "bg-emerald-50 text-emerald-700 ring-emerald-200"
+          }`}
+        >
+          {teksBannerToken}
+        </p>
+      ) : null}
 
       {/* Informasi bebas dari guru (Tahap 44). Baris baru dipertahankan. */}
       {teksInfo ? (

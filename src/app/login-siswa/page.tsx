@@ -30,6 +30,8 @@ export default async function LoginSiswaPage() {
   let tokenLoginTutupWaktu = WAKTU_TUTUP_TOKEN_LOGIN_DEFAULT;
   let infoLogin = "";
   let infoLoginAktif = false;
+  let infoTokenLogin = "";
+  let infoTokenLoginAktif = false;
 
   try {
     const admin = createAdminClient();
@@ -57,6 +59,10 @@ export default async function LoginSiswaPage() {
     // Informasi bebas dari guru (Tahap 44).
     infoLogin = pengaturan.infoLogin;
     infoLoginAktif = pengaturan.infoLoginAktif;
+
+    // Kalimat khusus login token (Tahap 47).
+    infoTokenLogin = pengaturan.infoTokenLogin;
+    infoTokenLoginAktif = pengaturan.infoTokenLoginAktif;
   } catch (err) {
     console.error("Gagal memuat data untuk login siswa:", err);
   }
@@ -72,6 +78,8 @@ export default async function LoginSiswaPage() {
         lewatBatasJam={lewatWaktuTutupTokenLogin(tokenLoginTutupWaktu)}
         infoLogin={infoLogin}
         infoLoginAktif={infoLoginAktif}
+        infoTokenLogin={infoTokenLogin}
+        infoTokenLoginAktif={infoTokenLoginAktif}
       />
     </div>
   );

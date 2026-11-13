@@ -3,7 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { requireGuru } from "@/lib/require-guru";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { TokenLoginMode } from "@/lib/pengaturan-soal";
+import {
+  MAKS_INFO_TOKEN_LOGIN,
+  type TokenLoginMode,
+} from "@/lib/pengaturan-soal";
 
 export async function addKelas(
   _prevState: { message: string | null },
@@ -350,6 +353,64 @@ export async function setTokenLoginWaktuTutup(
 
   return {
     message: `Token akan tertutup otomatis pukul ${waktu} WIB setiap hari.`,
+    sukses: true,
+  };
+}
+
+// Simpan kalimat informasi khusus login token (Tahap 47).
+//
+// Saat aktif dan teksnya tidak kosong, kalimat ini MENGGANTIKAN keterangan
+// otomatis status token di /login-siswa. Saat tidak aktif, banner keterangan
+// login token disembunyikan sepenuhnya (teks tidak dihapus).
+export async function simpanInfoTokenLogin(
+  _prevState: HasilTokenLogin,
+  formData: FormData,
+): Promise<HasilTokenLogin> {
+  const info = String(formData.get("info_token_login") ?? "").trim();
+  const aktif = formData.get("info_token_login_aktif") === "on";
+
+  if (info.length > MAKS_INFO_TOKEN_LOGIN) {
+    return {
+      message: `Informasi terlalu panjang (maks ${MAKS_INFO_TOKEN_LOGIN} karakter).`,
+    };
+  }
+
+  await requireGuru();
+  const admin = createAdminClient();
+
+  const { error } = await admin.from("pengaturan_guru").upsert(
+    {
+      id: 1,
+      info_token_login: info || null,
+      info_token_login_aktif: aktif,
+      diperbarui_at: new Date().toISOString(),
+    },
+    { onConflict: "id" },
+  );
+
+  if (error) {
+    console.error("Gagal menyimpan informasi login token:", error.message);
+    const kolomBelumAda =
+      error.message.includes("info_token_login") ||
+      error.code === "42703" ||
+      error.code === "PGRST204";
+
+    return {
+      message: kolomBelumAda
+        ? "Kolom informasi login token belum ada. Jalankan schema.sql Tahap 47 di Supabase."
+        : `Gagal menyimpan informasi: ${error.message}`,
+    };
+  }
+
+  revalidatePath("/guru/kelas");
+  revalidatePath("/login-siswa");
+
+  return {
+    message: aktif
+      ? info
+        ? "Informasi login token dipublish ke halaman login siswa."
+        : "Pengaturan disimpan. Isi kalimatnya agar tampil di halaman login."
+      : "Informasi login token disembunyikan dari halaman login siswa.",
     sukses: true,
   };
 }

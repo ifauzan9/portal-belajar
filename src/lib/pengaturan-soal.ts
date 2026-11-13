@@ -24,6 +24,9 @@ export const MAKS_PESAN_TUTUP = 200;
 /** Batas panjang informasi bebas di halaman login siswa (Tahap 44). */
 export const MAKS_INFO_LOGIN = 400;
 
+/** Batas panjang kalimat khusus login token di halaman login (Tahap 47). */
+export const MAKS_INFO_TOKEN_LOGIN = 300;
+
 /** Cara guru mengelola buka/tutup login token (Tahap 45). */
 export type TokenLoginMode = "otomatis" | "manual";
 
@@ -45,6 +48,10 @@ export type PengaturanSoal = {
   infoLogin: string;
   /** Saklar tampil/sembunyi informasi login tanpa menghapus teksnya. */
   infoLoginAktif: boolean;
+  /** Kalimat guru pengganti keterangan otomatis login token (Tahap 47). */
+  infoTokenLogin: string;
+  /** false = sembunyikan banner login token sepenuhnya (bila kalimat sudah diisi). */
+  infoTokenLoginAktif: boolean;
   /** Pesan yang ditampilkan ke siswa (sudah diisi default bila kosong). */
   pesan: string;
   /** false = tabel belum ada (DDL Tahap 41 belum dijalankan). */
@@ -59,6 +66,8 @@ const defaultTerbuka: PengaturanSoal = {
   tokenLoginTutupWaktu: WAKTU_TUTUP_TOKEN_LOGIN_DEFAULT,
   infoLogin: "",
   infoLoginAktif: true,
+  infoTokenLogin: "",
+  infoTokenLoginAktif: true,
   pesan: PESAN_TUTUP_DEFAULT,
   siap: false,
 };
@@ -71,6 +80,8 @@ type BarisPengaturan = {
   token_login_tutup_waktu: string | null;
   info_login_siswa: string | null;
   info_login_siswa_aktif: boolean | null;
+  info_token_login: string | null;
+  info_token_login_aktif: boolean | null;
   pesan_tutup: string | null;
 };
 
@@ -107,6 +118,10 @@ function rapikanInfo(nilai: string | null | undefined): string {
   return String(nilai ?? "").trim().slice(0, MAKS_INFO_LOGIN);
 }
 
+function rapikanInfoToken(nilai: string | null | undefined): string {
+  return String(nilai ?? "").trim().slice(0, MAKS_INFO_TOKEN_LOGIN);
+}
+
 /**
  * Baca pengaturan akses soal. Selalu aman dipanggil: bila tabel belum ada
  * (schema Tahap 41 belum dijalankan) hasilnya "semua terbuka".
@@ -117,22 +132,22 @@ function rapikanInfo(nilai: string | null | undefined): string {
 export async function ambilPengaturanSoal(
   supabase: SupabaseClient,
 ): Promise<PengaturanSoal> {
-  // 1) Skema terbaru (Tahap 41 + 43 + 44 + 45 + 46).
-  const v46 = await supabase
+  // 1) Skema terbaru (Tahap 41 + 43 + 44 + 45 + 46 + 47).
+  const v47 = await supabase
     .from("pengaturan_guru")
     .select(
-      "tutup_soal_ulangan, tutup_soal_lab, token_login_dibuka, token_login_mode, token_login_tutup_waktu, info_login_siswa, info_login_siswa_aktif, pesan_tutup",
+      "tutup_soal_ulangan, tutup_soal_lab, token_login_dibuka, token_login_mode, token_login_tutup_waktu, info_login_siswa, info_login_siswa_aktif, info_token_login, info_token_login_aktif, pesan_tutup",
     )
     .eq("id", 1)
     .maybeSingle();
 
-  if (!v46.error) {
-    if (!v46.data) {
+  if (!v47.error) {
+    if (!v47.data) {
       // Tabel ada tetapi baris id = 1 belum dibuat → semua default.
       return { ...defaultTerbuka, siap: true };
     }
 
-    const baris = v46.data as unknown as BarisPengaturan;
+    const baris = v47.data as unknown as BarisPengaturan;
 
     return {
       tutupUlangan: baris.tutup_soal_ulangan === true,
@@ -143,12 +158,48 @@ export async function ambilPengaturanSoal(
       tokenLoginTutupWaktu: rapikanWaktuTutup(baris.token_login_tutup_waktu),
       infoLogin: rapikanInfo(baris.info_login_siswa),
       infoLoginAktif: baris.info_login_siswa_aktif !== false,
+      infoTokenLogin: rapikanInfoToken(baris.info_token_login),
+      infoTokenLoginAktif: baris.info_token_login_aktif !== false,
       pesan: rapikanPesan(baris.pesan_tutup),
       siap: true,
     };
   }
 
-  // 2) Kolom Tahap 46 belum ada → baca skema Tahap 45.
+  // 2) Kolom Tahap 47 belum ada → baca skema Tahap 46.
+  const v46 = await supabase
+    .from("pengaturan_guru")
+    .select(
+      "tutup_soal_ulangan, tutup_soal_lab, token_login_dibuka, token_login_mode, token_login_tutup_waktu, info_login_siswa, info_login_siswa_aktif, pesan_tutup",
+    )
+    .eq("id", 1)
+    .maybeSingle();
+
+  if (!v46.error) {
+    if (!v46.data) {
+      return { ...defaultTerbuka, siap: true };
+    }
+
+    const baris = v46.data as unknown as Omit<
+      BarisPengaturan,
+      "info_token_login" | "info_token_login_aktif"
+    >;
+
+    return {
+      tutupUlangan: baris.tutup_soal_ulangan === true,
+      tutupLab: baris.tutup_soal_lab === true,
+      tokenLoginDibuka: baris.token_login_dibuka !== false,
+      tokenLoginMode: rapikanMode(baris.token_login_mode),
+      tokenLoginTutupWaktu: rapikanWaktuTutup(baris.token_login_tutup_waktu),
+      infoLogin: rapikanInfo(baris.info_login_siswa),
+      infoLoginAktif: baris.info_login_siswa_aktif !== false,
+      infoTokenLogin: "",
+      infoTokenLoginAktif: true,
+      pesan: rapikanPesan(baris.pesan_tutup),
+      siap: true,
+    };
+  }
+
+  // 3) Kolom Tahap 46 belum ada → baca skema Tahap 45.
   const v45 = await supabase
     .from("pengaturan_guru")
     .select(
@@ -164,7 +215,9 @@ export async function ambilPengaturanSoal(
 
     const baris = v45.data as unknown as Omit<
       BarisPengaturan,
-      "token_login_tutup_waktu"
+      | "token_login_tutup_waktu"
+      | "info_token_login"
+      | "info_token_login_aktif"
     >;
 
     return {
@@ -175,12 +228,14 @@ export async function ambilPengaturanSoal(
       tokenLoginTutupWaktu: WAKTU_TUTUP_TOKEN_LOGIN_DEFAULT,
       infoLogin: rapikanInfo(baris.info_login_siswa),
       infoLoginAktif: baris.info_login_siswa_aktif !== false,
+      infoTokenLogin: "",
+      infoTokenLoginAktif: true,
       pesan: rapikanPesan(baris.pesan_tutup),
       siap: true,
     };
   }
 
-  // 3) Kolom Tahap 45 belum ada → baca skema Tahap 44.
+  // 4) Kolom Tahap 45 belum ada → baca skema Tahap 44.
   const v44 = await supabase
     .from("pengaturan_guru")
     .select(
@@ -196,7 +251,10 @@ export async function ambilPengaturanSoal(
 
     const baris = v44.data as unknown as Omit<
       BarisPengaturan,
-      "token_login_mode" | "token_login_tutup_waktu"
+      | "token_login_mode"
+      | "token_login_tutup_waktu"
+      | "info_token_login"
+      | "info_token_login_aktif"
     >;
 
     return {
@@ -207,12 +265,14 @@ export async function ambilPengaturanSoal(
       tokenLoginTutupWaktu: WAKTU_TUTUP_TOKEN_LOGIN_DEFAULT,
       infoLogin: rapikanInfo(baris.info_login_siswa),
       infoLoginAktif: baris.info_login_siswa_aktif !== false,
+      infoTokenLogin: "",
+      infoTokenLoginAktif: true,
       pesan: rapikanPesan(baris.pesan_tutup),
       siap: true,
     };
   }
 
-  // 4) Kolom Tahap 44 belum ada → baca kolom Tahap 43.
+  // 5) Kolom Tahap 44 belum ada → baca kolom Tahap 43.
   const tahap43 = await supabase
     .from("pengaturan_guru")
     .select("tutup_soal_ulangan, tutup_soal_lab, token_login_dibuka, pesan_tutup")
@@ -230,6 +290,8 @@ export async function ambilPengaturanSoal(
       | "token_login_tutup_waktu"
       | "info_login_siswa"
       | "info_login_siswa_aktif"
+      | "info_token_login"
+      | "info_token_login_aktif"
     >;
 
     return {
@@ -240,12 +302,14 @@ export async function ambilPengaturanSoal(
       tokenLoginTutupWaktu: WAKTU_TUTUP_TOKEN_LOGIN_DEFAULT,
       infoLogin: "",
       infoLoginAktif: true,
+      infoTokenLogin: "",
+      infoTokenLoginAktif: true,
       pesan: rapikanPesan(baris.pesan_tutup),
       siap: true,
     };
   }
 
-  // 5) Kolom Tahap 43 juga belum ada → baca kolom Tahap 41 saja.
+  // 6) Kolom Tahap 43 juga belum ada → baca kolom Tahap 41 saja.
   const tahap41 = await supabase
     .from("pengaturan_guru")
     .select("tutup_soal_ulangan, tutup_soal_lab, pesan_tutup")
@@ -263,6 +327,8 @@ export async function ambilPengaturanSoal(
     | "token_login_tutup_waktu"
     | "info_login_siswa"
     | "info_login_siswa_aktif"
+    | "info_token_login"
+    | "info_token_login_aktif"
   >;
 
   return {
@@ -273,6 +339,8 @@ export async function ambilPengaturanSoal(
     tokenLoginTutupWaktu: WAKTU_TUTUP_TOKEN_LOGIN_DEFAULT,
     infoLogin: "",
     infoLoginAktif: true,
+    infoTokenLogin: "",
+    infoTokenLoginAktif: true,
     pesan: rapikanPesan(barisLama.pesan_tutup),
     siap: true,
   };

@@ -140,7 +140,8 @@ export default async function PengaturanGuruPage() {
           >
             halaman Kelas
           </Link>
-          ).{" "}
+          ). Kalimat khusus untuk keterangan status login token diatur di kartu{" "}
+          <em>Login Token Siswa</em> pada halaman Kelas.{" "}
           <Link
             href="/login-siswa"
             target="_blank"

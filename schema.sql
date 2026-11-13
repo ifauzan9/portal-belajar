@@ -4461,3 +4461,33 @@ comment on column public.pengaturan_guru.token_login_tutup_waktu is
 -- ============================================================
 -- Selesai Tahap 46. Kolom baru: "pengaturan_guru.token_login_tutup_waktu".
 -- ============================================================
+
+-- ============================================================
+-- TAHAP 47: INFORMASI KHUSUS LOGIN TOKEN
+-- ============================================================
+-- Guru bisa menulis kalimat sendiri untuk keterangan login token di
+-- /login-siswa, diatur dari kartu "Login Token Siswa" di /guru/kelas.
+--
+--   info_token_login       = kalimat pengganti keterangan otomatis
+--                            (null / kosong = pakai keterangan otomatis).
+--   info_token_login_aktif = false → sembunyikan seluruh banner keterangan
+--                            login token (tanpa menghapus teks).
+--
+-- Hanya berlaku untuk keterangan status token. Informasi umum di halaman
+-- login siswa (Tahap 44) dan login username & password tidak terpengaruh.
+alter table public.pengaturan_guru
+  add column if not exists info_token_login text;
+
+alter table public.pengaturan_guru
+  add column if not exists info_token_login_aktif boolean not null default true;
+
+comment on column public.pengaturan_guru.info_token_login is
+  'Kalimat guru pengganti keterangan otomatis login token di /login-siswa (kosong = otomatis)';
+
+comment on column public.pengaturan_guru.info_token_login_aktif is
+  'false = sembunyikan seluruh banner keterangan login token (bila info_token_login diisi)';
+
+-- ============================================================
+-- Selesai Tahap 47. Kolom baru: "pengaturan_guru.info_token_login"
+-- dan "pengaturan_guru.info_token_login_aktif".
+-- ============================================================

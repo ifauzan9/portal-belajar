@@ -9,6 +9,7 @@ import {
   type HasilTokenLogin,
 } from "@/app/guru/kelas/actions";
 import { Notifikasi } from "@/components/ui/notifikasi";
+import { FormInfoTokenLogin } from "@/components/form-info-token-login";
 import {
   lewatWaktuTutupTokenLogin,
   type TokenLoginMode,
@@ -21,7 +22,9 @@ import {
 //   2. Di mode otomatis, guru bisa mengubah jam tutup (bawaan 18:00 WIB).
 //   3. Saklar induk buka/tutup — di mode otomatis berfungsi sebagai tombol
 //      matikan total kapan pun.
-//   4. Tombol hapus SEMUA token sekaligus.
+//   4. Informasi login token yang bisa ditulis guru sendiri dan dipublish
+//      atau disembunyikan (Tahap 47).
+//   5. Tombol hapus SEMUA token sekaligus.
 //
 // Token per kelas tetap dikelola lewat TokenKelasForm di bawahnya.
 // ============================================================================
@@ -42,6 +45,9 @@ export function KontrolTokenLogin({
   siap,
   modeSiap,
   waktuSiap,
+  infoTokenLogin,
+  infoTokenLoginAktif,
+  infoTokenSiap,
 }: {
   /** Saklar induk Tahap 43: false = ditutup total kapan pun. */
   tokenDibuka: boolean;
@@ -58,6 +64,12 @@ export function KontrolTokenLogin({
   modeSiap: boolean;
   /** false = kolom Tahap 46 belum ada, jam tutup belum bisa diganti. */
   waktuSiap: boolean;
+  /** Kalimat informasi login token dari guru (Tahap 47). */
+  infoTokenLogin: string;
+  /** true = kalimat guru dipublish menggantikan keterangan otomatis. */
+  infoTokenLoginAktif: boolean;
+  /** false = kolom Tahap 47 belum ada, informasi belum bisa diatur. */
+  infoTokenSiap: boolean;
 }) {
   const [stateSaklar, actionSaklar, pendingSaklar] = useActionState<
     HasilTokenLogin,
@@ -330,6 +342,14 @@ export function KontrolTokenLogin({
           {stateSaklar.message}
         </p>
       ) : null}
+
+      <div className="mt-4 border-t border-slate-100 pt-4">
+        <FormInfoTokenLogin
+          info={infoTokenLogin}
+          aktif={infoTokenLoginAktif}
+          siap={infoTokenSiap}
+        />
+      </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
         <form action={actionHapus} className="min-w-0">
