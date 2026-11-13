@@ -115,6 +115,22 @@ export function tanggalWibHariIni(sekarang: Date = new Date()): string {
   return tanggalWibDariDate(sekarang);
 }
 
+/**
+ * Jam dinding WIB (0–23) dari sebuah Date. Dipakai untuk aturan berbasis jam,
+ * mis. batas login token pukul 18.00 WIB (Tahap 43).
+ */
+export function jamWib(sekarang: Date = new Date()): number {
+  if (Number.isNaN(sekarang.getTime())) return 0;
+
+  const jam = new Intl.DateTimeFormat("en-GB", {
+    timeZone: ZONA_WIB,
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).format(sekarang);
+
+  return Number(jam) || 0;
+}
+
 // Ambil tanggal kalender WIB (YYYY-MM-DD) dari sebuah Date.
 // Dipakai untuk sel Excel bertipe tanggal: apa pun zona mesin server, hasilnya
 // tanggal yang terlihat di WIB.

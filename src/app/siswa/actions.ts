@@ -31,7 +31,8 @@ import {
 } from "@/lib/lab";
 import { ambilKelasUlangan } from "@/lib/ambil-kelas-ulangan";
 import { belumWaktunyaMulai } from "@/lib/jadwal-ulangan";
-import { ambilPengaturanSoal } from "@/lib/pengaturan-soal";
+import { ambilPengaturanSoal, JAM_TUTUP_TOKEN_LOGIN } from "@/lib/pengaturan-soal";
+import { jamWib } from "@/lib/waktu";
 
 // ============================================================================
 // Aksi auth siswa (login, logout, ganti password).
@@ -207,12 +208,42 @@ export async function loginSiswaToken(
   const siswaId = String(formData.get("siswa_id") ?? "").trim();
   const token = String(formData.get("token") ?? "").trim().toUpperCase();
 
+  const supabase = await createClient();
+  const admin = createAdminClient();
+
+  // Saklar induk + batas jam login token (Tahap 43). Ditegakkan di server
+  // supaya tetap berlaku walau form di browser diakali. Dicek sebelum
+  // validasi field agar pesan yang muncul sesuai kondisi sebenarnya.
+  const pengaturan = await ambilPengaturanSoal(admin);
+
+  if (!pengaturan.tokenLoginDibuka) {
+    await catatLogLogin(supabase, {
+      siswaId: null,
+      username: `token:${kelasId || "-"}`,
+      berhasil: false,
+      alasan: "token_ditutup_guru",
+    });
+    return {
+      message:
+        "Login dengan token sedang ditutup oleh guru. Gunakan username & password.",
+    };
+  }
+
+  if (jamWib() >= JAM_TUTUP_TOKEN_LOGIN) {
+    await catatLogLogin(supabase, {
+      siswaId: null,
+      username: `token:${kelasId || "-"}`,
+      berhasil: false,
+      alasan: "token_lewat_batas_jam",
+    });
+    return {
+      message: `Login dengan token sudah ditutup (batas pukul ${JAM_TUTUP_TOKEN_LOGIN}.00 WIB). Gunakan username & password.`,
+    };
+  }
+
   if (!kelasId || !siswaId || !token) {
     return { message: "Kelas, nama, dan token wajib dipilih/diisi." };
   }
-
-  const supabase = await createClient();
-  const admin = createAdminClient();
 
   // Pembatasan percobaan (anti brute force) per IP + kelas.
   const kunci = `siswa-token:${await ambilIp()}:${kelasId}`;

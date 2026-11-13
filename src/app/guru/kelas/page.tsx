@@ -4,8 +4,10 @@ import { BarisKelas } from "@/components/baris-kelas";
 import { KepalaUrut } from "@/components/kepala-urut";
 import { TambahKelasForm } from "@/components/tambah-kelas-form";
 import { TokenKelasForm } from "@/components/token-kelas-form";
+import { KontrolTokenLogin } from "@/components/kontrol-token-login";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { JAM_TUTUP_TOKEN_LOGIN } from "@/lib/pengaturan-soal";
 import {
   bacaArah,
   bacaUrutKelas,
@@ -74,6 +76,24 @@ export default async function KelasPage(props: PageProps<"/guru/kelas">) {
   );
   if (tokenError) {
     console.error("Gagal memuat class_tokens:", tokenError.message);
+  }
+
+  // Saklar induk login token (Tahap 43). Kalau kolom belum ada, anggap
+  // terbuka dan tandai belum siap supaya saklar di halaman dinonaktifkan.
+  let tokenLoginDibuka = true;
+  let pengaturanTokenSiap = true;
+  const { data: dataPengaturan, error: errorPengaturan } = await supabase
+    .from("pengaturan_guru")
+    .select("token_login_dibuka")
+    .eq("id", 1)
+    .maybeSingle();
+
+  if (errorPengaturan) {
+    pengaturanTokenSiap = false;
+  } else {
+    tokenLoginDibuka =
+      (dataPengaturan as { token_login_dibuka: boolean | null } | null)
+        ?.token_login_dibuka !== false;
   }
 
   return (
@@ -201,9 +221,17 @@ export default async function KelasPage(props: PageProps<"/guru/kelas">) {
             Buat token untuk tiap kelas. Siswa memakainya di halaman{" "}
             <span className="font-medium text-slate-700">/login-siswa</span>{" "}
             dengan memilih kelas lalu namanya. Mengganti token langsung
-            membatalkan token lama.
+            membatalkan token lama. Login token hanya dibuka sampai pukul{" "}
+            {JAM_TUTUP_TOKEN_LOGIN}.00 WIB dan bisa ditutup total lewat saklar
+            di bawah.
           </p>
         </div>
+
+        <KontrolTokenLogin
+          tokenDibuka={tokenLoginDibuka}
+          jumlahToken={tokenPerKelas.size}
+          siap={pengaturanTokenSiap}
+        />
 
         {semuaKelas.length > 0 ? (
           <div className="grid gap-3 sm:grid-cols-2">

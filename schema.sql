@@ -1360,7 +1360,8 @@ create table if not exists public.login_logs (
   username text not null,
   berhasil boolean not null default false,
   -- alasan gagal: 'password_salah' | 'akun_nonaktif' |
-  -- 'username_tidak_ditemukan' | 'diblokir'. null = berhasil.
+  -- 'username_tidak_ditemukan' | 'diblokir' | 'token_salah' |
+  -- 'token_ditutup_guru' | 'token_lewat_batas_jam'. null = berhasil.
   alasan text,
   ip text,
   user_agent text,
@@ -4352,4 +4353,53 @@ comment on column public.coding_lessons.dibuka is
 
 -- ============================================================
 -- Selesai Tahap 42. Kolom baru: "coding_lessons.dibuka".
+-- ============================================================
+
+-- ============================================================
+-- TAHAP 43: SAKLAR LOGIN TOKEN SISWA
+-- ============================================================
+-- Saklar induk untuk login siswa memakai KODE TOKEN (tab "Kode Token" di
+-- /login-siswa). Disimpan di tabel satu baris "pengaturan_guru" (id = 1),
+-- diatur guru dari /guru/kelas.
+--
+--   token_login_dibuka = true  (default) → login token mengikuti aturan biasa
+--                                          (masih dibatasi jam 18.00 WIB).
+--   token_login_dibuka = false           → login token ditutup total kapan pun.
+--
+-- Login username & password TIDAK terpengaruh kolom ini.
+alter table public.pengaturan_guru
+  add column if not exists token_login_dibuka boolean not null default true;
+
+comment on column public.pengaturan_guru.token_login_dibuka is
+  'false = guru menutup login siswa lewat token kelas (login password tetap jalan)';
+
+-- ============================================================
+-- Selesai Tahap 43. Kolom baru: "pengaturan_guru.token_login_dibuka".
+-- ============================================================
+
+-- ============================================================
+-- TAHAP 44: INFORMASI DI HALAMAN LOGIN SISWA
+-- ============================================================
+-- Guru bisa menulis informasi bebas (pengumuman singkat) yang tampil di
+-- halaman /login-siswa, diatur dari /guru/pengaturan.
+--
+--   info_login_siswa       = teks informasi (null / kosong = tidak tampil).
+--   info_login_siswa_aktif = false → sembunyikan teks tanpa menghapusnya.
+--
+-- Tidak memengaruhi login token (Tahap 43) maupun login username & password.
+alter table public.pengaturan_guru
+  add column if not exists info_login_siswa text;
+
+alter table public.pengaturan_guru
+  add column if not exists info_login_siswa_aktif boolean not null default true;
+
+comment on column public.pengaturan_guru.info_login_siswa is
+  'Teks informasi dari guru yang tampil di halaman /login-siswa (kosong = tidak tampil)';
+
+comment on column public.pengaturan_guru.info_login_siswa_aktif is
+  'false = sembunyikan info_login_siswa tanpa menghapus teksnya';
+
+-- ============================================================
+-- Selesai Tahap 44. Kolom baru: "pengaturan_guru.info_login_siswa"
+-- dan "pengaturan_guru.info_login_siswa_aktif".
 -- ============================================================

@@ -1,5 +1,11 @@
+import { connection } from "next/server";
 import { LoginSiswaTabs } from "@/components/login-siswa-tabs";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  ambilPengaturanSoal,
+  JAM_TUTUP_TOKEN_LOGIN,
+} from "@/lib/pengaturan-soal";
+import { jamWib } from "@/lib/waktu";
 
 type Kelas = { id: string; nama_kelas: string };
 type Siswa = {
@@ -12,8 +18,15 @@ type Siswa = {
 // Daftar kelas + siswa untuk dropdown login token. Dibaca di server
 // (service-role) supaya tabel siswa tidak perlu dibuka ke browser.
 export default async function LoginSiswaPage() {
+  // Status token bergantung pada jam WIB saat request, jadi halaman ini
+  // tidak boleh diprerender statis.
+  await connection();
+
   let kelasList: Kelas[] = [];
   let siswaList: Siswa[] = [];
+  let tokenLoginDibuka = true;
+  let infoLogin = "";
+  let infoLoginAktif = false;
 
   try {
     const admin = createAdminClient();
@@ -30,13 +43,29 @@ export default async function LoginSiswaPage() {
     ]);
     kelasList = (hasilKelas.data ?? []) as Kelas[];
     siswaList = (hasilSiswa.data ?? []) as Siswa[];
+
+    // Saklar induk login token (Tahap 43). Bila tabel/kolom belum ada,
+    // helper mengembalikan nilai aman (terbuka).
+    const pengaturan = await ambilPengaturanSoal(admin);
+    tokenLoginDibuka = pengaturan.tokenLoginDibuka;
+
+    // Informasi bebas dari guru (Tahap 44).
+    infoLogin = pengaturan.infoLogin;
+    infoLoginAktif = pengaturan.infoLoginAktif;
   } catch (err) {
     console.error("Gagal memuat data untuk login siswa:", err);
   }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10">
-      <LoginSiswaTabs kelasList={kelasList} siswaList={siswaList} />
+      <LoginSiswaTabs
+        kelasList={kelasList}
+        siswaList={siswaList}
+        tokenDibuka={tokenLoginDibuka}
+        lewatBatasJam={jamWib() >= JAM_TUTUP_TOKEN_LOGIN}
+        infoLogin={infoLogin}
+        infoLoginAktif={infoLoginAktif}
+      />
     </div>
   );
 }

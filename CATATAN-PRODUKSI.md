@@ -72,6 +72,12 @@ Hal yang disiapkan di database:
 - Kolom **`coding_lessons.dibuka`** (Tahap 42) untuk tombol **Tutup modul** /
   **Buka modul** per modul di halaman **/guru/lab**. Tanpa kolom ini, tombol
   tidak muncul dan semua modul dianggap terbuka.
+- Kolom **`pengaturan_guru.token_login_dibuka`** (Tahap 43) untuk saklar
+  **Tutup/Buka login token** siswa di halaman **/guru/kelas**. Login token tetap
+  otomatis dibatasi sampai pukul 18.00 WIB setiap hari.
+- Kolom **`pengaturan_guru.info_login_siswa`** &
+  **`info_login_siswa_aktif`** (Tahap 44) untuk **Informasi di halaman login
+  siswa** yang diatur dari **/guru/pengaturan**.
 
 ## Batasan Penting
 
@@ -138,6 +144,10 @@ Setelah itu (opsional) samakan **Supabase → Authentication → URL Configurati
 | Soal ulangan masih bisa dibuka walau saklar global menyala | Kemungkinan siswa sudah memulai ulangan sebelum saklar dinyalakan (sesi berjalan sengaja diizinkan agar jawaban tidak hilang), atau saklar per ulangan masih terbuka. Cek juga menu titik-tiga di halaman Ulangan. |
 | Tombol "Tutup modul" di /guru/lab tidak muncul / tidak berpengaruh | Schema Tahap 42 belum dijalankan (kolom `coding_lessons.dibuka` belum ada). Jalankan Tahap 42 di Supabase SQL Editor; halaman akan menampilkan peringatan selama kolom belum ada. |
 | Modul lab masih bisa dibuka siswa walau sudah "Ditutup guru" | Cek juga saklar global di /guru/pengaturan — modul hanya bisa dibuka kalau kolom `dibuka` dan saklar global sama-sama terbuka. Kalau halaman level masih terbuka di tab lama, muat ulang: penjagaan sebenarnya ada di server. |
+| Login token siswa ditolak padahal token benar | Login token hanya dibuka sampai pukul 18.00 WIB (lihat banner kuning di /login-siswa). Cek juga saklar **Login Token Siswa** di /guru/kelas — kalau "Ditutup guru", token tidak bisa dipakai sama sekali. Alasan penolakan tercatat di /guru/log-login. |
+| Saklar "Tutup login token" di /guru/kelas tidak bisa dipakai | Schema Tahap 43 belum dijalankan (kolom `pengaturan_guru.token_login_dibuka` belum ada). Jalankan Tahap 43 di Supabase SQL Editor. |
+| Form "Informasi di halaman login siswa" tidak bisa disimpan | Schema Tahap 44 belum dijalankan (kolom `pengaturan_guru.info_login_siswa` belum ada). Jalankan Tahap 44 di Supabase SQL Editor. |
+| Informasi tidak muncul di /login-siswa | Pastikan centang **Tampilkan di halaman login siswa** aktif dan teksnya tidak kosong. Setelah disimpan, muat ulang halaman login siswa. |
 
 ## Checklist Cepat
 
@@ -152,4 +162,6 @@ Setelah itu (opsional) samakan **Supabase → Authentication → URL Configurati
 - [ ] Modul "Tugas Praktik - Persiapan Ujian Praktik Python" + 1 tantangan panjang sudah ada (Tahap 32 + Tahap 37 + Tahap 38)
 - [ ] Tabel `pengaturan_guru` sudah ada (Tahap 41) — untuk saklar "Tutup akses soal"
 - [ ] Kolom `coding_lessons.dibuka` sudah ada (Tahap 42) — untuk tombol "Tutup modul" di Lab Coding
+- [ ] Kolom `pengaturan_guru.token_login_dibuka` sudah ada (Tahap 43) — untuk saklar login token di /guru/kelas
+- [ ] Kolom `pengaturan_guru.info_login_siswa` & `info_login_siswa_aktif` sudah ada (Tahap 44) — untuk informasi di halaman login siswa
 - [ ] Login guru & siswa sudah dicoba di URL produksi

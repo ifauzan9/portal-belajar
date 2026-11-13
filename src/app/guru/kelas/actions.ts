@@ -192,3 +192,112 @@ export async function hapusTokenKelas(formData: FormData) {
 
   revalidatePath("/guru/kelas");
 }
+
+// ============================================================================
+// Saklar induk login token siswa (Tahap 43).
+//
+// ON  → login token mengikuti aturan biasa (tetap dibatasi jam 18.00 WIB).
+// OFF → login token ditutup total kapan pun. Login password tidak berubah.
+// ============================================================================
+
+export type HasilTokenLogin = {
+  message: string | null;
+  sukses?: boolean;
+};
+
+function pesanTahap43BelumSiap(pesan: string): boolean {
+  return (
+    pesan.includes("token_login_dibuka") ||
+    pesan.includes("pengaturan_guru") ||
+    pesan.includes("42P01") ||
+    pesan.includes("42703") ||
+    pesan.includes("PGRST205")
+  );
+}
+
+export async function setTokenLoginDibuka(
+  _prevState: HasilTokenLogin,
+  formData: FormData,
+): Promise<HasilTokenLogin> {
+  const dibuka = formData.get("dibuka") === "true";
+
+  await requireGuru();
+  const admin = createAdminClient();
+
+  const { error } = await admin.from("pengaturan_guru").upsert(
+    {
+      id: 1,
+      token_login_dibuka: dibuka,
+      diperbarui_at: new Date().toISOString(),
+    },
+    { onConflict: "id" },
+  );
+
+  if (error) {
+    console.error("Gagal menyimpan saklar login token:", error.message);
+    return {
+      message: pesanTahap43BelumSiap(error.message)
+        ? "Kolom pengaturan token belum ada. Jalankan schema.sql Tahap 43 di Supabase."
+        : `Gagal menyimpan saklar: ${error.message}`,
+    };
+  }
+
+  revalidatePath("/guru/kelas");
+  revalidatePath("/login-siswa");
+
+  return {
+    message: dibuka
+      ? "Login token dibuka lagi untuk siswa."
+      : "Login token ditutup untuk semua kelas.",
+    sukses: true,
+  };
+}
+
+// Hapus SEMUA token kelas sekaligus (tombol "Hapus semua token").
+export async function hapusSemuaTokenKelas(
+  _prevState: HasilTokenLogin,
+  formData: FormData,
+): Promise<HasilTokenLogin> {
+  // Penjaga tambahan: tombol harus mengirim konfirmasi eksplisit.
+  if (String(formData.get("konfirmasi") ?? "") !== "hapus-semua") {
+    return { message: "Konfirmasi tidak valid. Coba lagi dari halaman Kelas." };
+  }
+
+  await requireGuru();
+  const admin = createAdminClient();
+
+  // Supabase menolak delete tanpa filter, jadi id diambil dulu lalu dihapus
+  // berdasarkan daftar id tersebut.
+  const { data, error: errorBaca } = await admin
+    .from("class_tokens")
+    .select("id");
+
+  if (errorBaca) {
+    console.error("Gagal membaca token kelas:", errorBaca.message);
+    return { message: `Gagal membaca token: ${errorBaca.message}` };
+  }
+
+  const daftarId = (data ?? []).map((baris) => (baris as { id: string }).id);
+
+  if (daftarId.length === 0) {
+    return { message: "Tidak ada token yang perlu dihapus.", sukses: true };
+  }
+
+  const { error } = await admin
+    .from("class_tokens")
+    .delete()
+    .in("id", daftarId);
+
+  if (error) {
+    console.error("Gagal menghapus semua token:", error.message);
+    return { message: `Gagal menghapus token: ${error.message}` };
+  }
+
+  revalidatePath("/guru/kelas");
+  revalidatePath("/login-siswa");
+
+  return {
+    message: `${daftarId.length} token dihapus. Siswa sementara tidak bisa login lewat token.`,
+    sukses: true,
+  };
+}

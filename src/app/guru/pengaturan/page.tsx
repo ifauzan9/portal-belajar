@@ -2,17 +2,21 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { FormPengaturanSoal } from "@/components/form-pengaturan-soal";
+import { FormInfoLogin } from "@/components/form-info-login";
 import { Kartu, KartuJudul } from "@/components/ui/kartu";
 import { Notifikasi } from "@/components/ui/notifikasi";
-import { MAKS_PESAN_TUTUP } from "@/lib/pengaturan-soal";
+import { MAKS_PESAN_TUTUP, JAM_TUTUP_TOKEN_LOGIN } from "@/lib/pengaturan-soal";
 import { formatWaktuDetikWib } from "@/lib/waktu";
 
 // ============================================================================
-// Halaman pengaturan akun guru (Tahap 41).
+// Halaman pengaturan akun guru.
 //
-// Saat ini berisi satu bagian: saklar global "tutup akses soal" untuk semua
-// siswa (ulangan + Lab Coding). Saklar per ulangan tetap ada di
-// /guru/ulangan (menu titik-tiga → Tutup ulangan).
+// Berisi:
+//   1. Saklar global "tutup akses soal" (Tahap 41).
+//   2. Informasi bebas untuk halaman login siswa (Tahap 44).
+//
+// Saklar per ulangan tetap ada di /guru/ulangan (menu titik-tiga → Tutup
+// ulangan), dan login token diatur di /guru/kelas.
 // ============================================================================
 
 type BarisPengaturan = {
@@ -40,6 +44,23 @@ export default async function PengaturanGuruPage() {
   const siap = !error;
   const baris = (data ?? null) as BarisPengaturan | null;
 
+  // Kolom informasi login siswa (Tahap 44) dibaca terpisah supaya saklar
+  // Tahap 41 tetap bisa dipakai walau DDL Tahap 44 belum dijalankan.
+  const { data: dataInfo, error: errorInfo } = await supabase
+    .from("pengaturan_guru")
+    .select("info_login_siswa, info_login_siswa_aktif")
+    .eq("id", 1)
+    .maybeSingle();
+
+  const siapInfo = !errorInfo;
+  const infoLogin = (
+    (dataInfo as { info_login_siswa: string | null } | null)
+      ?.info_login_siswa ?? ""
+  ).trim();
+  const infoLoginAktif =
+    (dataInfo as { info_login_siswa_aktif: boolean | null } | null)
+      ?.info_login_siswa_aktif !== false;
+
   const tutupUlangan = baris?.tutup_soal_ulangan === true;
   const tutupLab = baris?.tutup_soal_lab === true;
   const pesan = (baris?.pesan_tutup ?? "").trim();
@@ -51,8 +72,8 @@ export default async function PengaturanGuruPage() {
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Pengaturan</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Atur akses siswa ke soal. Perubahan langsung berlaku untuk semua
-          siswa.
+          Atur akses siswa ke soal dan informasi yang tampil di halaman login.
+          Perubahan langsung berlaku untuk semua siswa.
         </p>
       </div>
 
@@ -94,6 +115,41 @@ export default async function PengaturanGuruPage() {
             Terakhir diubah: {formatWaktuDetikWib(diperbaruiAt)}
           </p>
         ) : null}
+      </Kartu>
+
+      <Kartu>
+        <KartuJudul
+          judul="Informasi di halaman login siswa"
+          subjudul="Tampil di /login-siswa untuk semua siswa"
+        />
+
+        <div className="mt-4">
+          <FormInfoLogin
+            info={infoLogin}
+            aktif={infoLoginAktif}
+            siap={siapInfo}
+          />
+        </div>
+
+        <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-500">
+          Informasi ini terpisah dari aturan login token (tutup otomatis pukul{" "}
+          {JAM_TUTUP_TOKEN_LOGIN}.00 WIB dan saklar di{" "}
+          <Link
+            href="/guru/kelas"
+            className="font-medium text-emerald-700 underline hover:no-underline"
+          >
+            halaman Kelas
+          </Link>
+          ).{" "}
+          <Link
+            href="/login-siswa"
+            target="_blank"
+            className="font-medium text-emerald-700 underline hover:no-underline"
+          >
+            Lihat halaman login siswa
+          </Link>
+          .
+        </p>
       </Kartu>
 
       <Kartu className="border-l-4 border-l-slate-300">
