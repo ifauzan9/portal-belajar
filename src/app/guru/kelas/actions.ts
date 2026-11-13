@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireGuru } from "@/lib/require-guru";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { TokenLoginMode } from "@/lib/pengaturan-soal";
 
 export async function addKelas(
   _prevState: { message: string | null },
@@ -194,10 +195,13 @@ export async function hapusTokenKelas(formData: FormData) {
 }
 
 // ============================================================================
-// Saklar induk login token siswa (Tahap 43).
+// Kontrol login token siswa (Tahap 43 + 45).
 //
-// ON  → login token mengikuti aturan biasa (tetap dibatasi jam 18.00 WIB).
-// OFF → login token ditutup total kapan pun. Login password tidak berubah.
+//   Mode otomatis → token terbuka sampai pukul 18.00 WIB, lalu tutup sendiri.
+//   Mode manual   → guru yang membuka/menutup; batas jam tidak berlaku.
+//
+// Saklar `token_login_dibuka` tetap menjadi tombol matikan total kapan pun.
+// Login password tidak terpengaruh.
 // ============================================================================
 
 export type HasilTokenLogin = {
@@ -249,6 +253,54 @@ export async function setTokenLoginDibuka(
     message: dibuka
       ? "Login token dibuka lagi untuk siswa."
       : "Login token ditutup untuk semua kelas.",
+    sukses: true,
+  };
+}
+
+// Ganti mode pengelolaan login token (Tahap 45).
+//   otomatis → tutup sendiri pukul 18.00 WIB.
+//   manual   → guru buka/tutup sendiri, batas jam tidak berlaku.
+export async function setTokenLoginMode(
+  _prevState: HasilTokenLogin,
+  formData: FormData,
+): Promise<HasilTokenLogin> {
+  const mode: TokenLoginMode =
+    formData.get("mode") === "manual" ? "manual" : "otomatis";
+
+  await requireGuru();
+  const admin = createAdminClient();
+
+  const { error } = await admin.from("pengaturan_guru").upsert(
+    {
+      id: 1,
+      token_login_mode: mode,
+      diperbarui_at: new Date().toISOString(),
+    },
+    { onConflict: "id" },
+  );
+
+  if (error) {
+    console.error("Gagal menyimpan mode login token:", error.message);
+    const kolomBelumAda =
+      error.message.includes("token_login_mode") ||
+      error.code === "42703" ||
+      error.code === "PGRST204";
+
+    return {
+      message: kolomBelumAda
+        ? "Kolom mode login token belum ada. Jalankan schema.sql Tahap 45 di Supabase."
+        : `Gagal menyimpan mode: ${error.message}`,
+    };
+  }
+
+  revalidatePath("/guru/kelas");
+  revalidatePath("/login-siswa");
+
+  return {
+    message:
+      mode === "manual"
+        ? "Mode manual aktif: Anda yang membuka/menutup token."
+        : "Mode otomatis aktif: token tutup pukul 18.00 WIB.",
     sukses: true,
   };
 }

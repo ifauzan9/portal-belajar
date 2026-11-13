@@ -7,7 +7,11 @@ import { TokenKelasForm } from "@/components/token-kelas-form";
 import { KontrolTokenLogin } from "@/components/kontrol-token-login";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { JAM_TUTUP_TOKEN_LOGIN } from "@/lib/pengaturan-soal";
+import {
+  JAM_TUTUP_TOKEN_LOGIN,
+  type TokenLoginMode,
+} from "@/lib/pengaturan-soal";
+import { jamWib } from "@/lib/waktu";
 import {
   bacaArah,
   bacaUrutKelas,
@@ -82,18 +86,37 @@ export default async function KelasPage(props: PageProps<"/guru/kelas">) {
   // terbuka dan tandai belum siap supaya saklar di halaman dinonaktifkan.
   let tokenLoginDibuka = true;
   let pengaturanTokenSiap = true;
-  const { data: dataPengaturan, error: errorPengaturan } = await supabase
+  const { data: dataSaklar, error: errorSaklar } = await supabase
     .from("pengaturan_guru")
     .select("token_login_dibuka")
     .eq("id", 1)
     .maybeSingle();
 
-  if (errorPengaturan) {
+  if (errorSaklar) {
     pengaturanTokenSiap = false;
   } else {
     tokenLoginDibuka =
-      (dataPengaturan as { token_login_dibuka: boolean | null } | null)
+      (dataSaklar as { token_login_dibuka: boolean | null } | null)
         ?.token_login_dibuka !== false;
+  }
+
+  // Mode pengelolaan token (Tahap 45). Dibaca terpisah agar saklar Tahap 43
+  // tetap bisa dipakai walau kolom mode belum ada (dianggap otomatis).
+  let tokenLoginMode: TokenLoginMode = "otomatis";
+  let modeTokenSiap = true;
+  const { data: dataMode, error: errorMode } = await supabase
+    .from("pengaturan_guru")
+    .select("token_login_mode")
+    .eq("id", 1)
+    .maybeSingle();
+
+  if (errorMode) {
+    modeTokenSiap = false;
+  } else if (
+    (dataMode as { token_login_mode: string | null } | null)
+      ?.token_login_mode === "manual"
+  ) {
+    tokenLoginMode = "manual";
   }
 
   return (
@@ -221,16 +244,19 @@ export default async function KelasPage(props: PageProps<"/guru/kelas">) {
             Buat token untuk tiap kelas. Siswa memakainya di halaman{" "}
             <span className="font-medium text-slate-700">/login-siswa</span>{" "}
             dengan memilih kelas lalu namanya. Mengganti token langsung
-            membatalkan token lama. Login token hanya dibuka sampai pukul{" "}
-            {JAM_TUTUP_TOKEN_LOGIN}.00 WIB dan bisa ditutup total lewat saklar
-            di bawah.
+            membatalkan token lama. Mode otomatis menutup token pukul{" "}
+            {JAM_TUTUP_TOKEN_LOGIN}.00 WIB; mode manual sepenuhnya Anda atur
+            lewat saklar di bawah.
           </p>
         </div>
 
         <KontrolTokenLogin
           tokenDibuka={tokenLoginDibuka}
+          mode={tokenLoginMode}
+          lewatBatasJam={jamWib() >= JAM_TUTUP_TOKEN_LOGIN}
           jumlahToken={tokenPerKelas.size}
           siap={pengaturanTokenSiap}
+          modeSiap={modeTokenSiap}
         />
 
         {semuaKelas.length > 0 ? (

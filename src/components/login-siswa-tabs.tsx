@@ -7,7 +7,7 @@ import {
   loginSiswaToken,
   type HasilLogin,
 } from "@/app/siswa/actions";
-import { JAM_TUTUP_TOKEN_LOGIN } from "@/lib/pengaturan-soal";
+import { JAM_TUTUP_TOKEN_LOGIN, type TokenLoginMode } from "@/lib/pengaturan-soal";
 import { jamWib } from "@/lib/waktu";
 import { Notifikasi } from "@/components/ui/notifikasi";
 
@@ -39,6 +39,7 @@ export function LoginSiswaTabs({
   kelasList,
   siswaList,
   tokenDibuka = true,
+  mode = "otomatis",
   lewatBatasJam = false,
   infoLogin = "",
   infoLoginAktif = false,
@@ -47,6 +48,8 @@ export function LoginSiswaTabs({
   siswaList: Siswa[];
   /** Saklar induk guru (Tahap 43). */
   tokenDibuka?: boolean;
+  /** Mode pengelolaan guru (Tahap 45). */
+  mode?: TokenLoginMode;
   /** Status saat halaman dirender server. */
   lewatBatasJam?: boolean;
   /** Informasi bebas dari guru (Tahap 44). */
@@ -63,11 +66,17 @@ export function LoginSiswaTabs({
     () => lewatBatasJam,
   );
 
+  // Mode manual mengabaikan jam 18.00: guru yang membuka/menutup.
+  const otomatis = mode !== "manual";
+  const bolehIsiToken = tokenDibuka && (!otomatis || !lewatJam);
+
   const infoToken = !tokenDibuka
     ? "Login dengan token sedang ditutup oleh guru."
-    : lewatJam
-      ? `Login token sudah ditutup (lewat pukul ${JAM_TUTUP_TOKEN_LOGIN}.00 WIB). Gunakan username & password.`
-      : `Login dengan token hanya dibuka sampai pukul ${JAM_TUTUP_TOKEN_LOGIN}.00 WIB.`;
+    : otomatis
+      ? lewatJam
+        ? `Login token sudah ditutup (lewat pukul ${JAM_TUTUP_TOKEN_LOGIN}.00 WIB). Gunakan username & password.`
+        : `Login dengan token hanya dibuka sampai pukul ${JAM_TUTUP_TOKEN_LOGIN}.00 WIB.`
+      : "Login token sedang dibuka oleh guru dan bisa ditutup kapan saja.";
 
   const teksInfo = infoLoginAktif ? infoLogin.trim() : "";
 
@@ -81,9 +90,11 @@ export function LoginSiswaTabs({
       {/* Info batas waktu login token, selalu terlihat. */}
       <p
         className={`mt-3 rounded-lg px-3 py-2 text-xs leading-5 ring-1 ${
-          !tokenDibuka || lewatJam
+          !bolehIsiToken
             ? "bg-red-50 text-red-700 ring-red-200"
-            : "bg-amber-50 text-amber-800 ring-amber-200"
+            : otomatis
+              ? "bg-amber-50 text-amber-800 ring-amber-200"
+              : "bg-emerald-50 text-emerald-700 ring-emerald-200"
         }`}
       >
         {infoToken}
@@ -119,7 +130,7 @@ export function LoginSiswaTabs({
           }`}
         >
           Kode Token
-          {!tokenDibuka || lewatJam ? (
+          {!bolehIsiToken ? (
             <span className="ml-1.5 inline-block rounded-full bg-red-100 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-red-700">
               tutup
             </span>
@@ -133,8 +144,7 @@ export function LoginSiswaTabs({
         <FormToken
           kelasList={kelasList}
           siswaList={siswaList}
-          tokenDibuka={tokenDibuka}
-          lewatJam={lewatJam}
+          bolehIsi={bolehIsiToken}
         />
       )}
 
@@ -211,13 +221,12 @@ function FormPassword() {
 function FormToken({
   kelasList,
   siswaList,
-  tokenDibuka,
-  lewatJam,
+  bolehIsi,
 }: {
   kelasList: Kelas[];
   siswaList: Siswa[];
-  tokenDibuka: boolean;
-  lewatJam: boolean;
+  /** false = token ditutup guru atau sudah lewat batas jam (mode otomatis). */
+  bolehIsi: boolean;
 }) {
   const [state, formAction, pending] = useActionState<HasilLogin, FormData>(
     loginSiswaToken,
@@ -225,9 +234,6 @@ function FormToken({
   );
 
   const [kelasId, setKelasId] = useState("");
-
-  const ditutupGuru = !tokenDibuka;
-  const bolehIsi = !ditutupGuru && !lewatJam;
 
   // Daftar siswa disaring sesuai kelas yang dipilih (data sudah ada di
   // browser, tidak perlu request tambahan).

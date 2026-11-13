@@ -5,7 +5,7 @@ import { FormPengaturanSoal } from "@/components/form-pengaturan-soal";
 import { FormInfoLogin } from "@/components/form-info-login";
 import { Kartu, KartuJudul } from "@/components/ui/kartu";
 import { Notifikasi } from "@/components/ui/notifikasi";
-import { MAKS_PESAN_TUTUP, JAM_TUTUP_TOKEN_LOGIN } from "@/lib/pengaturan-soal";
+import { MAKS_PESAN_TUTUP } from "@/lib/pengaturan-soal";
 import { formatWaktuDetikWib } from "@/lib/waktu";
 
 // ============================================================================
@@ -132,8 +132,8 @@ export default async function PengaturanGuruPage() {
         </div>
 
         <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-500">
-          Informasi ini terpisah dari aturan login token (tutup otomatis pukul{" "}
-          {JAM_TUTUP_TOKEN_LOGIN}.00 WIB dan saklar di{" "}
+          Informasi ini terpisah dari aturan login token (mode otomatis/manual
+          dan saklar di{" "}
           <Link
             href="/guru/kelas"
             className="font-medium text-emerald-700 underline hover:no-underline"

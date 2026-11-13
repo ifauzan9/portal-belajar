@@ -4403,3 +4403,34 @@ comment on column public.pengaturan_guru.info_login_siswa_aktif is
 -- Selesai Tahap 44. Kolom baru: "pengaturan_guru.info_login_siswa"
 -- dan "pengaturan_guru.info_login_siswa_aktif".
 -- ============================================================
+
+-- ============================================================
+-- TAHAP 45: MODE PENGELOLAAN LOGIN TOKEN (OTOMATIS / MANUAL)
+-- ============================================================
+-- Guru memilih cara login token siswa dibuka-tutup, dari /guru/kelas:
+--
+--   'otomatis' (default) → terbuka sampai pukul 18.00 WIB, lalu tertutup
+--                          sendiri setiap hari. Saklar token_login_dibuka
+--                          tetap berfungsi sebagai tombol matikan total.
+--   'manual'             → guru yang menentukan lewat saklar
+--                          token_login_dibuka; batas jam 18.00 tidak berlaku.
+--
+-- Rumus status: terbuka = token_login_dibuka
+--               dan (mode = 'manual' atau jam WIB < 18.00).
+alter table public.pengaturan_guru
+  add column if not exists token_login_mode text not null default 'otomatis';
+
+-- Constraint check dibuat ulang agar aman dijalankan berulang.
+alter table public.pengaturan_guru
+  drop constraint if exists pengaturan_guru_token_login_mode_check;
+
+alter table public.pengaturan_guru
+  add constraint pengaturan_guru_token_login_mode_check
+  check (token_login_mode in ('otomatis', 'manual'));
+
+comment on column public.pengaturan_guru.token_login_mode is
+  'otomatis = tutup sendiri pukul 18.00 WIB; manual = guru buka/tutup lewat saklar';
+
+-- ============================================================
+-- Selesai Tahap 45. Kolom baru: "pengaturan_guru.token_login_mode".
+-- ============================================================

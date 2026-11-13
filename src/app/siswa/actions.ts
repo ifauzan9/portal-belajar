@@ -31,8 +31,11 @@ import {
 } from "@/lib/lab";
 import { ambilKelasUlangan } from "@/lib/ambil-kelas-ulangan";
 import { belumWaktunyaMulai } from "@/lib/jadwal-ulangan";
-import { ambilPengaturanSoal, JAM_TUTUP_TOKEN_LOGIN } from "@/lib/pengaturan-soal";
-import { jamWib } from "@/lib/waktu";
+import {
+  ambilPengaturanSoal,
+  JAM_TUTUP_TOKEN_LOGIN,
+  tokenLoginTerbuka,
+} from "@/lib/pengaturan-soal";
 
 // ============================================================================
 // Aksi auth siswa (login, logout, ganti password).
@@ -211,8 +214,8 @@ export async function loginSiswaToken(
   const supabase = await createClient();
   const admin = createAdminClient();
 
-  // Saklar induk + batas jam login token (Tahap 43). Ditegakkan di server
-  // supaya tetap berlaku walau form di browser diakali. Dicek sebelum
+  // Saklar induk + aturan mode login token (Tahap 43 + 45). Ditegakkan di
+  // server supaya tetap berlaku walau form di browser diakali. Dicek sebelum
   // validasi field agar pesan yang muncul sesuai kondisi sebenarnya.
   const pengaturan = await ambilPengaturanSoal(admin);
 
@@ -229,7 +232,8 @@ export async function loginSiswaToken(
     };
   }
 
-  if (jamWib() >= JAM_TUTUP_TOKEN_LOGIN) {
+  // Mode manual: tidak ada batas jam, guru yang menutup lewat saklar.
+  if (!tokenLoginTerbuka(pengaturan)) {
     await catatLogLogin(supabase, {
       siswaId: null,
       username: `token:${kelasId || "-"}`,
