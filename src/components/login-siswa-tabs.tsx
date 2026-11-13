@@ -7,8 +7,11 @@ import {
   loginSiswaToken,
   type HasilLogin,
 } from "@/app/siswa/actions";
-import { JAM_TUTUP_TOKEN_LOGIN, type TokenLoginMode } from "@/lib/pengaturan-soal";
-import { jamWib } from "@/lib/waktu";
+import {
+  lewatWaktuTutupTokenLogin,
+  WAKTU_TUTUP_TOKEN_LOGIN_DEFAULT,
+  type TokenLoginMode,
+} from "@/lib/pengaturan-soal";
 import { Notifikasi } from "@/components/ui/notifikasi";
 
 type Kelas = { id: string; nama_kelas: string };
@@ -23,10 +26,10 @@ const KELAS_INPUT =
   "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400";
 
 // ---------------------------------------------------------------------------
-// Pemantau batas jam token (Tahap 43).
+// Pemantau jam tutup token (Tahap 43 + 46).
 //
 // Server mengirim status awal, lalu browser menyegarkan diri tiap 30 detik
-// supaya banner & form berubah sendiri begitu pukul 18.00 WIB lewat — tanpa
+// supaya banner & form berubah sendiri begitu jam tutup WIB lewat — tanpa
 // reload. Pola useSyncExternalStore sama seperti komponen JamRealtime.
 // ---------------------------------------------------------------------------
 
@@ -40,6 +43,7 @@ export function LoginSiswaTabs({
   siswaList,
   tokenDibuka = true,
   mode = "otomatis",
+  waktuTutup = WAKTU_TUTUP_TOKEN_LOGIN_DEFAULT,
   lewatBatasJam = false,
   infoLogin = "",
   infoLoginAktif = false,
@@ -50,6 +54,8 @@ export function LoginSiswaTabs({
   tokenDibuka?: boolean;
   /** Mode pengelolaan guru (Tahap 45). */
   mode?: TokenLoginMode;
+  /** Jam tutup otomatis "HH:MM" WIB (Tahap 46). */
+  waktuTutup?: string;
   /** Status saat halaman dirender server. */
   lewatBatasJam?: boolean;
   /** Informasi bebas dari guru (Tahap 44). */
@@ -62,11 +68,11 @@ export function LoginSiswaTabs({
   // saat hydration) dipakai nilai dari server agar markup cocok.
   const lewatJam = useSyncExternalStore(
     subscribe,
-    () => jamWib() >= JAM_TUTUP_TOKEN_LOGIN,
+    () => lewatWaktuTutupTokenLogin(waktuTutup),
     () => lewatBatasJam,
   );
 
-  // Mode manual mengabaikan jam 18.00: guru yang membuka/menutup.
+  // Mode manual mengabaikan jam tutup: guru yang membuka/menutup.
   const otomatis = mode !== "manual";
   const bolehIsiToken = tokenDibuka && (!otomatis || !lewatJam);
 
@@ -74,8 +80,8 @@ export function LoginSiswaTabs({
     ? "Login dengan token sedang ditutup oleh guru."
     : otomatis
       ? lewatJam
-        ? `Login token sudah ditutup (lewat pukul ${JAM_TUTUP_TOKEN_LOGIN}.00 WIB). Gunakan username & password.`
-        : `Login dengan token hanya dibuka sampai pukul ${JAM_TUTUP_TOKEN_LOGIN}.00 WIB.`
+        ? `Login token sudah ditutup (lewat pukul ${waktuTutup} WIB). Gunakan username & password.`
+        : `Login dengan token hanya dibuka sampai pukul ${waktuTutup} WIB.`
       : "Login token sedang dibuka oleh guru dan bisa ditutup kapan saja.";
 
   const teksInfo = infoLoginAktif ? infoLogin.trim() : "";

@@ -195,9 +195,10 @@ export async function hapusTokenKelas(formData: FormData) {
 }
 
 // ============================================================================
-// Kontrol login token siswa (Tahap 43 + 45).
+// Kontrol login token siswa (Tahap 43 + 45 + 46).
 //
-//   Mode otomatis → token terbuka sampai pukul 18.00 WIB, lalu tutup sendiri.
+//   Mode otomatis → token terbuka sampai jam tutup yang diatur, lalu tutup
+//                   sendiri setiap hari (bawaan 18:00 WIB).
 //   Mode manual   → guru yang membuka/menutup; batas jam tidak berlaku.
 //
 // Saklar `token_login_dibuka` tetap menjadi tombol matikan total kapan pun.
@@ -258,7 +259,7 @@ export async function setTokenLoginDibuka(
 }
 
 // Ganti mode pengelolaan login token (Tahap 45).
-//   otomatis → tutup sendiri pukul 18.00 WIB.
+//   otomatis → tutup sendiri pada jam yang diatur (Tahap 46).
 //   manual   → guru buka/tutup sendiri, batas jam tidak berlaku.
 export async function setTokenLoginMode(
   _prevState: HasilTokenLogin,
@@ -300,7 +301,55 @@ export async function setTokenLoginMode(
     message:
       mode === "manual"
         ? "Mode manual aktif: Anda yang membuka/menutup token."
-        : "Mode otomatis aktif: token tutup pukul 18.00 WIB.",
+        : "Mode otomatis aktif: token tertutup sendiri sesuai jam yang diatur.",
+    sukses: true,
+  };
+}
+
+// Simpan jam tutup otomatis login token (Tahap 46).
+export async function setTokenLoginWaktuTutup(
+  _prevState: HasilTokenLogin,
+  formData: FormData,
+): Promise<HasilTokenLogin> {
+  const waktu = String(formData.get("waktu") ?? "").trim();
+
+  // Hanya terima "HH:MM" 24 jam. Jangan diam-diam diganti default supaya
+  // guru sadar kalau inputnya tidak valid.
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(waktu)) {
+    return { message: "Format jam harus HH:MM, contoh 18:00." };
+  }
+
+  await requireGuru();
+  const admin = createAdminClient();
+
+  const { error } = await admin.from("pengaturan_guru").upsert(
+    {
+      id: 1,
+      token_login_tutup_waktu: waktu,
+      diperbarui_at: new Date().toISOString(),
+    },
+    { onConflict: "id" },
+  );
+
+  if (error) {
+    console.error("Gagal menyimpan jam tutup token:", error.message);
+    const kolomBelumAda =
+      error.message.includes("token_login_tutup_waktu") ||
+      error.code === "42703" ||
+      error.code === "PGRST204";
+
+    return {
+      message: kolomBelumAda
+        ? "Kolom jam tutup token belum ada. Jalankan schema.sql Tahap 46 di Supabase."
+        : `Gagal menyimpan jam tutup: ${error.message}`,
+    };
+  }
+
+  revalidatePath("/guru/kelas");
+  revalidatePath("/login-siswa");
+
+  return {
+    message: `Token akan tertutup otomatis pukul ${waktu} WIB setiap hari.`,
     sukses: true,
   };
 }

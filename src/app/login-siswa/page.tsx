@@ -3,10 +3,10 @@ import { LoginSiswaTabs } from "@/components/login-siswa-tabs";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   ambilPengaturanSoal,
-  JAM_TUTUP_TOKEN_LOGIN,
+  lewatWaktuTutupTokenLogin,
+  WAKTU_TUTUP_TOKEN_LOGIN_DEFAULT,
   type TokenLoginMode,
 } from "@/lib/pengaturan-soal";
-import { jamWib } from "@/lib/waktu";
 
 type Kelas = { id: string; nama_kelas: string };
 type Siswa = {
@@ -27,6 +27,7 @@ export default async function LoginSiswaPage() {
   let siswaList: Siswa[] = [];
   let tokenLoginDibuka = true;
   let tokenLoginMode: TokenLoginMode = "otomatis";
+  let tokenLoginTutupWaktu = WAKTU_TUTUP_TOKEN_LOGIN_DEFAULT;
   let infoLogin = "";
   let infoLoginAktif = false;
 
@@ -51,6 +52,7 @@ export default async function LoginSiswaPage() {
     const pengaturan = await ambilPengaturanSoal(admin);
     tokenLoginDibuka = pengaturan.tokenLoginDibuka;
     tokenLoginMode = pengaturan.tokenLoginMode;
+    tokenLoginTutupWaktu = pengaturan.tokenLoginTutupWaktu;
 
     // Informasi bebas dari guru (Tahap 44).
     infoLogin = pengaturan.infoLogin;
@@ -66,7 +68,8 @@ export default async function LoginSiswaPage() {
         siswaList={siswaList}
         tokenDibuka={tokenLoginDibuka}
         mode={tokenLoginMode}
-        lewatBatasJam={jamWib() >= JAM_TUTUP_TOKEN_LOGIN}
+        waktuTutup={tokenLoginTutupWaktu}
+        lewatBatasJam={lewatWaktuTutupTokenLogin(tokenLoginTutupWaktu)}
         infoLogin={infoLogin}
         infoLoginAktif={infoLoginAktif}
       />

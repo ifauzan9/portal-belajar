@@ -5,28 +5,29 @@ import {
   hapusSemuaTokenKelas,
   setTokenLoginDibuka,
   setTokenLoginMode,
+  setTokenLoginWaktuTutup,
   type HasilTokenLogin,
 } from "@/app/guru/kelas/actions";
 import { Notifikasi } from "@/components/ui/notifikasi";
 import {
-  JAM_TUTUP_TOKEN_LOGIN,
+  lewatWaktuTutupTokenLogin,
   type TokenLoginMode,
 } from "@/lib/pengaturan-soal";
-import { jamWib } from "@/lib/waktu";
 
 // ============================================================================
-// Kontrol login token siswa (Tahap 43 + 45) di /guru/kelas.
+// Kontrol login token siswa (Tahap 43 + 45 + 46) di /guru/kelas.
 //
-//   1. Pilih mode: Otomatis (tutup pukul 18.00 WIB) atau Manual (atur sendiri).
-//   2. Saklar induk buka/tutup — di mode otomatis berfungsi sebagai tombol
+//   1. Pilih mode: Otomatis (tutup pada jam yang diatur) atau Manual.
+//   2. Di mode otomatis, guru bisa mengubah jam tutup (bawaan 18:00 WIB).
+//   3. Saklar induk buka/tutup — di mode otomatis berfungsi sebagai tombol
 //      matikan total kapan pun.
-//   3. Tombol hapus SEMUA token sekaligus.
+//   4. Tombol hapus SEMUA token sekaligus.
 //
 // Token per kelas tetap dikelola lewat TokenKelasForm di bawahnya.
 // ============================================================================
 
-// Segarkan status jam tiap 30 detik agar badge berubah sendiri saat pukul
-// 18.00 WIB lewat (server snapshot dipakai saat hydration pertama).
+// Segarkan status jam tiap 30 detik agar badge berubah sendiri saat jam tutup
+// lewat (server snapshot dipakai saat hydration pertama).
 function subscribeWaktu(callback: () => void) {
   const id = setInterval(callback, 30_000);
   return () => clearInterval(id);
@@ -35,15 +36,19 @@ function subscribeWaktu(callback: () => void) {
 export function KontrolTokenLogin({
   tokenDibuka,
   mode,
+  waktuTutup,
   lewatBatasJam,
   jumlahToken,
   siap,
   modeSiap,
+  waktuSiap,
 }: {
   /** Saklar induk Tahap 43: false = ditutup total kapan pun. */
   tokenDibuka: boolean;
   /** Mode pengelolaan Tahap 45. */
   mode: TokenLoginMode;
+  /** Jam tutup otomatis "HH:MM" WIB (Tahap 46). */
+  waktuTutup: string;
   /** Status jam WIB saat halaman dirender (untuk mode otomatis). */
   lewatBatasJam: boolean;
   jumlahToken: number;
@@ -51,6 +56,8 @@ export function KontrolTokenLogin({
   siap: boolean;
   /** false = kolom Tahap 45 belum ada, mode belum bisa diganti. */
   modeSiap: boolean;
+  /** false = kolom Tahap 46 belum ada, jam tutup belum bisa diganti. */
+  waktuSiap: boolean;
 }) {
   const [stateSaklar, actionSaklar, pendingSaklar] = useActionState<
     HasilTokenLogin,
@@ -62,6 +69,11 @@ export function KontrolTokenLogin({
     FormData
   >(setTokenLoginMode, { message: null });
 
+  const [stateWaktu, actionWaktu, pendingWaktu] = useActionState<
+    HasilTokenLogin,
+    FormData
+  >(setTokenLoginWaktuTutup, { message: null });
+
   const [stateHapus, actionHapus, pendingHapus] = useActionState<
     HasilTokenLogin,
     FormData
@@ -70,7 +82,7 @@ export function KontrolTokenLogin({
   // Hitung ulang status jam di browser (server hanya mengirim nilai awal).
   const lewatJam = useSyncExternalStore(
     subscribeWaktu,
-    () => jamWib() >= JAM_TUTUP_TOKEN_LOGIN,
+    () => lewatWaktuTutupTokenLogin(waktuTutup),
     () => lewatBatasJam,
   );
 
@@ -133,8 +145,8 @@ export function KontrolTokenLogin({
             ) : (
               <>
                 {jumlahToken} token aktif. Mode otomatis: token dibuka sampai
-                pukul {JAM_TUTUP_TOKEN_LOGIN}.00 WIB, lalu tertutup sendiri.
-                Login username & password tidak terpengaruh.
+                pukul {waktuTutup} WIB, lalu tertutup sendiri. Login username &
+                password tidak terpengaruh.
               </>
             )}
           </p>
@@ -168,7 +180,7 @@ export function KontrolTokenLogin({
         </form>
       </div>
 
-      {/* Pilih mode: otomatis (jam 18.00) atau manual (guru yang atur). */}
+      {/* Pilih mode: otomatis (jam tutup diatur) atau manual (guru yang atur). */}
       <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
         <form action={actionMode} className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-medium text-slate-600">
@@ -181,10 +193,10 @@ export function KontrolTokenLogin({
               value="otomatis"
               disabled={pendingMode || !modeSiap}
               onClick={(event) => {
-                // Beralih ke otomatis setelah 18.00 langsung menutup token.
+                // Beralih ke otomatis setelah jam tutup langsung menutup token.
                 if (manual && tokenDibuka && lewatJam) {
                   const yakin = window.confirm(
-                    `Sekarang sudah lewat pukul ${JAM_TUTUP_TOKEN_LOGIN}.00 WIB. Beralih ke mode otomatis akan langsung menutup login token. Lanjutkan?`,
+                    `Sekarang sudah lewat pukul ${waktuTutup} WIB. Beralih ke mode otomatis akan langsung menutup login token. Lanjutkan?`,
                   );
                   if (!yakin) event.preventDefault();
                 }
@@ -218,10 +230,56 @@ export function KontrolTokenLogin({
 
         <p className="text-[11px] leading-4 text-slate-500">
           {manual
-            ? "Batas jam 18.00 tidak berlaku di mode manual."
-            : `Buka sampai ${JAM_TUTUP_TOKEN_LOGIN}.00 WIB; tombol di atas tetap bisa mematikan kapan pun.`}
+            ? "Batas jam tidak berlaku di mode manual."
+            : `Buka sampai pukul ${waktuTutup} WIB; tombol di atas tetap bisa mematikan kapan pun.`}
         </p>
       </div>
+
+      {/* Jam tutup hanya relevan di mode otomatis (Tahap 46). */}
+      {!manual ? (
+        <div className="mt-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+          <form
+            action={actionWaktu}
+            className="flex flex-wrap items-end gap-3"
+          >
+            <label
+              htmlFor="token_login_tutup_waktu"
+              className="text-xs font-medium text-slate-600"
+            >
+              Tutup otomatis pukul (WIB)
+              <input
+                id="token_login_tutup_waktu"
+                type="time"
+                name="waktu"
+                required
+                defaultValue={waktuTutup}
+                disabled={pendingWaktu || !waktuSiap}
+                className="mt-1 block rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={pendingWaktu || !waktuSiap}
+              className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {pendingWaktu ? "Menyimpan..." : "Simpan jam"}
+            </button>
+            <p className="text-[11px] leading-4 text-slate-500">
+              Berlaku setiap hari. Token otomatis tertutup mulai jam ini.
+            </p>
+          </form>
+
+          {stateWaktu.message ? (
+            <p
+              className={`mt-2 text-xs ${
+                stateWaktu.sukses ? "text-emerald-600" : "text-red-600"
+              }`}
+            >
+              {stateWaktu.message}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {stateMode.message ? (
         <p
@@ -238,8 +296,7 @@ export function KontrolTokenLogin({
           <Notifikasi varian="peringatan">
             Jalankan <code className="font-mono">schema.sql</code> Tahap 43 di
             Supabase SQL Editor supaya saklar ini aktif. Sebelum itu login token
-            tetap berjalan seperti biasa (dibatasi jam{" "}
-            {JAM_TUTUP_TOKEN_LOGIN}.00 WIB).
+            tetap berjalan seperti biasa (dibatasi jam tutup otomatis).
           </Notifikasi>
         </div>
       ) : null}
@@ -250,6 +307,16 @@ export function KontrolTokenLogin({
             Jalankan <code className="font-mono">schema.sql</code> Tahap 45 di
             Supabase SQL Editor supaya mode Otomatis/Manual bisa diganti.
             Sebelum itu mode otomatis dipakai.
+          </Notifikasi>
+        </div>
+      ) : null}
+
+      {!waktuSiap && !manual ? (
+        <div className="mt-3">
+          <Notifikasi varian="peringatan">
+            Jalankan <code className="font-mono">schema.sql</code> Tahap 46 di
+            Supabase SQL Editor supaya jam tutup otomatis bisa diubah. Sebelum
+            itu dipakai pukul {waktuTutup} WIB.
           </Notifikasi>
         </div>
       ) : null}

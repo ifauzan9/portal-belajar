@@ -6,7 +6,7 @@ import {
   type HasilPengaturanSoal,
 } from "@/app/guru/pengaturan/actions";
 import { Notifikasi } from "@/components/ui/notifikasi";
-import { JAM_TUTUP_TOKEN_LOGIN, MAKS_INFO_LOGIN } from "@/lib/pengaturan-soal";
+import { MAKS_INFO_LOGIN } from "@/lib/pengaturan-soal";
 
 // ============================================================================
 // Form "Informasi di halaman login siswa" (Tahap 44).
@@ -88,7 +88,7 @@ export function FormInfoLogin({
           value={teks}
           onChange={(e) => setTeks(e.target.value)}
           disabled={!siap}
-          placeholder={`Contoh: Login token hanya dibuka sampai pukul ${JAM_TUTUP_TOKEN_LOGIN}.00 WIB. Kalau lupa password, hubungi guru kelas.`}
+          placeholder="Contoh: Login token hanya dibuka sampai pukul 18.00 WIB. Kalau lupa password, hubungi guru kelas."
           className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
         />
         <div className="mt-1 flex items-center justify-between gap-3 text-xs">

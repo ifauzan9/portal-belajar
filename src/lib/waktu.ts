@@ -117,7 +117,7 @@ export function tanggalWibHariIni(sekarang: Date = new Date()): string {
 
 /**
  * Jam dinding WIB (0–23) dari sebuah Date. Dipakai untuk aturan berbasis jam,
- * mis. batas login token pukul 18.00 WIB (Tahap 43).
+ * mis. jadwal atau batas waktu yang diatur guru.
  */
 export function jamWib(sekarang: Date = new Date()): number {
   if (Number.isNaN(sekarang.getTime())) return 0;
@@ -129,6 +129,27 @@ export function jamWib(sekarang: Date = new Date()): number {
   }).format(sekarang);
 
   return Number(jam) || 0;
+}
+
+/**
+ * Menit sejak tengah malam menurut jam dinding WIB (0–1439).
+ * Dipakai untuk aturan yang butuh jam + menit, mis. jam tutup login token
+ * yang bisa diatur guru (Tahap 46).
+ */
+export function menitWib(sekarang: Date = new Date()): number {
+  if (Number.isNaN(sekarang.getTime())) return 0;
+
+  const bagian = new Intl.DateTimeFormat("en-GB", {
+    timeZone: ZONA_WIB,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(sekarang);
+
+  const ambil = (tipe: string) =>
+    Number(bagian.find((b) => b.type === tipe)?.value ?? 0) || 0;
+
+  return (ambil("hour") % 24) * 60 + ambil("minute");
 }
 
 // Ambil tanggal kalender WIB (YYYY-MM-DD) dari sebuah Date.

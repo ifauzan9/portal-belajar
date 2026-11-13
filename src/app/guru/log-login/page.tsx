@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { IkonBuku } from "@/components/ui/ikon-siswa";
 import { formatWaktuDetikWib } from "@/lib/waktu";
-import { JAM_TUTUP_TOKEN_LOGIN } from "@/lib/pengaturan-soal";
 import {
   formatAkurasi,
   formatKoordinat,
@@ -33,7 +32,7 @@ const LABEL_ALASAN: Record<string, string> = {
   token_kelas_belum_dibuat: "Token kelas belum dibuat",
   akun_belum_dibuat: "Akun belum dibuat",
   token_ditutup_guru: "Login token ditutup guru",
-  token_lewat_batas_jam: `Login token lewat pukul ${JAM_TUTUP_TOKEN_LOGIN}.00`,
+  token_lewat_batas_jam: "Login token lewat jam tutup",
 };
 
 type LogRow = {

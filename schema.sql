@@ -4434,3 +4434,30 @@ comment on column public.pengaturan_guru.token_login_mode is
 -- ============================================================
 -- Selesai Tahap 45. Kolom baru: "pengaturan_guru.token_login_mode".
 -- ============================================================
+
+-- ============================================================
+-- TAHAP 46: JAM TUTUP OTOMATIS LOGIN TOKEN BISA DIATUR
+-- ============================================================
+-- Di mode otomatis, guru bisa memilih jam tutup sendiri (bawaan 18:00 WIB).
+-- Format "HH:MM" 24 jam. Contoh: '17:30', '21:00'.
+--
+-- Rumus status: terbuka = token_login_dibuka
+--               dan (mode = 'manual'
+--                    atau jam WIB sekarang < token_login_tutup_waktu).
+alter table public.pengaturan_guru
+  add column if not exists token_login_tutup_waktu text not null default '18:00';
+
+-- Constraint check dibuat ulang agar aman dijalankan berulang.
+alter table public.pengaturan_guru
+  drop constraint if exists pengaturan_guru_token_login_tutup_waktu_check;
+
+alter table public.pengaturan_guru
+  add constraint pengaturan_guru_token_login_tutup_waktu_check
+  check (token_login_tutup_waktu ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$');
+
+comment on column public.pengaturan_guru.token_login_tutup_waktu is
+  'Jam tutup otomatis login token (HH:MM WIB), dipakai saat token_login_mode = otomatis';
+
+-- ============================================================
+-- Selesai Tahap 46. Kolom baru: "pengaturan_guru.token_login_tutup_waktu".
+-- ============================================================

@@ -33,7 +33,6 @@ import { ambilKelasUlangan } from "@/lib/ambil-kelas-ulangan";
 import { belumWaktunyaMulai } from "@/lib/jadwal-ulangan";
 import {
   ambilPengaturanSoal,
-  JAM_TUTUP_TOKEN_LOGIN,
   tokenLoginTerbuka,
 } from "@/lib/pengaturan-soal";
 
@@ -214,7 +213,7 @@ export async function loginSiswaToken(
   const supabase = await createClient();
   const admin = createAdminClient();
 
-  // Saklar induk + aturan mode login token (Tahap 43 + 45). Ditegakkan di
+  // Saklar induk + aturan mode login token (Tahap 43 + 45 + 46). Ditegakkan di
   // server supaya tetap berlaku walau form di browser diakali. Dicek sebelum
   // validasi field agar pesan yang muncul sesuai kondisi sebenarnya.
   const pengaturan = await ambilPengaturanSoal(admin);
@@ -241,7 +240,7 @@ export async function loginSiswaToken(
       alasan: "token_lewat_batas_jam",
     });
     return {
-      message: `Login dengan token sudah ditutup (batas pukul ${JAM_TUTUP_TOKEN_LOGIN}.00 WIB). Gunakan username & password.`,
+      message: `Login dengan token sudah ditutup (batas pukul ${pengaturan.tokenLoginTutupWaktu} WIB). Gunakan username & password.`,
     };
   }
 

@@ -8,10 +8,11 @@ import { KontrolTokenLogin } from "@/components/kontrol-token-login";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
-  JAM_TUTUP_TOKEN_LOGIN,
+  WAKTU_TUTUP_TOKEN_LOGIN_DEFAULT,
+  lewatWaktuTutupTokenLogin,
+  rapikanWaktuTutup,
   type TokenLoginMode,
 } from "@/lib/pengaturan-soal";
-import { jamWib } from "@/lib/waktu";
 import {
   bacaArah,
   bacaUrutKelas,
@@ -117,6 +118,25 @@ export default async function KelasPage(props: PageProps<"/guru/kelas">) {
       ?.token_login_mode === "manual"
   ) {
     tokenLoginMode = "manual";
+  }
+
+  // Jam tutup otomatis (Tahap 46). Kolom belum ada → pakai 18:00 dan tandai
+  // belum siap supaya guru diberi tahu untuk menjalankan DDL Tahap 46.
+  let tokenLoginTutupWaktu = WAKTU_TUTUP_TOKEN_LOGIN_DEFAULT;
+  let waktuTokenSiap = true;
+  const { data: dataWaktu, error: errorWaktu } = await supabase
+    .from("pengaturan_guru")
+    .select("token_login_tutup_waktu")
+    .eq("id", 1)
+    .maybeSingle();
+
+  if (errorWaktu) {
+    waktuTokenSiap = false;
+  } else {
+    tokenLoginTutupWaktu = rapikanWaktuTutup(
+      (dataWaktu as { token_login_tutup_waktu: string | null } | null)
+        ?.token_login_tutup_waktu,
+    );
   }
 
   return (
@@ -244,19 +264,20 @@ export default async function KelasPage(props: PageProps<"/guru/kelas">) {
             Buat token untuk tiap kelas. Siswa memakainya di halaman{" "}
             <span className="font-medium text-slate-700">/login-siswa</span>{" "}
             dengan memilih kelas lalu namanya. Mengganti token langsung
-            membatalkan token lama. Mode otomatis menutup token pukul{" "}
-            {JAM_TUTUP_TOKEN_LOGIN}.00 WIB; mode manual sepenuhnya Anda atur
-            lewat saklar di bawah.
+            membatalkan token lama. Mode otomatis menutup token pada jam yang
+            Anda atur; mode manual sepenuhnya Anda atur lewat saklar di bawah.
           </p>
         </div>
 
         <KontrolTokenLogin
           tokenDibuka={tokenLoginDibuka}
           mode={tokenLoginMode}
-          lewatBatasJam={jamWib() >= JAM_TUTUP_TOKEN_LOGIN}
+          waktuTutup={tokenLoginTutupWaktu}
+          lewatBatasJam={lewatWaktuTutupTokenLogin(tokenLoginTutupWaktu)}
           jumlahToken={tokenPerKelas.size}
           siap={pengaturanTokenSiap}
           modeSiap={modeTokenSiap}
+          waktuSiap={waktuTokenSiap}
         />
 
         {semuaKelas.length > 0 ? (

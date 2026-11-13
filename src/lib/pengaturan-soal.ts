@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { jamWib } from "@/lib/waktu";
+import { menitWib } from "@/lib/waktu";
 
 // ============================================================================
 // Pengaturan global "tutup akses soal" (Tahap 41).
@@ -27,6 +27,9 @@ export const MAKS_INFO_LOGIN = 400;
 /** Cara guru mengelola buka/tutup login token (Tahap 45). */
 export type TokenLoginMode = "otomatis" | "manual";
 
+/** Jam tutup token bawaan bila guru belum mengubah (Tahap 46). */
+export const WAKTU_TUTUP_TOKEN_LOGIN_DEFAULT = "18:00";
+
 export type PengaturanSoal = {
   /** Siswa tidak bisa membuka/memulai soal ulangan. */
   tutupUlangan: boolean;
@@ -34,8 +37,10 @@ export type PengaturanSoal = {
   tutupLab: boolean;
   /** Saklar induk login siswa lewat token kelas (Tahap 43). */
   tokenLoginDibuka: boolean;
-  /** Otomatis (tutup pukul 18.00) atau manual (guru yang menentukan). */
+  /** Otomatis (tutup pada jam tertentu) atau manual (guru yang menentukan). */
   tokenLoginMode: TokenLoginMode;
+  /** Jam tutup otomatis format "HH:MM" WIB (Tahap 46). */
+  tokenLoginTutupWaktu: string;
   /** Informasi bebas dari guru untuk halaman login siswa ("" = kosong). */
   infoLogin: string;
   /** Saklar tampil/sembunyi informasi login tanpa menghapus teksnya. */
@@ -51,6 +56,7 @@ const defaultTerbuka: PengaturanSoal = {
   tutupLab: false,
   tokenLoginDibuka: true,
   tokenLoginMode: "otomatis",
+  tokenLoginTutupWaktu: WAKTU_TUTUP_TOKEN_LOGIN_DEFAULT,
   infoLogin: "",
   infoLoginAktif: true,
   pesan: PESAN_TUTUP_DEFAULT,
@@ -62,13 +68,34 @@ type BarisPengaturan = {
   tutup_soal_lab: boolean | null;
   token_login_dibuka: boolean | null;
   token_login_mode: string | null;
+  token_login_tutup_waktu: string | null;
   info_login_siswa: string | null;
   info_login_siswa_aktif: boolean | null;
   pesan_tutup: string | null;
 };
 
+/** Pola jam 24 jam "HH:MM" (00:00–23:59). */
+const POLA_WAKTU_TUTUP = /^([01]\d|2[0-3]):[0-5]\d$/;
+
 function rapikanMode(nilai: string | null | undefined): TokenLoginMode {
   return nilai === "manual" ? "manual" : "otomatis";
+}
+
+/**
+ * Pastikan nilai jam valid. Postgres tipe `time` mengembalikan "18:00:00",
+ * jadi detiknya dipotong dulu. Nilai rusak → jam bawaan.
+ */
+export function rapikanWaktuTutup(
+  nilai: string | null | undefined,
+): string {
+  const teks = String(nilai ?? "").trim().slice(0, 5);
+  return POLA_WAKTU_TUTUP.test(teks) ? teks : WAKTU_TUTUP_TOKEN_LOGIN_DEFAULT;
+}
+
+/** "HH:MM" → menit sejak tengah malam. */
+function waktuKeMenit(waktu: string): number {
+  const [jam, menit] = rapikanWaktuTutup(waktu).split(":");
+  return Number(jam) * 60 + Number(menit);
 }
 
 function rapikanPesan(nilai: string | null | undefined): string {
@@ -90,7 +117,38 @@ function rapikanInfo(nilai: string | null | undefined): string {
 export async function ambilPengaturanSoal(
   supabase: SupabaseClient,
 ): Promise<PengaturanSoal> {
-  // 1) Skema terbaru (Tahap 41 + 43 + 44 + 45).
+  // 1) Skema terbaru (Tahap 41 + 43 + 44 + 45 + 46).
+  const v46 = await supabase
+    .from("pengaturan_guru")
+    .select(
+      "tutup_soal_ulangan, tutup_soal_lab, token_login_dibuka, token_login_mode, token_login_tutup_waktu, info_login_siswa, info_login_siswa_aktif, pesan_tutup",
+    )
+    .eq("id", 1)
+    .maybeSingle();
+
+  if (!v46.error) {
+    if (!v46.data) {
+      // Tabel ada tetapi baris id = 1 belum dibuat → semua default.
+      return { ...defaultTerbuka, siap: true };
+    }
+
+    const baris = v46.data as unknown as BarisPengaturan;
+
+    return {
+      tutupUlangan: baris.tutup_soal_ulangan === true,
+      tutupLab: baris.tutup_soal_lab === true,
+      // null = kolom ada tapi baris lama belum diisi → anggap terbuka.
+      tokenLoginDibuka: baris.token_login_dibuka !== false,
+      tokenLoginMode: rapikanMode(baris.token_login_mode),
+      tokenLoginTutupWaktu: rapikanWaktuTutup(baris.token_login_tutup_waktu),
+      infoLogin: rapikanInfo(baris.info_login_siswa),
+      infoLoginAktif: baris.info_login_siswa_aktif !== false,
+      pesan: rapikanPesan(baris.pesan_tutup),
+      siap: true,
+    };
+  }
+
+  // 2) Kolom Tahap 46 belum ada → baca skema Tahap 45.
   const v45 = await supabase
     .from("pengaturan_guru")
     .select(
@@ -101,18 +159,20 @@ export async function ambilPengaturanSoal(
 
   if (!v45.error) {
     if (!v45.data) {
-      // Tabel ada tetapi baris id = 1 belum dibuat → semua default.
       return { ...defaultTerbuka, siap: true };
     }
 
-    const baris = v45.data as unknown as BarisPengaturan;
+    const baris = v45.data as unknown as Omit<
+      BarisPengaturan,
+      "token_login_tutup_waktu"
+    >;
 
     return {
       tutupUlangan: baris.tutup_soal_ulangan === true,
       tutupLab: baris.tutup_soal_lab === true,
-      // null = kolom ada tapi baris lama belum diisi → anggap terbuka.
       tokenLoginDibuka: baris.token_login_dibuka !== false,
       tokenLoginMode: rapikanMode(baris.token_login_mode),
+      tokenLoginTutupWaktu: WAKTU_TUTUP_TOKEN_LOGIN_DEFAULT,
       infoLogin: rapikanInfo(baris.info_login_siswa),
       infoLoginAktif: baris.info_login_siswa_aktif !== false,
       pesan: rapikanPesan(baris.pesan_tutup),
@@ -120,7 +180,7 @@ export async function ambilPengaturanSoal(
     };
   }
 
-  // 2) Kolom Tahap 45 belum ada → baca skema Tahap 44.
+  // 3) Kolom Tahap 45 belum ada → baca skema Tahap 44.
   const v44 = await supabase
     .from("pengaturan_guru")
     .select(
@@ -134,13 +194,17 @@ export async function ambilPengaturanSoal(
       return { ...defaultTerbuka, siap: true };
     }
 
-    const baris = v44.data as unknown as Omit<BarisPengaturan, "token_login_mode">;
+    const baris = v44.data as unknown as Omit<
+      BarisPengaturan,
+      "token_login_mode" | "token_login_tutup_waktu"
+    >;
 
     return {
       tutupUlangan: baris.tutup_soal_ulangan === true,
       tutupLab: baris.tutup_soal_lab === true,
       tokenLoginDibuka: baris.token_login_dibuka !== false,
       tokenLoginMode: "otomatis",
+      tokenLoginTutupWaktu: WAKTU_TUTUP_TOKEN_LOGIN_DEFAULT,
       infoLogin: rapikanInfo(baris.info_login_siswa),
       infoLoginAktif: baris.info_login_siswa_aktif !== false,
       pesan: rapikanPesan(baris.pesan_tutup),
@@ -148,7 +212,7 @@ export async function ambilPengaturanSoal(
     };
   }
 
-  // 3) Kolom Tahap 44 belum ada → baca kolom Tahap 43.
+  // 4) Kolom Tahap 44 belum ada → baca kolom Tahap 43.
   const tahap43 = await supabase
     .from("pengaturan_guru")
     .select("tutup_soal_ulangan, tutup_soal_lab, token_login_dibuka, pesan_tutup")
@@ -162,7 +226,10 @@ export async function ambilPengaturanSoal(
 
     const baris = tahap43.data as unknown as Omit<
       BarisPengaturan,
-      "token_login_mode" | "info_login_siswa" | "info_login_siswa_aktif"
+      | "token_login_mode"
+      | "token_login_tutup_waktu"
+      | "info_login_siswa"
+      | "info_login_siswa_aktif"
     >;
 
     return {
@@ -170,6 +237,7 @@ export async function ambilPengaturanSoal(
       tutupLab: baris.tutup_soal_lab === true,
       tokenLoginDibuka: baris.token_login_dibuka !== false,
       tokenLoginMode: "otomatis",
+      tokenLoginTutupWaktu: WAKTU_TUTUP_TOKEN_LOGIN_DEFAULT,
       infoLogin: "",
       infoLoginAktif: true,
       pesan: rapikanPesan(baris.pesan_tutup),
@@ -177,7 +245,7 @@ export async function ambilPengaturanSoal(
     };
   }
 
-  // 4) Kolom Tahap 43 juga belum ada → baca kolom Tahap 41 saja.
+  // 5) Kolom Tahap 43 juga belum ada → baca kolom Tahap 41 saja.
   const tahap41 = await supabase
     .from("pengaturan_guru")
     .select("tutup_soal_ulangan, tutup_soal_lab, pesan_tutup")
@@ -192,6 +260,7 @@ export async function ambilPengaturanSoal(
     BarisPengaturan,
     | "token_login_dibuka"
     | "token_login_mode"
+    | "token_login_tutup_waktu"
     | "info_login_siswa"
     | "info_login_siswa_aktif"
   >;
@@ -201,6 +270,7 @@ export async function ambilPengaturanSoal(
     tutupLab: barisLama.tutup_soal_lab === true,
     tokenLoginDibuka: true,
     tokenLoginMode: "otomatis",
+    tokenLoginTutupWaktu: WAKTU_TUTUP_TOKEN_LOGIN_DEFAULT,
     infoLogin: "",
     infoLoginAktif: true,
     pesan: rapikanPesan(barisLama.pesan_tutup),
@@ -209,26 +279,39 @@ export async function ambilPengaturanSoal(
 }
 
 // ============================================================================
-// Batas jam & mode login token (Tahap 43 + 45).
+// Batas waktu & mode login token (Tahap 43 + 45 + 46).
 //
-// Mode otomatis hanya membuka token sampai pukul 18.00 WIB setiap hari.
-// Mode manual mengabaikan jam: guru yang membuka/menutup lewat saklar.
-// Hitungan jam memakai helper WIB supaya server (UTC) dan browser sama.
+// Mode otomatis hanya membuka token sampai jam tutup yang diatur guru setiap
+// hari (bawaan 18:00 WIB). Mode manual mengabaikan jam: guru yang
+// membuka/menutup lewat saklar. Hitungan jam memakai helper WIB supaya server
+// (UTC) dan browser memberi hasil sama.
 // ============================================================================
 
-export const JAM_TUTUP_TOKEN_LOGIN = 18; // pukul 18.00 WIB
+/** Sudah lewat jam tutup otomatis? (hanya melihat jam, bukan saklar/mode). */
+export function lewatWaktuTutupTokenLogin(
+  waktuTutup: string,
+  sekarang: Date = new Date(),
+): boolean {
+  return menitWib(sekarang) >= waktuKeMenit(waktuTutup);
+}
 
 /**
  * Status akhir login token: saklar guru DAN aturan mode.
  * Dipakai di halaman login, halaman guru, dan Server Action.
  */
 export function tokenLoginTerbuka(
-  pengaturan: Pick<PengaturanSoal, "tokenLoginDibuka" | "tokenLoginMode">,
+  pengaturan: Pick<
+    PengaturanSoal,
+    "tokenLoginDibuka" | "tokenLoginMode" | "tokenLoginTutupWaktu"
+  >,
   sekarang: Date = new Date(),
 ): boolean {
   if (!pengaturan.tokenLoginDibuka) return false;
   if (pengaturan.tokenLoginMode === "manual") return true;
-  return jamWib(sekarang) < JAM_TUTUP_TOKEN_LOGIN;
+  return !lewatWaktuTutupTokenLogin(
+    pengaturan.tokenLoginTutupWaktu,
+    sekarang,
+  );
 }
 
 /** Soal ulangan boleh diakses = saklar global terbuka DAN ulangan dibuka. */
