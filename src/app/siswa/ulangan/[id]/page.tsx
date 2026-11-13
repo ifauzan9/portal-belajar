@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Notifikasi } from "@/components/ui/notifikasi";
 import { IkonBuku } from "@/components/ui/ikon-siswa";
+import { jenisSoalTersedia } from "@/lib/jenis-soal-ulangan";
 
 // ============================================================================
 // Halaman mengerjakan soal ulangan (status "akan dilaksanakan").
@@ -196,7 +197,58 @@ export default async function KerjakanUlanganPage(
       disubmit_at: string;
     };
     const nilaiKode = submit.nilai_kode ?? 0;
-    const adaKode = nilaiKode > 0 || soalList.some((s) => s.jenis === "kode");
+
+    // Kartu nilai mengikuti jenis soal yang ada di ulangan ini.
+    // "Total" selalu tampil paling akhir.
+    const jenisSoal = jenisSoalTersedia(soalList.map((s) => s.jenis));
+    const kartu: {
+      label: string;
+      nilai: number;
+      latar: string;
+      warnaLabel: string;
+      warnaAngka: string;
+      ring: string;
+    }[] = [];
+
+    if (jenisSoal.pg) {
+      kartu.push({
+        label: "Nilai PG",
+        nilai: submit.nilai_pg,
+        latar: "bg-blue-50",
+        warnaLabel: "text-blue-600",
+        warnaAngka: "text-blue-700",
+        ring: "ring-blue-100",
+      });
+    }
+    if (jenisSoal.esai) {
+      kartu.push({
+        label: "Nilai Esai",
+        nilai: submit.nilai_esai,
+        latar: "bg-amber-50",
+        warnaLabel: "text-amber-600",
+        warnaAngka: "text-amber-700",
+        ring: "ring-amber-100",
+      });
+    }
+    if (jenisSoal.kode) {
+      kartu.push({
+        label: "Nilai Kode",
+        nilai: nilaiKode,
+        latar: "bg-emerald-50",
+        warnaLabel: "text-emerald-600",
+        warnaAngka: "text-emerald-700",
+        ring: "ring-emerald-100",
+      });
+    }
+
+    const jumlahKartu = kartu.length + 1; // + Total
+    const kelasGrid =
+      jumlahKartu === 2
+        ? "grid-cols-2"
+        : jumlahKartu === 3
+          ? "grid-cols-3"
+          : "grid-cols-2 sm:grid-cols-4";
+
     return (
       <div className="space-y-6">
         <Kepala judul={dataUlangan.judul} />
@@ -213,31 +265,20 @@ export default async function KerjakanUlanganPage(
 
           {nilaiDitampilkan ? (
             <>
-              <div
-                className={`mt-4 grid gap-3 ${
-                  adaKode ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"
-                }`}
-              >
-                <div className="rounded-xl bg-blue-50 p-3 text-center ring-1 ring-blue-100">
-                  <p className="text-xs text-blue-600">Nilai PG</p>
-                  <p className="text-2xl font-semibold tabular-nums text-blue-700">
-                    {submit.nilai_pg}
-                  </p>
-                </div>
-                <div className="rounded-xl bg-amber-50 p-3 text-center ring-1 ring-amber-100">
-                  <p className="text-xs text-amber-600">Nilai Esai</p>
-                  <p className="text-2xl font-semibold tabular-nums text-amber-700">
-                    {submit.nilai_esai}
-                  </p>
-                </div>
-                {adaKode ? (
-                  <div className="rounded-xl bg-emerald-50 p-3 text-center ring-1 ring-emerald-100">
-                    <p className="text-xs text-emerald-600">Nilai Kode</p>
-                    <p className="text-2xl font-semibold tabular-nums text-emerald-700">
-                      {nilaiKode}
+              <div className={`mt-4 grid gap-3 ${kelasGrid}`}>
+                {kartu.map((k) => (
+                  <div
+                    key={k.label}
+                    className={`rounded-xl p-3 text-center ring-1 ${k.latar} ${k.ring}`}
+                  >
+                    <p className={`text-xs ${k.warnaLabel}`}>{k.label}</p>
+                    <p
+                      className={`text-2xl font-semibold tabular-nums ${k.warnaAngka}`}
+                    >
+                      {k.nilai}
                     </p>
                   </div>
-                ) : null}
+                ))}
                 <div className="rounded-xl bg-slate-100 p-3 text-center ring-1 ring-slate-200">
                   <p className="text-xs text-slate-500">Total</p>
                   <p className="text-2xl font-semibold tabular-nums text-slate-900">
@@ -247,7 +288,7 @@ export default async function KerjakanUlanganPage(
               </div>
 
               <p className="mt-3 text-xs text-slate-500">
-                {submit.nilai_esai === 0 && !adaKode
+                {jenisSoal.esai && submit.nilai_esai === 0
                   ? "Nilai esai masih menunggu penilaian guru."
                   : "Nilai sudah lengkap."}
               </p>

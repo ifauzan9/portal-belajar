@@ -16,6 +16,7 @@ import { gabungNilaiUlangan } from "@/lib/nilai-ulangan";
 import { hitungRanking } from "@/lib/ranking";
 import { ambilDataJawabanUlangan } from "@/lib/ulangan-jawaban";
 import { toggleUlangan } from "@/app/guru/ulangan/actions";
+import { jenisSoalTersedia } from "@/lib/jenis-soal-ulangan";
 
 type SiswaRow = {
   id: string;
@@ -159,6 +160,19 @@ export default async function InputNilaiPage({
   }
 
   const daftarSoal = (soalData ?? []) as SoalReview[];
+
+  // Jenis soal yang ada → dipakai untuk teks info yang sesuai.
+  const jenisSoal = jenisSoalTersedia(daftarSoal.map((s) => s.jenis));
+  const teksInfoNilai =
+    jenisSoal.esai && jenisSoal.kode
+      ? "Nilai PG & kode dihitung otomatis saat siswa submit; nilai esai dinilai manual melalui halaman "
+      : jenisSoal.esai
+        ? "Nilai PG dihitung otomatis saat siswa submit; nilai esai dinilai manual melalui halaman "
+        : jenisSoal.kode && jenisSoal.pg
+          ? "Nilai PG & kode dihitung otomatis saat siswa submit; rincian soal ada di halaman "
+          : jenisSoal.kode
+            ? "Nilai kode dihitung otomatis saat siswa submit; rincian soal ada di halaman "
+            : "Nilai PG dihitung otomatis saat siswa submit; rincian soal ada di halaman ";
 
   // Nilai resmi yang sudah diinput guru + nilai otomatis dari submission.
   // Submission dipakai sebagai cadangan supaya nilai ulangan online tetap
@@ -304,8 +318,7 @@ export default async function InputNilaiPage({
         {dataUlangan.status === "akan" ? (
           <div className="mt-3 rounded-xl bg-blue-50 p-3 text-xs text-blue-700 ring-1 ring-blue-100">
             Ulangan ini berstatus <b>Akan dilaksanakan</b>. Siswa bisa
-            mengerjakan soal secara online. Nilai PG dihitung otomatis saat
-            siswa submit; nilai esai dinilai manual melalui halaman{" "}
+            mengerjakan soal secara online. {teksInfoNilai}
             <Link
               href={`/guru/ulangan/${id}/soal`}
               className="font-medium underline hover:no-underline"

@@ -9,6 +9,7 @@ import {
 } from "@/app/siswa/actions";
 import { Badge } from "@/components/ui/badge";
 import { Notifikasi } from "@/components/ui/notifikasi";
+import { ModalKonfirmasi } from "@/components/ui/modal-konfirmasi";
 import { IkonJam } from "@/components/ui/ikon-siswa";
 import { TeksSoalTerlindungi } from "@/components/teks-soal-terlindungi";
 import {
@@ -113,14 +114,12 @@ export function FormJawaban({
     return () => clearInterval(idInterval);
   }, [tenggat, durasi, mulaiMs]);
 
-  // Auto-submit saat durasi habis
+  // Auto-submit saat durasi habis (tanpa konfirmasi).
   useEffect(() => {
-    if (lewatDurasi && !pending && !state.nilaiTotal) {
-      const form = document.querySelector<HTMLFormElement>(
-        'form[data-jawaban-form="true"]',
-      );
-      form?.requestSubmit();
+    if (lewatDurasi && !pending && !state.nilaiTotal && !kirimRef.current) {
+      void kirimSekarang();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lewatDurasi, pending, state.nilaiTotal]);
 
   // ------------------- KUNCI HALAMAN -------------------
@@ -192,14 +191,28 @@ export function FormJawaban({
 
   const soalKode = soalList.filter((s) => s.jenis === "kode");
 
-  async function tanganiSubmit(e: React.FormEvent<HTMLFormElement>) {
-    if (soalKode.length === 0) return; // form biasa (PG/esai)
+  // ------------------- KONFIRMASI SUBMIT -------------------
+  // Submit selalu lewat modal konfirmasi supaya siswa tidak mengirim
+  // jawaban secara tidak sengaja. Auto-submit (waktu habis) melewatinya.
+  const [konfirmasiTerbuka, setKonfirmasiTerbuka] = useState(false);
 
-    e.preventDefault();
+  // Kirim jawaban tanpa konfirmasi (dipakai setelah user menekan "Ya").
+  async function kirimSekarang() {
     if (pending || menyiapkanKode || kirimRef.current) return;
 
     const form = formRef.current;
     if (!form) return;
+
+    if (soalKode.length === 0) {
+      // Form biasa (PG/esai): kirim langsung.
+      kirimRef.current = true;
+      try {
+        startTransition(() => formAction(new FormData(form)));
+      } finally {
+        kirimRef.current = false;
+      }
+      return;
+    }
 
     kirimRef.current = true;
     setMenyiapkanKode(true);
@@ -226,6 +239,17 @@ export function FormJawaban({
     }
   }
 
+  function tanganiSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault(); // tahan dulu, konfirmasi dulu baru kirim
+    if (pending || menyiapkanKode || kirimRef.current || sudahSubmit) return;
+    setKonfirmasiTerbuka(true);
+  }
+
+  function konfirmasiKirim() {
+    setKonfirmasiTerbuka(false);
+    void kirimSekarang();
+  }
+
   // ------------------- HITUNG PROGRES -------------------
   const totalPoin = soalList.reduce((akum, s) => akum + s.poin, 0);
   const soalPG = soalList.filter((s) => s.jenis === "pg");
@@ -235,6 +259,14 @@ export function FormJawaban({
   const dijawabEsai = soalEsai.filter(
     (s) => jawaban[s.id]?.trim(),
   ).length;
+
+  // Soal yang belum dijawab (PG & esai). Soal kode dinilai dari editor,
+  // jadi tidak dihitung di sini.
+  const belumDijawab = soalList.filter((s) => {
+    if (s.jenis === "pg") return !jawaban[s.id];
+    if (s.jenis === "esai") return !jawaban[s.id]?.trim();
+    return false;
+  });
 
   // Tenggat lokal: jika durasi aktif, hitung sisa dari durasi;
   // jika hanya tenggat (tanpa durasi), hitung sisa dari tenggat.
@@ -584,6 +616,42 @@ export function FormJawaban({
           ) : null}
         </Notifikasi>
       ) : null}
+
+      {/* ---------------- KONFIRMASI KIRIM ---------------- */}
+      <ModalKonfirmasi
+        terbuka={konfirmasiTerbuka}
+        judul="Kirim jawaban sekarang?"
+        konfirmasiLabel="Ya, kumpulkan"
+        batalLabel="Periksa lagi"
+        pending={sedangKirim}
+        onKonfirmasi={konfirmasiKirim}
+        onBatal={() => setKonfirmasiTerbuka(false)}
+      >
+        <p>
+          Setelah dikumpulkan, jawaban <strong>tidak bisa diubah lagi</strong>.
+          Pastikan semua jawaban sudah benar.
+        </p>
+
+        {belumDijawab.length > 0 ? (
+          <div className="mt-3 rounded-lg bg-amber-50 p-3 text-amber-800 ring-1 ring-amber-200">
+            <p className="font-medium">
+              ⚠ Masih ada {belumDijawab.length} soal yang belum dijawab:
+            </p>
+            <p className="mt-1">
+              Soal nomor{" "}
+              {belumDijawab
+                .map((s) => soalList.findIndex((x) => x.id === s.id) + 1)
+                .sort((a, b) => a - b)
+                .join(", ")}
+              .
+            </p>
+          </div>
+        ) : (
+          <p className="mt-3 rounded-lg bg-emerald-50 p-3 text-emerald-800 ring-1 ring-emerald-200">
+            ✅ Semua soal sudah dijawab.
+          </p>
+        )}
+      </ModalKonfirmasi>
     </div>
   );
 }

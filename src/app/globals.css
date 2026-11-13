@@ -346,6 +346,9 @@ body {
 #area-siswa[data-tema="gelap"] .bg-blue-50 {
   background-color: #101f36;
 }
+#area-siswa[data-tema="gelap"] .bg-blue-50\/70 {
+  background-color: #101f36b3;
+}
 #area-siswa[data-tema="gelap"] .bg-blue-100 {
   background-color: #16263f;
 }
@@ -429,6 +432,9 @@ body {
 #area-siswa[data-tema="gelap"] .text-blue-900 {
   color: var(--color-blue-300);
 }
+#area-siswa[data-tema="gelap"] .text-blue-700 {
+  color: var(--color-blue-300);
+}
 #area-siswa[data-tema="gelap"] .text-blue-800 {
   color: var(--color-blue-200);
 }
@@ -443,6 +449,12 @@ body {
 }
 #area-siswa[data-tema="gelap"] .text-violet-700 {
   color: #c4b5fd;
+}
+#area-siswa[data-tema="gelap"] .text-violet-600 {
+  color: var(--color-violet-300);
+}
+#area-siswa[data-tema="gelap"] .text-violet-800 {
+  color: var(--color-violet-200);
 }
 #area-siswa[data-tema="gelap"] .text-green-700 {
   color: var(--color-green-300);
@@ -465,6 +477,9 @@ body {
 }
 #area-siswa[data-tema="gelap"] .text-orange-800 {
   color: var(--color-orange-200);
+}
+#area-siswa[data-tema="gelap"] .text-orange-600 {
+  color: var(--color-orange-400);
 }
 
 /* Ring & garis tepi berwarna muda. */

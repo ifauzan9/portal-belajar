@@ -8,6 +8,7 @@ import {
 } from "@/app/guru/ulangan/actions";
 import { TombolReset } from "@/components/tombol-reset";
 import { formatWaktuWib } from "@/lib/waktu";
+import { jenisSoalTersedia } from "@/lib/jenis-soal-ulangan";
 
 type KodeJawaban = {
   soalId: string;
@@ -114,6 +115,9 @@ export function DaftarJawaban({
 
   const petaSoal = new Map(daftarSoal.map((s) => [s.id, s]));
 
+  // Badge nilai per siswa hanya untuk jenis soal yang ada di ulangan.
+  const jenisSoal = jenisSoalTersedia(daftarSoal.map((s) => s.jenis));
+
   // Siswa yang punya sesi timer tetapi belum submit. Tombol reset tetap
   // ditampilkan supaya guru bisa mengulang timer yang sudah habis.
   const sesiBelumSubmit = daftarSesi.filter(
@@ -202,11 +206,15 @@ export function DaftarJawaban({
                       ⚠ {probeCounts[row.siswa_id]}×
                     </span>
                   ) : null}
-                  <span className="text-blue-600">PG: {row.nilai_pg}</span>
-                  <span className="text-amber-600">
-                    Esai: {row.nilai_esai}
-                  </span>
-                  {row.daftarKode.length > 0 ? (
+                  {jenisSoal.pg ? (
+                    <span className="text-blue-600">PG: {row.nilai_pg}</span>
+                  ) : null}
+                  {jenisSoal.esai ? (
+                    <span className="text-amber-600">
+                      Esai: {row.nilai_esai}
+                    </span>
+                  ) : null}
+                  {jenisSoal.kode ? (
                     <span className="text-emerald-600">
                       Kode: {row.nilai_kode_manual ?? row.nilai_kode}
                       {row.nilai_kode_manual !== null ? " (manual)" : ""}

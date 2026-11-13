@@ -11,6 +11,13 @@ import { belumWaktunyaMulai } from "@/lib/jadwal-ulangan";
 import { formatTanggalWib, formatWaktuWib } from "@/lib/waktu";
 import { ambilPengaturanSoal } from "@/lib/pengaturan-soal";
 import { PemberitahuanSoalDitutup } from "@/components/pemberitahuan-soal";
+import { jenisSoalTersedia } from "@/lib/jenis-soal-ulangan";
+import { ambilRankingUlangan } from "@/lib/ranking-ulangan";
+import {
+  KartuPosisiRanking,
+  PapanPeringkatSiswa,
+  RankingTertahan,
+} from "@/components/ranking-siswa";
 
 // ============================================================================
 // Detail nilai ulangan per siswa.
@@ -176,6 +183,32 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
     .maybeSingle();
 
   const nilaiSaya = (nilaiData as { nilai: number } | null)?.nilai ?? null;
+
+  // Jenis soal yang ada di ulangan ini. Menentukan kartu nilai mana yang
+  // ditampilkan (ulangan koding-saja tidak perlu kartu PG/Esai).
+  const { data: soalJenis } = await supabase
+    .from("exam_questions")
+    .select("jenis")
+    .eq("exam_id", id);
+  const jenisSoal = jenisSoalTersedia(
+    (soalJenis as { jenis: string }[] | null)?.map((s) => s.jenis),
+  );
+
+  // Ranking seluruh siswa. Hanya dimuat bila memang akan ditampilkan:
+  //  - ulangan "akan" + sudah submit, atau
+  //  - ulangan "sudah" + kode akses sudah benar.
+  const perluRanking =
+    (dataUlangan.status === "akan" && sudahSubmit) ||
+    (dataUlangan.status === "sudah" && kodeTerbuka);
+  const ranking = perluRanking
+    ? await ambilRankingUlangan(
+        supabase,
+        id,
+        daftarKelasId,
+        mapIdKeNama,
+        siswa.id,
+      )
+    : null;
 
   // Badge status
   const badgeStatus =
@@ -367,40 +400,81 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
               {(() => {
                 const nilaiKode =
                   submitInfo.nilai_kode_manual ?? submitInfo.nilai_kode;
-                const adaKode =
-                  nilaiKode > 0 || submitInfo.nilai_kode_manual !== null;
+
+                // Kartu hanya untuk jenis soal yang ada di ulangan.
+                // "Total" selalu tampil paling akhir.
+                const kartu: {
+                  label: string;
+                  nilai: number;
+                  latar: string;
+                  warnaLabel: string;
+                  warnaAngka: string;
+                  sub?: string;
+                  warnaSub?: string;
+                }[] = [];
+
+                if (jenisSoal.pg) {
+                  kartu.push({
+                    label: "Nilai PG",
+                    nilai: submitInfo.nilai_pg,
+                    latar: "bg-blue-50",
+                    warnaLabel: "text-blue-600",
+                    warnaAngka: "text-blue-700",
+                  });
+                }
+                if (jenisSoal.esai) {
+                  kartu.push({
+                    label: "Nilai Esai",
+                    nilai: submitInfo.nilai_esai,
+                    latar: "bg-amber-50",
+                    warnaLabel: "text-amber-600",
+                    warnaAngka: "text-amber-700",
+                  });
+                }
+                if (jenisSoal.kode) {
+                  kartu.push({
+                    label: "Nilai Kode",
+                    nilai: nilaiKode,
+                    latar: "bg-emerald-50",
+                    warnaLabel: "text-emerald-600",
+                    warnaAngka: "text-emerald-700",
+                    sub:
+                      submitInfo.nilai_kode_manual !== null
+                        ? "dinilai guru"
+                        : undefined,
+                    warnaSub: "text-emerald-500",
+                  });
+                }
+
+                const jumlahKartu = kartu.length + 1; // + Total
+                const kelasGrid =
+                  jumlahKartu === 2
+                    ? "grid-cols-2"
+                    : jumlahKartu === 3
+                      ? "grid-cols-3"
+                      : "grid-cols-2 sm:grid-cols-4";
+
                 return (
                   <>
-                    <div
-                      className={`mt-3 grid gap-3 ${
-                        adaKode ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"
-                      }`}
-                    >
-                      <div className="rounded-xl bg-blue-50 p-3 text-center">
-                        <p className="text-xs text-blue-600">Nilai PG</p>
-                        <p className="text-2xl font-semibold tabular-nums text-blue-700">
-                          {submitInfo.nilai_pg}
-                        </p>
-                      </div>
-                      <div className="rounded-xl bg-amber-50 p-3 text-center">
-                        <p className="text-xs text-amber-600">Nilai Esai</p>
-                        <p className="text-2xl font-semibold tabular-nums text-amber-700">
-                          {submitInfo.nilai_esai}
-                        </p>
-                      </div>
-                      {adaKode ? (
-                        <div className="rounded-xl bg-emerald-50 p-3 text-center">
-                          <p className="text-xs text-emerald-600">Nilai Kode</p>
-                          <p className="text-2xl font-semibold tabular-nums text-emerald-700">
-                            {nilaiKode}
+                    <div className={`mt-3 grid gap-3 ${kelasGrid}`}>
+                      {kartu.map((k) => (
+                        <div
+                          key={k.label}
+                          className={`rounded-xl p-3 text-center ${k.latar}`}
+                        >
+                          <p className={`text-xs ${k.warnaLabel}`}>{k.label}</p>
+                          <p
+                            className={`text-2xl font-semibold tabular-nums ${k.warnaAngka}`}
+                          >
+                            {k.nilai}
                           </p>
-                          {submitInfo.nilai_kode_manual !== null ? (
-                            <p className="text-[10px] text-emerald-500">
-                              dinilai guru
+                          {k.sub ? (
+                            <p className={`text-[10px] ${k.warnaSub}`}>
+                              {k.sub}
                             </p>
                           ) : null}
                         </div>
-                      ) : null}
+                      ))}
                       <div className="rounded-xl bg-slate-100 p-3 text-center">
                         <p className="text-xs text-slate-500">Total</p>
                         <p className="text-2xl font-semibold tabular-nums text-slate-900">
@@ -410,7 +484,7 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
                     </div>
 
                     <p className="mt-3 text-xs text-slate-500">
-                      {submitInfo.nilai_esai === 0 && !adaKode
+                      {jenisSoal.esai && submitInfo.nilai_esai === 0
                         ? "Nilai esai masih menunggu penilaian guru."
                         : "Nilai sudah lengkap."}
                     </p>
@@ -434,6 +508,25 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
             Submit: {formatWaktuWib(submitInfo.disubmit_at)}
           </p>
         </div>
+
+        {/* Ranking: penuh bila nilai terbuka, terkunci bila masih ditahan. */}
+        {ranking ? (
+          nilaiTerbuka ? (
+            <>
+              <KartuPosisiRanking
+                posisi={ranking.posisiSaya}
+                totalDinilai={ranking.totalDinilai}
+              />
+              <PapanPeringkatSiswa
+                daftar={ranking.daftarDinilai}
+                siswaId={siswa.id}
+                totalSiswa={ranking.totalSiswa}
+              />
+            </>
+          ) : ranking.posisiSaya || ranking.totalDinilai > 0 ? (
+            <RankingTertahan />
+          ) : null
+        ) : null}
       </div>
     );
   }
@@ -511,6 +604,20 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
           </p>
         ) : null}
       </div>
+
+      {ranking ? (
+        <>
+          <KartuPosisiRanking
+            posisi={ranking.posisiSaya}
+            totalDinilai={ranking.totalDinilai}
+          />
+          <PapanPeringkatSiswa
+            daftar={ranking.daftarDinilai}
+            siswaId={siswa.id}
+            totalSiswa={ranking.totalSiswa}
+          />
+        </>
+      ) : null}
     </div>
   );
 }

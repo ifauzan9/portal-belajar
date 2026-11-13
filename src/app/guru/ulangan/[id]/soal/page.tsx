@@ -13,6 +13,7 @@ import { DaftarJawaban } from "./daftar-jawaban";
 import { DaftarSoal } from "./daftar-soal";
 import { ambilDataJawabanUlangan } from "@/lib/ulangan-jawaban";
 import { formatWaktuWib } from "@/lib/waktu";
+import { jenisSoalTersedia } from "@/lib/jenis-soal-ulangan";
 
 // ============================================================================
 // Halaman kelola soal ulangan (status "akan dilaksanakan").
@@ -137,6 +138,19 @@ export default async function SoalUlanganPage({
 
   const soalKode = daftarSoal.filter((s) => s.jenis === "kode");
 
+  // Jenis soal yang ada → untuk teks info hasil nilai.
+  const jenisSoal = jenisSoalTersedia(daftarSoal.map((s) => s.jenis));
+  const teksInfoNilai =
+    jenisSoal.esai && jenisSoal.kode
+      ? "Nilai PG & kode otomatis terlihat; esai masih menunggu penilaian."
+      : jenisSoal.esai
+        ? "Nilai PG otomatis terlihat; esai masih menunggu penilaian."
+        : jenisSoal.kode && jenisSoal.pg
+          ? "Nilai PG & kode otomatis terlihat."
+          : jenisSoal.kode
+            ? "Nilai kode otomatis terlihat."
+            : "Nilai PG otomatis terlihat.";
+
   const { daftarSubmit, daftarSesi, soalCount, probeCounts, daftarSoalEsai } =
     await ambilDataJawabanUlangan(supabase, id, daftarSoal);
 
@@ -201,7 +215,7 @@ export default async function SoalUlanganPage({
                 {!dataUlangan.nilai_selesai
                   ? "Semua siswa dapat melihat hasil di halaman mereka."
                   : dataUlangan.nilai_ditampilkan
-                    ? "Nilai PG otomatis terlihat; esai masih menunggu penilaian."
+                    ? teksInfoNilai
                     : "Nilai baru terbuka setelah kamu tekan tombol &ldquo;Selesai dinilai&rdquo;."}
               </p>
             </div>
