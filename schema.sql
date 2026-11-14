@@ -4612,3 +4612,170 @@ alter table public.exam_submissions
 -- Selesai Tahap 50. Semua nilai ulangan dibatasi 0–100.
 -- Aturan remedial (nilai < 75) diterapkan di aplikasi.
 -- ============================================================
+
+-- ============================================================
+-- TAHAP 51: SOAL PRAKTIK KODING KARTU PESERTA KEGIATAN LITERASI
+-- ============================================================
+-- Mengganti soal kode bawaan pada ulangan "Ulangan Praktik Akhir
+-- Semester" dengan tantangan "Membuat Kartu Peserta Kegiatan
+-- Literasi".
+--
+-- Soal meminta tepat 3 input (nama, kelas, judul_buku) dan 2
+-- variabel tetap yang ditulis langsung di kode (lokasi, tanggal).
+-- Nilai lama, jawaban lama, dan id soal tidak dihapus; migrasi ini
+-- hanya memperbarui isi soal. Aman dijalankan berulang.
+update public.exam_questions q
+set
+  soal = $soal51$Membuat Kartu Peserta Kegiatan Literasi
+Tingkat kesulitan: Menengah
+
+Buat program Python untuk membuat kartu peserta kegiatan literasi sekolah.
+Program meminta TIGA data menggunakan input(), kemudian menampilkan
+informasi peserta, lokasi kegiatan, tanggal kegiatan, dan panduan kegiatan.
+
+DATA YANG DIMINTA DENGAN INPUT (berurutan)
+1. Nama siswa
+2. Kelas
+3. Judul buku favorit
+
+DATA TETAP YANG DITULIS LANGSUNG DI KODE (bukan input)
+- lokasi = "Perpustakaan Sekolah"
+- tanggal = "27 November 2026"
+
+Kedua data tersebut harus ditulis langsung di dalam kode, disimpan dalam
+variabel bernama lokasi dan tanggal, kemudian ditampilkan menggunakan print().
+
+NAMA VARIABEL YANG DINILAI
+nama, kelas, judul_buku, lokasi, tanggal
+
+KETENTUAN
+- Gunakan tepat 3 perintah input() untuk nama, kelas, dan judul_buku.
+- Simpan hasil input() ke variabel nama, kelas, dan judul_buku.
+- Tulis lokasi dan tanggal langsung di kode; jangan memakai input().
+- Tampilkan semua data dengan print().
+- Jangan menulis jawaban langsung di print(); program akan diuji dengan
+  data input yang berbeda.
+
+CONTOH INPUT WAJIB
+Dimas
+IX B
+Negeri 5 Menara
+
+TARGET OUTPUT
+========================================
+    KARTU PESERTA KEGIATAN LITERASI
+========================================
+Nama       : Dimas
+Kelas      : IX B
+Judul Buku : Negeri 5 Menara
+Lokasi     : Perpustakaan Sekolah
+Tanggal    : 27 November 2026
+----------------------------------------
+       PANDUAN KEGIATAN
+----------------------------------------
+1. Membaca buku dengan tertib.
+2. Menjaga buku dengan baik.
+3. Mengembalikan buku ke tempatnya.
+----------------------------------------
+Terima kasih telah berpartisipasi.
+========================================$soal51$,
+  kode_awal = $kode51$# Tulis programmu di sini.
+# Minta 3 data dengan input(): nama, kelas, judul_buku.
+# Tulis lokasi dan tanggal langsung di kode.
+# Tampilkan kartu peserta dengan print().$kode51$,
+  keluaran_diharapkan = $keluaran51$========================================
+    KARTU PESERTA KEGIATAN LITERASI
+========================================
+Nama       : Dimas
+Kelas      : IX B
+Judul Buku : Negeri 5 Menara
+Lokasi     : Perpustakaan Sekolah
+Tanggal    : 27 November 2026
+----------------------------------------
+       PANDUAN KEGIATAN
+----------------------------------------
+1. Membaca buku dengan tertib.
+2. Menjaga buku dengan baik.
+3. Mengembalikan buku ke tempatnya.
+----------------------------------------
+Terima kasih telah berpartisipasi.
+========================================$keluaran51$,
+  masukan = $masukan51$Dimas
+IX B
+Negeri 5 Menara$masukan51$,
+  masukan_uji = $masukanuji51$Siti
+IX A
+Laskar Pelangi$masukanuji51$,
+  keluaran_uji = $keluaranuji51$========================================
+    KARTU PESERTA KEGIATAN LITERASI
+========================================
+Nama       : Siti
+Kelas      : IX A
+Judul Buku : Laskar Pelangi
+Lokasi     : Perpustakaan Sekolah
+Tanggal    : 27 November 2026
+----------------------------------------
+       PANDUAN KEGIATAN
+----------------------------------------
+1. Membaca buku dengan tertib.
+2. Menjaga buku dengan baik.
+3. Mengembalikan buku ke tempatnya.
+----------------------------------------
+Terima kasih telah berpartisipasi.
+========================================$keluaranuji51$,
+  jawaban_asli = $jawaban51$nama = input("Nama: ")
+kelas = input("Kelas: ")
+judul_buku = input("Judul Buku: ")
+
+lokasi = "Perpustakaan Sekolah"
+tanggal = "27 November 2026"
+
+print("========================================")
+print("    KARTU PESERTA KEGIATAN LITERASI")
+print("========================================")
+print("Nama       :", nama)
+print("Kelas      :", kelas)
+print("Judul Buku :", judul_buku)
+print("Lokasi     :", lokasi)
+print("Tanggal    :", tanggal)
+print("----------------------------------------")
+print("       PANDUAN KEGIATAN")
+print("----------------------------------------")
+print("1. Membaca buku dengan tertib.")
+print("2. Menjaga buku dengan baik.")
+print("3. Mengembalikan buku ke tempatnya.")
+print("----------------------------------------")
+print("Terima kasih telah berpartisipasi.")
+print("========================================")$jawaban51$,
+  aturan = $aturan51${
+    "variabel_wajib": ["nama", "kelas", "judul_buku", "lokasi", "tanggal"],
+    "variabel_tetap": {
+      "lokasi": "Perpustakaan Sekolah",
+      "tanggal": "27 November 2026"
+    },
+    "dari_input": true,
+    "min_variabel": 5,
+    "min_input": 3,
+    "maks_input": 3,
+    "izinkan_prompt": true,
+    "bobot": {
+      "output": 50,
+      "output_uji": 20,
+      "variabel": 20,
+      "jumlah": 10
+    },
+    "pesan_benar": "Selamat! Kartu peserta kegiatan literasi berhasil dibuat dan seluruh ketentuan tugas telah terpenuhi.",
+    "pesan_salah": "Program belum sesuai. Periksa kembali penggunaan input(), variabel, dan print().",
+    "pesan_input_salah": "Input belum sesuai. Gunakan data yang diminta pada soal."
+  }$aturan51$::jsonb,
+  poin = 100
+from public.exams e
+where q.exam_id = e.id
+  and e.judul = 'Ulangan Praktik Akhir Semester'
+  and q.jenis = 'kode'
+  and q.urutan = 1;
+
+-- ============================================================
+-- Selesai Tahap 51. Soal kode ulangan kini memakai tantangan
+-- Kartu Peserta Kegiatan Literasi dengan 3 input + 2 variabel tetap.
+-- ============================================================

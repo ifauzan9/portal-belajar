@@ -92,6 +92,11 @@ Hal yang disiapkan di database:
   di bawah 75 **remedial**. Nilai kode manual, poin soal, komponen nilai, dan
   total nilai dibatasi 0–100 di aplikasi; constraint database juga
   dikembalikan ke 0–100. Tahap 50 menggantikan batas longgar Tahap 49.
+- **Soal kode ulangan** (Tahap 51). Ulangan **Ulangan Praktik Akhir Semester**
+  memakai tantangan **Membuat Kartu Peserta Kegiatan Literasi**: tepat 3 input
+  (`nama`, `kelas`, `judul_buku`) dan 2 variabel tetap (`lokasi`, `tanggal`)
+  yang ditulis langsung di kode. Soal diuji dengan data input berbeda, sehingga
+  jawaban tidak boleh di-hardcode. Nilai dan jawaban lama tidak dihapus.
 
 ## Batasan Penting
 
@@ -153,6 +158,9 @@ Setelah itu (opsional) samakan **Supabase → Authentication → URL Configurati
 | Tugas praktik selalu "Input belum sesuai" padahal data sudah benar | Program memanggil `input()` bukan tepat 3 kali, atau urutan/huruf besar-kecilnya diubah. Data input: nama, NIS, kelas. `ruang` dan `tanggal` tidak boleh memakai `input()`. |
 | Tugas praktik selalu "Belum lengkap: minimal N perintah print()" | Jumlah `print()` belum mencapai 18, atau output belum mencapai 18 baris tidak kosong. Pastikan setiap bagian kartu ditampilkan dengan `print()`. |
 | Pesan "Dengan input berbeda, output tidak sesuai" | Program masih menulis jawaban langsung di `print()`. Nilai harus diambil dari `input()`, disimpan di variabel, lalu ditampilkan. |
+| Soal kode ulangan masih sapaan "Halo, Budi!" / hanya 1 input | Schema Tahap 51 belum dijalankan. Jalankan Tahap 51 di Supabase SQL Editor agar soal berganti menjadi Kartu Peserta Kegiatan Literasi (3 input: `nama`, `kelas`, `judul_buku`; variabel tetap: `lokasi`, `tanggal`). |
+| Soal kode ulangan selalu "Input belum sesuai" | Program memanggil `input()` bukan tepat 3 kali, atau urutan/huruf besar-kecil data diubah. Data utama: `Dimas`, `IX B`, `Negeri 5 Menara`. `lokasi` dan `tanggal` tidak boleh memakai `input()`. |
+| Nilai soal kode ulangan tidak penuh padahal output terlihat benar | Pastikan `nama`, `kelas`, dan `judul_buku` berasal dari `input()`; `lokasi` dan `tanggal` ditulis langsung di kode. Output uji memakai data berbeda (`Siti`, `IX A`, `Laskar Pelangi`), jadi jangan hardcode. |
 | Saklar "Tutup akses soal" di Pengaturan tidak berpengaruh | Schema Tahap 41 belum dijalankan (tabel `pengaturan_guru` belum ada). Jalankan Tahap 41 di Supabase SQL Editor; form akan menampilkan peringatan selama tabel belum ada. |
 | Halaman /guru/pengaturan error "relation does not exist" | Sama seperti di atas — jalankan Tahap 41. |
 | Soal ulangan masih bisa dibuka walau saklar global menyala | Kemungkinan siswa sudah memulai ulangan sebelum saklar dinyalakan (sesi berjalan sengaja diizinkan agar jawaban tidak hilang), atau saklar per ulangan masih terbuka. Cek juga menu titik-tiga di halaman Ulangan. |
@@ -189,4 +197,5 @@ Setelah itu (opsional) samakan **Supabase → Authentication → URL Configurati
 - [ ] Kolom `pengaturan_guru.info_login_siswa` & `info_login_siswa_aktif` sudah ada (Tahap 44) — untuk informasi di halaman login siswa
 - [ ] Kolom `exams.bagikan_nilai` sudah ada (Tahap 48) — untuk saklar **Bagikan nilai** per ulangan
 - [ ] Constraint nilai ulangan sudah dibatasi 0–100 (Tahap 50), dengan aturan remedial < 75
+- [ ] Soal kode **Ulangan Praktik Akhir Semester** sudah memakai Kartu Peserta Kegiatan Literasi (Tahap 51)
 - [ ] Login guru & siswa sudah dicoba di URL produksi
