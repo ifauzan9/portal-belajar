@@ -9,7 +9,7 @@ import {
 import { gabungNilaiUlangan } from "@/lib/nilai-ulangan";
 import { hitungRanking } from "@/lib/ranking";
 import { hitungRataRata, tampilkanRataRata } from "@/lib/rata-rata";
-import { statusNilai } from "@/lib/status-nilai";
+import { KKM_ULANGAN, statusLulus } from "@/lib/status-nilai";
 import { Badge } from "@/components/ui/badge";
 import { formatTanggalWib } from "@/lib/waktu";
 
@@ -161,11 +161,18 @@ export default async function RankingUlanganPage({
     .filter((siswa) => siswa.nilai === null)
     .sort(bandingkanKelasLaluNama);
 
+  // Ringkasan kelulusan hanya menghitung siswa yang sudah punya nilai.
+  const jumlahLulus = dinilai.filter(
+    (siswa) => siswa.nilai >= KKM_ULANGAN,
+  ).length;
+  const jumlahRemedial = dinilai.length - jumlahLulus;
+
   const tigaTeratas = dinilai.slice(0, 3).map((siswa) => ({
     nama: siswa.nama_siswa,
     nis: siswa.nis,
     nilai: siswa.nilai,
     ranking: ranking.get(siswa.id)!.ranking!,
+    status: statusLulus(siswa.nilai),
   }));
 
   const rataRata = tampilkanRataRata(
@@ -198,7 +205,7 @@ export default async function RankingUlanganPage({
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
           <p className="text-xs font-medium text-slate-500">Total siswa</p>
           <p className="mt-1 text-2xl font-semibold text-slate-900 tabular-nums">
@@ -209,6 +216,22 @@ export default async function RankingUlanganPage({
           <p className="text-xs font-medium text-slate-500">Sudah dinilai</p>
           <p className="mt-1 text-2xl font-semibold text-emerald-700 tabular-nums">
             {dinilai.length}
+          </p>
+        </div>
+        <div className="rounded-2xl bg-white p-4 ring-1 ring-emerald-200">
+          <p className="text-xs font-medium text-emerald-700">
+            Lulus (≥ {KKM_ULANGAN})
+          </p>
+          <p className="mt-1 text-2xl font-semibold text-emerald-700 tabular-nums">
+            {jumlahLulus}
+          </p>
+        </div>
+        <div className="rounded-2xl bg-white p-4 ring-1 ring-red-200">
+          <p className="text-xs font-medium text-red-700">
+            Remedial (&lt; {KKM_ULANGAN})
+          </p>
+          <p className="mt-1 text-2xl font-semibold text-red-700 tabular-nums">
+            {jumlahRemedial}
           </p>
         </div>
         <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">
@@ -238,14 +261,15 @@ export default async function RankingUlanganPage({
             Ranking Seluruh Siswa
           </h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            Nilai yang sama mendapat peringkat yang sama. Hanya siswa yang
-            sudah dinilai yang masuk ranking.
+            Nilai yang sama mendapat peringkat yang sama. Lulus jika nilai ≥{" "}
+            {KKM_ULANGAN}; remedial jika di bawah {KKM_ULANGAN}. Hanya siswa
+            yang sudah dinilai yang masuk ranking.
           </p>
         </div>
 
         {dinilai.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-sm">
+            <table className="w-full min-w-[720px] text-sm">
               <thead className="border-b border-slate-200 bg-slate-50">
                 <tr>
                   <th
@@ -282,6 +306,12 @@ export default async function RankingUlanganPage({
                     scope="col"
                     className="px-4 py-3 text-left font-medium text-slate-500 sm:px-5"
                   >
+                    Status
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-4 py-3 text-left font-medium text-slate-500 sm:px-5"
+                  >
                     Keterangan
                   </th>
                 </tr>
@@ -290,7 +320,7 @@ export default async function RankingUlanganPage({
                 {dinilai.map((siswa) => {
                   const info = ranking.get(siswa.id)!;
                   const peringkat = info.ranking!;
-                  const status = statusNilai(siswa.nilai);
+                  const status = statusLulus(siswa.nilai);
                   return (
                     <tr
                       key={siswa.id}
@@ -317,19 +347,17 @@ export default async function RankingUlanganPage({
                       <td className="px-4 py-3 text-right font-semibold text-slate-900 tabular-nums sm:px-5">
                         {siswa.nilai}
                       </td>
+                      <td className="px-4 py-3 text-left sm:px-5">
+                        {status ? (
+                          <Badge varian={status.varian}>{status.label}</Badge>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-xs text-slate-500 sm:px-5">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {status ? (
-                            <Badge varian={status.varian}>
-                              {status.label}
-                            </Badge>
-                          ) : null}
-                          {info.tiedWith > 1 ? (
-                            <span>Seri {info.tiedWith} siswa</span>
-                          ) : status ? null : (
-                            <span>—</span>
-                          )}
-                        </div>
+                        {info.tiedWith > 1
+                          ? `Seri ${info.tiedWith} siswa`
+                          : "—"}
                       </td>
                     </tr>
                   );

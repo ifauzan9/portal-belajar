@@ -1,8 +1,12 @@
+import { Badge } from "@/components/ui/badge";
+
 type BarisRanking = {
   nama: string;
   nis: string | null;
   nilai: number;
   ranking: number;
+  // Opsional: status lulus/remedial ditampilkan kalau pemanggil mengirimnya.
+  status?: { label: string; varian: "sukses" | "bahaya" } | null;
 };
 
 // Warna lencana berdasarkan posisi (peringkat).
@@ -48,6 +52,11 @@ export function KartuRanking({
                 {s.nilai}
                 {s.nis ? ` · ${s.nis}` : ""}
               </p>
+              {s.status ? (
+                <span className="mt-1 inline-block">
+                  <Badge varian={s.status.varian}>{s.status.label}</Badge>
+                </span>
+              ) : null}
             </div>
           </div>
         ))}

@@ -15,6 +15,11 @@ export type StatusNilaiView = {
   varian: "sukses" | "bahaya";
 };
 
+export type StatusLulusView = {
+  label: "Lulus" | "Remedial";
+  varian: "sukses" | "bahaya";
+};
+
 // Membulatkan ke bawah lalu menjepit ke rentang 0–100. Nilai bukan angka
 // dianggap 0 supaya tidak ada angka NaN yang masuk ke database.
 export function batasiNilai(nilai: number): number {
@@ -31,5 +36,18 @@ export function statusNilai(
 
   return nilai >= KKM_ULANGAN
     ? { label: "Tidak remedial", varian: "sukses" }
+    : { label: "Remedial", varian: "bahaya" };
+}
+
+// Varian label untuk halaman ranking: "Lulus" lebih ringkas daripada
+// "Tidak remedial", tetapi aturan ambangnya sama.
+export function statusLulus(
+  nilai: number | null | undefined,
+): StatusLulusView | null {
+  const status = statusNilai(nilai);
+  if (!status) return null;
+
+  return status.label === "Tidak remedial"
+    ? { label: "Lulus", varian: "sukses" }
     : { label: "Remedial", varian: "bahaya" };
 }
