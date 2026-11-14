@@ -1063,7 +1063,14 @@ export async function simpanNilaiEsai(
   revalidatePath(`/guru/ulangan/${examId}/soal`);
   revalidatePath(`/guru/ulangan/${examId}/nilai`);
   revalidatePath("/guru/ulangan");
-  return { message: null };
+
+  // Nilai esai sudah masuk ke exam_submissions, tetapi exam_scores gagal
+  // disinkronkan. Jangan diamkan: beri tahu guru supaya bisa mencoba lagi.
+  return {
+    message: galatScores
+      ? `Nilai esai tersimpan, tetapi sinkronisasi nilai siswa gagal: ${galatScores.message}`
+      : null,
+  };
 }
 
 // ============================================================================
@@ -1209,6 +1216,7 @@ export async function simpanNilaiKodeManualBanyak(input: {
 
   let disimpan: string[] = [];
   let pesanGagal: string | null = null;
+  let pesanSinkron: string | null = null;
 
   // Satu upsert untuk semua siswa. Semua baris sudah dipastikan ada lewat
   // query di atas, jadi tidak ada submission baru yang tidak sengaja dibuat.
@@ -1243,6 +1251,11 @@ export async function simpanNilaiKodeManualBanyak(input: {
 
     if (galatScores) {
       console.error("Gagal sinkronkan exam_scores:", galatScores.message);
+      pesanSinkron = `Nilai kode tersimpan, tetapi sinkronisasi nilai siswa gagal: ${galatScores.message}`;
+      // Jangan anggap baris ini selesai. Draft dipertahankan di browser
+      // supaya guru bisa mencoba simpan lagi setelah masalahnya diperbaiki.
+      for (const baris of barisScores) gagal.add(baris.siswa_id);
+      disimpan = [];
     }
   }
 
@@ -1254,9 +1267,11 @@ export async function simpanNilaiKodeManualBanyak(input: {
     revalidatePath("/guru/ulangan");
   }
 
+  const pesanGabungan = [pesanGagal, pesanSinkron].filter(Boolean).join(" ");
+
   return {
     message:
-      pesanGagal ??
+      pesanGabungan ||
       (gagal.size > 0 ? `${gagal.size} nilai gagal disimpan.` : null),
     disimpan,
     gagal: [...gagal],

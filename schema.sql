@@ -4524,3 +4524,28 @@ comment on column public.exams.bagikan_nilai is
 -- ============================================================
 -- Selesai Tahap 48. Kolom baru: "exams.bagikan_nilai".
 -- ============================================================
+
+-- ============================================================
+-- TAHAP 49: BATAS NILAI exam_scores MENGIKUTI TOTAL ULANGAN
+-- ============================================================
+-- Sejak nilai kode manual (0-1000) dan poin soal bisa lebih dari 100,
+-- nilai total ulangan juga bisa melebihi 100. Constraint lama
+-- (nilai >= 0 and nilai <= 100) membuat sinkronisasi exam_scores gagal,
+-- sehingga halaman nilai/ranking siswa bisa menampilkan nilai lama.
+--
+-- Batas atas dibuat longgar (hanya >= 0), sama seperti
+-- exam_submissions.nilai_total. Validasi rentang angka tetap dilakukan
+-- di aplikasi sebelum data disimpan.
+alter table public.exam_scores
+  drop constraint if exists exam_scores_nilai_check;
+
+alter table public.exam_scores
+  add constraint exam_scores_nilai_check
+  check (nilai >= 0);
+
+comment on column public.exam_scores.nilai is
+  'Nilai total ulangan (PG + esai + kode); boleh lebih dari 100 sesuai poin soal';
+
+-- ============================================================
+-- Selesai Tahap 49. Constraint "exam_scores_nilai_check" diperbarui.
+-- ============================================================
