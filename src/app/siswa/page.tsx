@@ -13,6 +13,7 @@ import {
   ulanganBolehDiakses,
 } from "@/lib/pengaturan-soal";
 import { statusAksesSoal } from "@/lib/status-soal";
+import { statusNilai } from "@/lib/status-nilai";
 import { PemberitahuanSoalDitutup } from "@/components/pemberitahuan-soal";
 import {
   formatTanggalJamPendekWib,
@@ -625,37 +626,43 @@ export default async function DashboardSiswaPage() {
 
         {daftarUlangan.length > 0 ? (
           <ul className="mt-3 divide-y divide-slate-100">
-            {daftarUlangan.slice(0, 5).map((u) => (
-              <li
-                key={u.id}
-                className="flex items-center justify-between gap-3 rounded-lg px-2 py-2.5 text-sm transition hover:bg-emerald-50/60"
-              >
-                <span className="min-w-0 truncate text-slate-700">
-                  {u.judul}
-                </span>
-                <span className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-                  {u.status === "akan" && u.sudahSubmit ? (
-                    <Badge varian="sukses">Sudah dikerjakan</Badge>
-                  ) : u.status === "akan" && !u.dibuka ? (
-                    <Badge varian="bahaya">Ditutup guru</Badge>
-                  ) : u.status === "akan" && u.punyaSesi ? (
-                    <Badge varian="info">Sedang dikerjakan</Badge>
-                  ) : u.status === "akan" && !u.bolehSoal ? (
-                    <Badge varian="bahaya">Ditutup guru</Badge>
-                  ) : u.status === "akan" && !u.deadlineLewat ? (
-                    <Badge varian="info">Buka</Badge>
-                  ) : null}
-                  {u.aksesSoal ? (
-                    <Badge varian={u.aksesSoal.varian}>
-                      {u.aksesSoal.label}
-                    </Badge>
-                  ) : null}
-                  <span className="tabular-nums font-medium text-slate-700">
-                    {u.nilai === null ? "–" : u.nilai}
+            {daftarUlangan.slice(0, 5).map((u) => {
+              const status = statusNilai(u.nilai);
+              return (
+                <li
+                  key={u.id}
+                  className="flex items-center justify-between gap-3 rounded-lg px-2 py-2.5 text-sm transition hover:bg-emerald-50/60"
+                >
+                  <span className="min-w-0 truncate text-slate-700">
+                    {u.judul}
                   </span>
-                </span>
-              </li>
-            ))}
+                  <span className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                    {u.status === "akan" && u.sudahSubmit ? (
+                      <Badge varian="sukses">Sudah dikerjakan</Badge>
+                    ) : u.status === "akan" && !u.dibuka ? (
+                      <Badge varian="bahaya">Ditutup guru</Badge>
+                    ) : u.status === "akan" && u.punyaSesi ? (
+                      <Badge varian="info">Sedang dikerjakan</Badge>
+                    ) : u.status === "akan" && !u.bolehSoal ? (
+                      <Badge varian="bahaya">Ditutup guru</Badge>
+                    ) : u.status === "akan" && !u.deadlineLewat ? (
+                      <Badge varian="info">Buka</Badge>
+                    ) : null}
+                    {u.aksesSoal ? (
+                      <Badge varian={u.aksesSoal.varian}>
+                        {u.aksesSoal.label}
+                      </Badge>
+                    ) : null}
+                    <span className="tabular-nums font-medium text-slate-700">
+                      {u.nilai === null ? "–" : u.nilai}
+                    </span>
+                    {status ? (
+                      <Badge varian={status.varian}>{status.label}</Badge>
+                    ) : null}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <EmptyState

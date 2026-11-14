@@ -11,6 +11,7 @@ import { belumWaktunyaMulai } from "@/lib/jadwal-ulangan";
 import { formatTanggalWib, formatWaktuWib } from "@/lib/waktu";
 import { ambilPengaturanSoal } from "@/lib/pengaturan-soal";
 import { statusAksesSoal } from "@/lib/status-soal";
+import { KKM_ULANGAN, statusNilai } from "@/lib/status-nilai";
 import { PemberitahuanSoalDitutup } from "@/components/pemberitahuan-soal";
 import { Badge } from "@/components/ui/badge";
 import { jenisSoalTersedia } from "@/lib/jenis-soal-ulangan";
@@ -299,6 +300,7 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
     </div>
   );
 
+  const statusNilaiSaya = statusNilai(nilaiSaya);
   const kartuNilaiSiswa = (
     <div className="rounded-2xl bg-white p-5 ring-1 ring-slate-200">
       <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">
@@ -308,7 +310,7 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
         className={`mt-1 text-4xl font-semibold tabular-nums ${
           nilaiSaya === null
             ? "text-slate-400"
-            : nilaiSaya >= 70
+            : nilaiSaya >= KKM_ULANGAN
               ? "text-emerald-600"
               : nilaiSaya >= 50
                 ? "text-amber-600"
@@ -317,12 +319,23 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
       >
         {nilaiSaya === null ? "Belum dinilai" : nilaiSaya}
       </p>
+      {statusNilaiSaya ? (
+        <div className="mt-2">
+          <Badge varian={statusNilaiSaya.varian}>
+            {statusNilaiSaya.label}
+          </Badge>
+        </div>
+      ) : null}
       {nilaiSaya === null ? (
         <p className="mt-1 text-sm text-slate-500">
           Nilai kamu untuk ulangan ini belum tersedia. Kamu belum mengerjakan
           ulangan atau guru belum menginput nilainya.
         </p>
-      ) : null}
+      ) : (
+        <p className="mt-1 text-xs text-slate-500">
+          KKM {KKM_ULANGAN}: nilai {KKM_ULANGAN} ke atas tidak remedial.
+        </p>
+      )}
     </div>
   );
 
@@ -512,6 +525,9 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
               {(() => {
                 const nilaiKode =
                   submitInfo.nilai_kode_manual ?? submitInfo.nilai_kode;
+                const menungguNilaiEsai =
+                  jenisSoal.esai && submitInfo.nilai_esai === 0;
+                const statusTotal = statusNilai(submitInfo.nilai_total);
 
                 // Kartu hanya untuk jenis soal yang ada di ulangan.
                 // "Total" selalu tampil paling akhir.
@@ -592,6 +608,17 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
                         <p className="text-2xl font-semibold tabular-nums text-slate-900">
                           {submitInfo.nilai_total}
                         </p>
+                        {menungguNilaiEsai ? (
+                          <p className="mt-1 text-[10px] font-medium text-amber-600">
+                            Menunggu nilai esai
+                          </p>
+                        ) : statusTotal ? (
+                          <span className="mt-1 inline-block">
+                            <Badge varian={statusTotal.varian}>
+                              {statusTotal.label}
+                            </Badge>
+                          </span>
+                        ) : null}
                       </div>
                     </div>
 

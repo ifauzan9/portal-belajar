@@ -22,6 +22,7 @@ import {
 import { TombolReset } from "@/components/tombol-reset";
 import { formatWaktuWib } from "@/lib/waktu";
 import { jenisSoalTersedia } from "@/lib/jenis-soal-ulangan";
+import { batasiNilai, statusNilai } from "@/lib/status-nilai";
 
 type KodeJawaban = {
   soalId: string;
@@ -113,7 +114,7 @@ function nilaiKodeEfektif(
 
   const angka = Number(draft);
   if (!Number.isFinite(angka)) return row.nilai_kode;
-  return Math.max(0, Math.min(1000, Math.floor(angka)));
+  return batasiNilai(angka);
 }
 
 type SesiRow = {
@@ -275,7 +276,7 @@ export function DaftarJawaban({
     for (const s of daftarSoalEsai) {
       total += nilaiPerSoal[s.id] ?? 0;
     }
-    return total;
+    return batasiNilai(total);
   };
 
   return (
@@ -329,8 +330,12 @@ export function DaftarJawaban({
             const draft = draftKode[row.siswa_id];
             const adaDraft = draft !== undefined;
             const kodeEfektif = nilaiKodeEfektif(row, draft);
-            const totalEfektif =
-              row.nilai_pg + row.nilai_esai + kodeEfektif;
+            const totalEfektif = batasiNilai(
+              row.nilai_pg + row.nilai_esai + kodeEfektif,
+            );
+            const menungguNilaiEsai =
+              jenisSoal.esai && row.nilai_esai === 0;
+            const statusTotal = statusNilai(totalEfektif);
 
             return (
             <div
@@ -391,6 +396,13 @@ export function DaftarJawaban({
                     Total: {totalEfektif}
                     {adaDraft ? " (draft)" : ""}
                   </span>
+                  {menungguNilaiEsai ? (
+                    <Badge varian="peringatan">Menunggu nilai esai</Badge>
+                  ) : statusTotal ? (
+                    <Badge varian={statusTotal.varian}>
+                      {statusTotal.label}
+                    </Badge>
+                  ) : null}
                   <span className="text-slate-400">
                     {bukaId === row.id ? "▲" : "▼"}
                   </span>
@@ -690,7 +702,7 @@ export function DaftarJawaban({
                           <input
                             type="number"
                             min={0}
-                            max={1000}
+                            max={100}
                             value={draft ?? nilaiServerKode(row)}
                             onChange={(e) =>
                               ubahNilaiKode(row, e.target.value)
@@ -776,7 +788,7 @@ export function DaftarJawaban({
                           <span className="font-medium text-slate-600">
                             {hitungTotalEsai(row)}
                           </span>{" "}
-                          dari {daftarSoalEsai.length} soal esai
+                          (maks. 100) dari {daftarSoalEsai.length} soal esai
                         </p>
                       </div>
                       {stateEsai.message ? (

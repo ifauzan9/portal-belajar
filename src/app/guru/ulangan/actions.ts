@@ -6,6 +6,7 @@ import { bacaKelasDariForm } from "@/lib/pilih-kelas";
 import { ambilKelasUlangan } from "@/lib/ambil-kelas-ulangan";
 import { bacaNilaiDariForm, parseNilaiExcel } from "@/lib/parse-nilai";
 import { parseInputLokalWib } from "@/lib/waktu";
+import { batasiNilai } from "@/lib/status-nilai";
 
 const MAX_JUDUL = 200;
 const MAX_KODE = 50;
@@ -747,8 +748,8 @@ export async function addQuestion(
     return { message: "Jenis soal tidak valid." };
   }
 
-  if (poin < 0 || poin > 1000) {
-    return { message: "Poin harus antara 0 dan 1000." };
+  if (!Number.isFinite(poin) || poin < 0 || poin > 100) {
+    return { message: "Poin harus antara 0 dan 100." };
   }
 
   // Kolom khusus soal kode.
@@ -962,6 +963,10 @@ export async function simpanNilaiEsai(
     totalEsai += nilaiValid;
   }
 
+  // Total esai juga dijepit ke 0–100 supaya nilai satu komponen tidak
+  // melewati skala nilai yang dipakai halaman siswa.
+  const totalEsaiAkhir = batasiNilai(totalEsai);
+
   // Kalau tidak ada input per soal sama sekali (mis. ulangan tanpa esai,
   // atau field lama), tetap jalankan dengan total 0 supaya nilai_total sinkron.
   const supabase = await requireGuru();
@@ -1001,16 +1006,17 @@ export async function simpanNilaiEsai(
     nilai_kode_manual?: number | null;
   };
 
-  const nilaiPG = dataSubmit.nilai_pg;
+  const nilaiPG = batasiNilai(dataSubmit.nilai_pg);
   // Nilai kode manual (kalau guru menimpa) menggantikan nilai otomatis.
-  const nilaiKode =
-    dataSubmit.nilai_kode_manual ?? dataSubmit.nilai_kode ?? 0;
-  const nilaiTotal = nilaiPG + totalEsai + nilaiKode;
+  const nilaiKode = batasiNilai(
+    dataSubmit.nilai_kode_manual ?? dataSubmit.nilai_kode ?? 0,
+  );
+  const nilaiTotal = batasiNilai(nilaiPG + totalEsaiAkhir + nilaiKode);
 
   // Update exam_submissions
   const { error: galatUpdate } = await supabase
     .from("exam_submissions")
-    .update({ nilai_esai: totalEsai, nilai_total: nilaiTotal })
+    .update({ nilai_esai: totalEsaiAkhir, nilai_total: nilaiTotal })
     .eq("exam_id", examId)
     .eq("siswa_id", siswaId);
 
@@ -1135,7 +1141,7 @@ export async function simpanNilaiKodeManualBanyak(input: {
 
     valid.push({
       siswaId,
-      manual: Math.max(0, Math.min(1000, Math.floor(angka))),
+      manual: batasiNilai(angka),
     });
   }
 
@@ -1202,15 +1208,17 @@ export async function simpanNilaiKodeManualBanyak(input: {
       continue;
     }
 
-    const nilaiKode = item.manual ?? submit.nilai_kode ?? 0;
+    const nilaiPG = batasiNilai(submit.nilai_pg);
+    const nilaiEsai = batasiNilai(submit.nilai_esai);
+    const nilaiKode = batasiNilai(item.manual ?? submit.nilai_kode ?? 0);
     barisSubmits.push({
       exam_id: examId,
       siswa_id: item.siswaId,
-      nilai_pg: submit.nilai_pg,
-      nilai_esai: submit.nilai_esai,
-      nilai_kode: submit.nilai_kode ?? 0,
+      nilai_pg: nilaiPG,
+      nilai_esai: nilaiEsai,
+      nilai_kode: batasiNilai(submit.nilai_kode ?? 0),
       nilai_kode_manual: item.manual,
-      nilai_total: submit.nilai_pg + submit.nilai_esai + nilaiKode,
+      nilai_total: batasiNilai(nilaiPG + nilaiEsai + nilaiKode),
     });
   }
 

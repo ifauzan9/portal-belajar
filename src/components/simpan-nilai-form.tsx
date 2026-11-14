@@ -2,6 +2,8 @@
 
 import { useActionState, useRef, useEffect } from "react";
 import { simpanNilaiBatch } from "@/app/guru/ulangan/actions";
+import { statusNilai } from "@/lib/status-nilai";
+import { Badge } from "@/components/ui/badge";
 import type { InfoRanking } from "@/lib/ranking";
 
 type SiswaBaris = {
@@ -123,6 +125,12 @@ export function SimpanNilaiForm({
                 >
                   Nilai (0–100)
                 </th>
+                <th
+                  scope="col"
+                  className="px-4 py-3 text-left font-medium text-slate-500 sm:px-5"
+                >
+                  Keterangan
+                </th>
               </tr>
             </thead>
             <tbody
@@ -174,6 +182,20 @@ export function SimpanNilaiForm({
                       placeholder="Kosongkan kalau belum dinilai"
                       className="w-24 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                     />
+                  </td>
+                  <td className="px-4 py-3 sm:px-5">
+                    {(() => {
+                      const nilaiSaatIni =
+                        nilaiImport && nilaiImport.has(siswa.id)
+                          ? nilaiImport.get(siswa.id)!
+                          : siswa.nilai;
+                      const status = statusNilai(nilaiSaatIni);
+                      return status ? (
+                        <Badge varian={status.varian}>{status.label}</Badge>
+                      ) : (
+                        <span className="text-slate-300">–</span>
+                      );
+                    })()}
                   </td>
                 </tr>
               ))}

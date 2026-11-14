@@ -88,10 +88,10 @@ Hal yang disiapkan di database:
 - Kolom **`exams.bagikan_nilai`** (Tahap 48) untuk saklar **Bagikan nilai /
   Tarik nilai** per ulangan. Default `false`: nilai disembunyikan sampai guru
   membagikannya. Terpisah dari `dibuka` (tutup/buka akses soal).
-- Constraint **`exam_scores_nilai_check`** (Tahap 49) diperbarui agar
-  `exam_scores.nilai` boleh lebih dari 100, mengikuti total ulangan
-  (PG + esai + kode). Tanpa Tahap 49, nilai kode manual di atas 100 bisa
-  tersimpan di jawaban tetapi gagal tersinkron ke halaman nilai/ranking siswa.
+- **Skala nilai 0–100** (Tahap 50). Nilai 75 ke atas **tidak remedial**,
+  di bawah 75 **remedial**. Nilai kode manual, poin soal, komponen nilai, dan
+  total nilai dibatasi 0–100 di aplikasi; constraint database juga
+  dikembalikan ke 0–100. Tahap 50 menggantikan batas longgar Tahap 49.
 
 ## Batasan Penting
 
@@ -167,7 +167,8 @@ Setelah itu (opsional) samakan **Supabase → Authentication → URL Configurati
 | Nilai siswa masih terlihat walau ulangan sudah ditutup | Cek saklar **Bagikan nilai** di menu titik-tiga daftar Ulangan atau halaman Input Nilai. Tutup/buka ulangan hanya mengatur akses soal; nilai diatur terpisah oleh saklar tersebut. |
 | Nilai tidak muncul di akun siswa padahal sudah diisi | Nilai belum dibagikan. Buka **/guru/ulangan/[id]/nilai** atau menu titik-tiga → **Bagikan nilai**. |
 | Tombol "Bagikan nilai" tidak berpengaruh / halaman Ulangan error "column bagikan_nilai does not exist" | Schema Tahap 48 belum dijalankan. Jalankan Tahap 48 di Supabase SQL Editor. |
-| Nilai kode manual di atas 100 tersimpan di jawaban, tetapi nilai siswa/ranking tidak berubah | Schema Tahap 49 belum dijalankan. Constraint lama `exam_scores_nilai_check` membatasi nilai maksimal 100, sehingga sinkronisasi `exam_scores` gagal. Jalankan Tahap 49 di Supabase SQL Editor. |
+| Nilai kode manual tidak bisa diisi di atas 100 | Memang dibatasi 0–100 (Tahap 50). Isi nilai dalam rentang tersebut; nilai 75 ke atas tidak remedial, di bawah 75 remedial. |
+| Ingin memastikan database juga membatasi nilai 0–100 | Jalankan Tahap 50 di Supabase SQL Editor. Constraint `exam_scores_nilai_check` dan `exam_submissions.nilai_total` dikembalikan ke 0–100. |
 
 ## Checklist Cepat
 
@@ -187,5 +188,5 @@ Setelah itu (opsional) samakan **Supabase → Authentication → URL Configurati
 - [ ] Kolom `pengaturan_guru.token_login_tutup_waktu` sudah ada (Tahap 46) — untuk mengatur jam tutup otomatis login token
 - [ ] Kolom `pengaturan_guru.info_login_siswa` & `info_login_siswa_aktif` sudah ada (Tahap 44) — untuk informasi di halaman login siswa
 - [ ] Kolom `exams.bagikan_nilai` sudah ada (Tahap 48) — untuk saklar **Bagikan nilai** per ulangan
-- [ ] Constraint `exam_scores.nilai` sudah mengizinkan total lebih dari 100 (Tahap 49)
+- [ ] Constraint nilai ulangan sudah dibatasi 0–100 (Tahap 50), dengan aturan remedial < 75
 - [ ] Login guru & siswa sudah dicoba di URL produksi

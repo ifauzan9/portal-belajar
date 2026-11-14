@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ambilKelasTugas } from "@/lib/tugas";
 import { ambilKelasUlangan } from "@/lib/ambil-kelas-ulangan";
 import { relevansiKelas } from "@/lib/rekap";
+import { statusNilai } from "@/lib/status-nilai";
 import { formatTanggalWib } from "@/lib/waktu";
 
 // ============================================================================
@@ -429,6 +430,7 @@ export default async function DetailRekapPage(
               const sub = mapSubmit.get(u.id);
               const nilaiTampil = nilai ?? sub?.nilai_total ?? null;
               const dikerjakan = nilai !== undefined || sub !== undefined;
+              const status = statusNilai(nilaiTampil);
               return (
                 <BarisKegiatan
                   key={u.id}
@@ -438,11 +440,18 @@ export default async function DetailRekapPage(
                   }`}
                   badge={
                     dikerjakan ? (
-                      <Badge varian="sukses" titik>
-                        {nilaiTampil === null
-                          ? "Dikerjakan"
-                          : `Nilai ${nilaiTampil}`}
-                      </Badge>
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        <Badge varian="sukses" titik>
+                          {nilaiTampil === null
+                            ? "Dikerjakan"
+                            : `Nilai ${nilaiTampil}`}
+                        </Badge>
+                        {status ? (
+                          <Badge varian={status.varian}>
+                            {status.label}
+                          </Badge>
+                        ) : null}
+                      </span>
                     ) : (
                       badgeBelum
                     )

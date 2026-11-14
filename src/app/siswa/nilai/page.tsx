@@ -10,6 +10,7 @@ import {
   ulanganBolehDiakses,
 } from "@/lib/pengaturan-soal";
 import { statusAksesSoal } from "@/lib/status-soal";
+import { statusNilai } from "@/lib/status-nilai";
 import { PemberitahuanSoalDitutup } from "@/components/pemberitahuan-soal";
 import { Kartu, KartuJudul } from "@/components/ui/kartu";
 import { KartuStat } from "@/components/ui/kartu-stat";
@@ -248,7 +249,7 @@ export default async function NilaiSiswaPage() {
       <Kartu>
         <KartuJudul
           judul="Grafik Nilai per Ulangan"
-          subjudul="Batang menunjukkan nilai kamu (skala 0–100). Hijau ≥ 70, kuning ≥ 50, merah < 50."
+          subjudul="Batang menunjukkan nilai kamu (skala 0–100). Hijau ≥ 75 (tidak remedial), kuning ≥ 50, merah < 50."
         />
 
         {batang.length > 0 ? (
@@ -256,7 +257,7 @@ export default async function NilaiSiswaPage() {
             {batang.map((u) => {
               const n = u.nilai as number;
               const warna =
-                n >= 70
+                n >= 75
                   ? "bg-emerald-500"
                   : n >= 50
                     ? "bg-amber-500"
@@ -303,6 +304,7 @@ export default async function NilaiSiswaPage() {
               {daftarUlangan.map((u) => {
                 const s = statusUlangan(u);
                 const boleh = bisaDikerjakan(u);
+                const status = statusNilai(u.nilai);
                 return (
                   <li
                     key={u.id}
@@ -316,6 +318,13 @@ export default async function NilaiSiswaPage() {
                         <span className="text-lg font-semibold tabular-nums text-slate-900">
                           {u.nilai === null ? "–" : u.nilai}
                         </span>
+                        {status ? (
+                          <div className="mt-0.5 flex justify-end">
+                            <Badge varian={status.varian}>
+                              {status.label}
+                            </Badge>
+                          </div>
+                        ) : null}
                         {u.nilai === null && !u.dibagikan ? (
                           <p className="text-[10px] text-slate-400">
                             Belum dibagikan
@@ -377,6 +386,7 @@ export default async function NilaiSiswaPage() {
                   {daftarUlangan.map((u) => {
                     const s = statusUlangan(u);
                     const boleh = bisaDikerjakan(u);
+                    const status = statusNilai(u.nilai);
                     return (
                       <tr key={u.id} className="transition hover:bg-slate-50">
                         <td className="px-4 py-3 font-medium text-slate-900">
@@ -397,6 +407,13 @@ export default async function NilaiSiswaPage() {
                         </td>
                         <td className="px-4 py-3 tabular-nums font-medium text-slate-700">
                           {u.nilai === null ? "–" : u.nilai}
+                          {status ? (
+                            <span className="mt-1 block">
+                              <Badge varian={status.varian}>
+                                {status.label}
+                              </Badge>
+                            </span>
+                          ) : null}
                           {u.nilai === null && !u.dibagikan ? (
                             <span className="block text-[11px] font-normal text-slate-400">
                               Belum dibagikan

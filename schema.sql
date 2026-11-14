@@ -4527,6 +4527,7 @@ comment on column public.exams.bagikan_nilai is
 
 -- ============================================================
 -- TAHAP 49: BATAS NILAI exam_scores MENGIKUTI TOTAL ULANGAN
+-- (DIGANTI TAHAP 50: skala nilai dikembalikan ke 0–100.)
 -- ============================================================
 -- Sejak nilai kode manual (0-1000) dan poin soal bisa lebih dari 100,
 -- nilai total ulangan juga bisa melebihi 100. Constraint lama
@@ -4548,4 +4549,66 @@ comment on column public.exam_scores.nilai is
 
 -- ============================================================
 -- Selesai Tahap 49. Constraint "exam_scores_nilai_check" diperbarui.
+-- ============================================================
+
+-- ============================================================
+-- TAHAP 50: BATAS NILAI 0–100 & STATUS REMEDIAL
+-- ============================================================
+-- Skala nilai ulangan adalah 0–100. Nilai 75 ke atas tidak remedial,
+-- di bawah 75 remedial. Nilai kode manual, poin soal, komponen nilai,
+-- dan nilai total semuanya dibatasi 0–100 agar konsisten.
+--
+-- Constraint Tahap 49 yang hanya membatasi >= 0 diganti kembali dengan
+-- batas atas 100. Aplikasi juga menjepit nilai sebelum menyimpan, jadi
+-- data lama yang tidak valid tidak dibuat ulang.
+alter table public.exam_scores
+  drop constraint if exists exam_scores_nilai_check;
+
+alter table public.exam_scores
+  add constraint exam_scores_nilai_check
+  check (nilai >= 0 and nilai <= 100);
+
+comment on column public.exam_scores.nilai is
+  'Nilai total ulangan (PG + esai + kode), skala 0-100';
+
+alter table public.exam_questions
+  drop constraint if exists exam_questions_poin_check;
+
+alter table public.exam_questions
+  add constraint exam_questions_poin_check
+  check (poin >= 0 and poin <= 100);
+
+alter table public.exam_submissions
+  drop constraint if exists exam_submissions_nilai_pg_check;
+alter table public.exam_submissions
+  add constraint exam_submissions_nilai_pg_check
+  check (nilai_pg >= 0 and nilai_pg <= 100);
+
+alter table public.exam_submissions
+  drop constraint if exists exam_submissions_nilai_esai_check;
+alter table public.exam_submissions
+  add constraint exam_submissions_nilai_esai_check
+  check (nilai_esai >= 0 and nilai_esai <= 100);
+
+alter table public.exam_submissions
+  drop constraint if exists exam_submissions_nilai_kode_check;
+alter table public.exam_submissions
+  add constraint exam_submissions_nilai_kode_check
+  check (nilai_kode >= 0 and nilai_kode <= 100);
+
+alter table public.exam_submissions
+  drop constraint if exists exam_submissions_nilai_kode_manual_check;
+alter table public.exam_submissions
+  add constraint exam_submissions_nilai_kode_manual_check
+  check (nilai_kode_manual is null or (nilai_kode_manual >= 0 and nilai_kode_manual <= 100));
+
+alter table public.exam_submissions
+  drop constraint if exists exam_submissions_nilai_total_check;
+alter table public.exam_submissions
+  add constraint exam_submissions_nilai_total_check
+  check (nilai_total >= 0 and nilai_total <= 100);
+
+-- ============================================================
+-- Selesai Tahap 50. Semua nilai ulangan dibatasi 0–100.
+-- Aturan remedial (nilai < 75) diterapkan di aplikasi.
 -- ============================================================

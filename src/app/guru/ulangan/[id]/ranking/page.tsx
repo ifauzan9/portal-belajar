@@ -9,6 +9,8 @@ import {
 import { gabungNilaiUlangan } from "@/lib/nilai-ulangan";
 import { hitungRanking } from "@/lib/ranking";
 import { hitungRataRata, tampilkanRataRata } from "@/lib/rata-rata";
+import { statusNilai } from "@/lib/status-nilai";
+import { Badge } from "@/components/ui/badge";
 import { formatTanggalWib } from "@/lib/waktu";
 
 type SiswaRow = {
@@ -288,6 +290,7 @@ export default async function RankingUlanganPage({
                 {dinilai.map((siswa) => {
                   const info = ranking.get(siswa.id)!;
                   const peringkat = info.ranking!;
+                  const status = statusNilai(siswa.nilai);
                   return (
                     <tr
                       key={siswa.id}
@@ -315,9 +318,18 @@ export default async function RankingUlanganPage({
                         {siswa.nilai}
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-500 sm:px-5">
-                        {info.tiedWith > 1
-                          ? `Seri ${info.tiedWith} siswa`
-                          : "—"}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {status ? (
+                            <Badge varian={status.varian}>
+                              {status.label}
+                            </Badge>
+                          ) : null}
+                          {info.tiedWith > 1 ? (
+                            <span>Seri {info.tiedWith} siswa</span>
+                          ) : status ? null : (
+                            <span>—</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );

@@ -35,6 +35,7 @@ import {
   ambilPengaturanSoal,
   tokenLoginTerbuka,
 } from "@/lib/pengaturan-soal";
+import { batasiNilai } from "@/lib/status-nilai";
 
 // ============================================================================
 // Aksi auth siswa (login, logout, ganti password).
@@ -1009,14 +1010,15 @@ export async function submitUlangan(
         poin: soal.poin,
       });
 
-      nilaiKode += hasil.nilai;
+      const nilaiSoalKode = batasiNilai(hasil.nilai);
+      nilaiKode += nilaiSoalKode;
       daftarJawaban.push({ soalId: soal.id, jawaban: kode });
       daftarJawabanKode.push({
         soalId: soal.id,
         kode,
         keluaran,
         keluaranUji,
-        nilai: hasil.nilai,
+        nilai: nilaiSoalKode,
         rincian: hasil,
         percobaan,
       });
@@ -1044,11 +1046,14 @@ export async function submitUlangan(
 
   // Simpan submission. Kolom nilai_kode baru ada setelah DDL Tahap 33,
   // jadi sediakan fallback supaya soal lama tetap bisa dikumpulkan.
-  const nilaiTotal = nilaiPG + nilaiKode;
+  // Semua nilai dijepit ke 0–100 supaya konsisten dengan skala nilai.
+  const nilaiPGAkhir = batasiNilai(nilaiPG);
+  const nilaiKodeAkhir = batasiNilai(nilaiKode);
+  const nilaiTotal = batasiNilai(nilaiPGAkhir + nilaiKodeAkhir);
   const dataDasar = {
     exam_id: examId,
     siswa_id: sesi.siswaId,
-    nilai_pg: nilaiPG,
+    nilai_pg: nilaiPGAkhir,
     nilai_esai: 0,
     nilai_total: nilaiTotal,
   };
@@ -1058,7 +1063,7 @@ export async function submitUlangan(
 
   const cobaInsert = await supabase
     .from("exam_submissions")
-    .insert({ ...dataDasar, nilai_kode: nilaiKode })
+    .insert({ ...dataDasar, nilai_kode: nilaiKodeAkhir })
     .select("id")
     .single();
 
