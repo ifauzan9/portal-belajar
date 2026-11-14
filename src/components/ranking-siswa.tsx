@@ -1,12 +1,14 @@
+import { Badge } from "@/components/ui/badge";
 import { Kartu, KartuJudul } from "@/components/ui/kartu";
 import type { BarisPeringkat, PosisiSaya } from "@/lib/ranking-ulangan";
+import { KKM_ULANGAN, type StatusLulusView } from "@/lib/status-nilai";
 
 // ============================================================================
 // Ranking ulangan di sisi siswa.
 //
-// NILAI per siswa sengaja TIDAK ditampilkan — hanya peringkat, nama, dan
-// kelas. Peringkat tetap memberi gambaran posisi tanpa membocorkan skor
-// teman sekelas.
+// NILAI per siswa sengaja TIDAK ditampilkan. Yang terlihat hanya peringkat,
+// nama, kelas, dan status lulus/remedial. Status memberi gambaran hasil
+// tanpa membocorkan skor teman sekelas.
 // ============================================================================
 
 // Warna lencana peringkat: emas / perak / perunggu, sisanya netral.
@@ -29,15 +31,22 @@ function warnaAngkaPosisi(peringkat: number): string {
 export function KartuPosisiRanking({
   posisi,
   totalDinilai,
+  status,
 }: {
   posisi: PosisiSaya;
   totalDinilai: number;
+  status?: StatusLulusView | null;
 }) {
   return (
     <Kartu>
-      <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">
-        Posisi kamu
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">
+          Posisi kamu
+        </p>
+        {status ? (
+          <Badge varian={status.varian}>{status.label}</Badge>
+        ) : null}
+      </div>
 
       {posisi ? (
         <>
@@ -82,19 +91,32 @@ export function PapanPeringkatSiswa({
   totalSiswa: number;
 }) {
   const belumDinilai = Math.max(0, totalSiswa - daftar.length);
+  const jumlahLulus = daftar.filter(
+    (s) => s.status?.label === "Lulus",
+  ).length;
+  const jumlahRemedial = daftar.filter(
+    (s) => s.status?.label === "Remedial",
+  ).length;
 
   return (
     <section className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200">
       <div className="p-5 pb-0">
         <KartuJudul
           judul="Ranking Seluruh Siswa"
-          subjudul="Nilai tidak ditampilkan. Hanya siswa yang sudah dinilai yang masuk ranking."
+          subjudul="Status lulus/remedial ditampilkan, angka nilai tetap privat. Hanya siswa yang sudah dinilai yang masuk ranking."
         />
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+          <Badge varian="sukses">Lulus: {jumlahLulus}</Badge>
+          <Badge varian="bahaya">Remedial: {jumlahRemedial}</Badge>
+          <span>
+            KKM {KKM_ULANGAN}: nilai ≥ {KKM_ULANGAN} lulus.
+          </span>
+        </div>
       </div>
 
       {daftar.length > 0 ? (
         <div className="mt-4 max-h-[26rem] overflow-auto">
-          <table className="w-full min-w-[420px] text-sm">
+          <table className="w-full min-w-[520px] text-sm">
             <thead className="sticky top-0 border-y border-slate-200 bg-slate-50">
               <tr>
                 <th
@@ -114,6 +136,12 @@ export function PapanPeringkatSiswa({
                   className="px-4 py-3 text-left text-xs font-medium tracking-wide text-slate-500 uppercase"
                 >
                   Kelas
+                </th>
+                <th
+                  scope="col"
+                  className="px-4 py-3 text-left text-xs font-medium tracking-wide text-slate-500 uppercase"
+                >
+                  Status
                 </th>
               </tr>
             </thead>
@@ -152,6 +180,13 @@ export function PapanPeringkatSiswa({
                       </span>
                     </td>
                     <td className="px-4 py-3 text-slate-500">{s.namaKelas}</td>
+                    <td className="px-4 py-3">
+                      {s.status ? (
+                        <Badge varian={s.status.varian}>{s.status.label}</Badge>
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
+                    </td>
                   </tr>
                 );
               })}

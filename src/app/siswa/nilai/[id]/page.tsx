@@ -236,6 +236,12 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
       )
     : null;
 
+  // Status untuk kartu posisi diambil dari ranking agar konsisten dengan
+  // nilai yang dipakai saat menghitung peringkat.
+  const statusPosisiSaya =
+    ranking?.daftarDinilai.find((baris) => baris.id === siswa.id)?.status ??
+    null;
+
   // Badge status
   const badgeStatus =
     dataUlangan.status === "akan" ? (
@@ -655,6 +661,7 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
               <KartuPosisiRanking
                 posisi={ranking.posisiSaya}
                 totalDinilai={ranking.totalDinilai}
+                status={statusPosisiSaya}
               />
               <PapanPeringkatSiswa
                 daftar={ranking.daftarDinilai}
@@ -733,6 +740,7 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
           <KartuPosisiRanking
             posisi={ranking.posisiSaya}
             totalDinilai={ranking.totalDinilai}
+            status={statusPosisiSaya}
           />
           <PapanPeringkatSiswa
             daftar={ranking.daftarDinilai}

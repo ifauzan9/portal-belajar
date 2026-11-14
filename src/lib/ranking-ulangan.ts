@@ -5,13 +5,15 @@
 // sama dengan halaman ranking guru (competition ranking: 1, 2, 2, 4).
 //
 // PENTING: fungsi ini TIDAK mengembalikan nilai per siswa ke lapisan
-// tampilan. Nilai hanya dipakai untuk mengurutkan; yang dikirim ke
-// komponen hanya peringkat, nama, dan kelas.
+// tampilan. Nilai hanya dipakai untuk mengurutkan dan menentukan status;
+// yang dikirim ke komponen hanya peringkat, nama, kelas, dan status
+// lulus/remedial.
 // ============================================================================
 
 import { createClient } from "@/lib/supabase/server";
 import { gabungNilaiUlangan } from "@/lib/nilai-ulangan";
 import { hitungRanking } from "@/lib/ranking";
+import { statusLulus, type StatusLulusView } from "@/lib/status-nilai";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
@@ -22,6 +24,8 @@ export type BarisPeringkat = {
   ranking: number;
   // Jumlah siswa dengan nilai sama (termasuk diri sendiri).
   tiedWith: number;
+  // Status lulus/remedial tanpa membocorkan angka nilai.
+  status: StatusLulusView | null;
 };
 
 export type PosisiSaya = {
@@ -108,6 +112,7 @@ export async function ambilRankingUlangan(
         namaKelas: s.namaKelas,
         ranking: info.ranking!,
         tiedWith: info.tiedWith,
+        status: statusLulus(s.nilai),
       };
     });
 
