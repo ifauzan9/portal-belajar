@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireSiswa } from "@/lib/sesi-siswa";
-import { createClient } from "@/lib/supabase/server";
+import { createSiswaClient } from "@/lib/supabase/siswa";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hitungProgresLab } from "@/lib/progres-lab";
 import { Kartu } from "@/components/ui/kartu";
@@ -14,7 +14,7 @@ import { PemberitahuanSoalDitutup } from "@/components/pemberitahuan-soal";
 
 export default async function LabSiswaPage() {
   const { siswa, kelas } = await requireSiswa();
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
   const admin = createAdminClient();
 
   const [hasilLesson, hasilLatihan, hasilHasil, pengaturanSoal] =

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState, useCallback, useEffect, useRef, useState } from "react";
 import {
   deleteUlangan,
+  toggleBagikanNilai,
   toggleUlangan,
   updateUlangan,
 } from "@/app/guru/ulangan/actions";
@@ -31,8 +32,8 @@ export function BarisUlangan({
   tenggat,
   // Durasi pengerjaan dalam menit (null = tanpa timer)
   durasi,
-  // Tampilkan nilai langsung setelah submit
-  nilaiDitampilkan,
+  // Bagikan nilai ke siswa (Tahap 48; false = nilai disembunyikan)
+  bagikanNilai,
   // Jumlah soal yang sudah ada di ulangan ini
   jumlahSoal,
   // Apakah deadline sudah lewat (untuk badge)
@@ -52,7 +53,7 @@ export function BarisUlangan({
   status: "akan" | "sudah";
   tenggat: string | null;
   durasi: number | null;
-  nilaiDitampilkan: boolean;
+  bagikanNilai: boolean;
   jumlahSoal: number;
   deadlineLewat: boolean;
   dibuka: boolean;
@@ -216,7 +217,7 @@ export function BarisUlangan({
           : (
               <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-blue-200">
                 <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-                Akan dilaksanakan
+                Sedang dilaksanakan
                 {jumlahSoal > 0 ? ` · ${jumlahSoal} soal` : ""}
               </span>
             )
@@ -273,14 +274,21 @@ export function BarisUlangan({
                 ⏱
               </span>
             ) : null}
-            {status === "akan" && !nilaiDitampilkan ? (
+            {bagikanNilai ? (
               <span
-                title="Nilai ditahan sampai guru menandai selesai dinilai"
-                className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-violet-50 text-[11px] text-violet-700 ring-1 ring-violet-200"
+                title="Nilai dibagikan ke siswa"
+                className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-50 text-[11px] text-emerald-700 ring-1 ring-emerald-200"
+              >
+                📤
+              </span>
+            ) : (
+              <span
+                title="Nilai belum dibagikan ke siswa"
+                className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] text-slate-500 ring-1 ring-slate-200"
               >
                 🔒
               </span>
-            ) : null}
+            )}
           </div>
           {teksTenggat ? (
             <p className="mt-1 text-[11px] text-slate-400">
@@ -358,6 +366,27 @@ export function BarisUlangan({
                 >
                   Ubah
                 </button>
+                <form action={toggleBagikanNilai}>
+                  <input type="hidden" name="id" value={id} />
+                  <button
+                    type="submit"
+                    onClick={(event) => {
+                      const pesan = bagikanNilai
+                        ? `Tarik nilai "${judul}"? Siswa tidak bisa lagi melihat nilainya.`
+                        : `Bagikan nilai "${judul}" ke siswa? Siswa bisa melihat nilainya.`;
+                      if (!confirm(pesan)) {
+                        event.preventDefault();
+                      }
+                    }}
+                    className={`flex w-full items-center px-3 py-1.5 text-left text-xs font-medium transition ${
+                      bagikanNilai
+                        ? "text-amber-700 hover:bg-amber-50"
+                        : "text-emerald-700 hover:bg-emerald-50"
+                    }`}
+                  >
+                    {bagikanNilai ? "Tarik nilai" : "Bagikan nilai"}
+                  </button>
+                </form>
                 <form action={toggleUlangan}>
                   <input type="hidden" name="id" value={id} />
                   <button
@@ -483,7 +512,7 @@ export function BarisUlangan({
                       onChange={() => setStatusEdit(nilaiStatus)}
                       className="hidden"
                     />
-                    {nilaiStatus === "sudah" ? "Sudah" : "Akan"}
+                    {nilaiStatus === "sudah" ? "Sudah" : "Sedang"}
                   </label>
                 ))}
               </div>
@@ -517,23 +546,26 @@ export function BarisUlangan({
                     className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 sm:w-24"
                   />
                 </div>
-                <label className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 sm:h-[38px]">
-                  <input
-                    type="checkbox"
-                    name="tampilkan_nilai"
-                    defaultChecked={nilaiDitampilkan}
-                    className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
-                  />
-                  Nilai langsung tampil
-                </label>
               </>
             ) : (
               <>
                 <div />
                 <div />
-                <div />
               </>
             )}
+
+            <label
+              className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 sm:h-[38px]"
+              title="Centang = siswa boleh melihat nilai ulangan ini"
+            >
+              <input
+                type="checkbox"
+                name="bagikan_nilai"
+                defaultChecked={bagikanNilai}
+                className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
+              />
+              Bagikan nilai
+            </label>
 
             <div>
               <label className="mb-0.5 block text-xs font-medium text-slate-500">

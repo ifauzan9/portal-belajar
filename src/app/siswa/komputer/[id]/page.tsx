@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireSiswa } from "@/lib/sesi-siswa";
-import { createClient } from "@/lib/supabase/server";
+import { createSiswaClient } from "@/lib/supabase/siswa";
 import { Kartu } from "@/components/ui/kartu";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -12,7 +12,7 @@ export default async function ModulKomputerSiswaPage(
 ) {
   const { id } = await props.params;
   const { siswa } = await requireSiswa();
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
 
   const { data: lessonData } = await supabase
     .from("komputer_lessons")

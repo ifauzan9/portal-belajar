@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireSiswa } from "@/lib/sesi-siswa";
-import { createClient } from "@/lib/supabase/server";
+import { createSiswaClient } from "@/lib/supabase/siswa";
 import { ambilKelasUlangan } from "@/lib/ambil-kelas-ulangan";
 import { tenggatSudahLewat } from "@/lib/deadline";
 import { belumWaktunyaMulai } from "@/lib/jadwal-ulangan";
@@ -8,6 +8,7 @@ import {
   ambilPengaturanSoal,
   ulanganBolehDiakses,
 } from "@/lib/pengaturan-soal";
+import { statusAksesSoal } from "@/lib/status-soal";
 import { PemberitahuanSoalDitutup } from "@/components/pemberitahuan-soal";
 import { Kartu, KartuJudul } from "@/components/ui/kartu";
 import { KartuStat } from "@/components/ui/kartu-stat";
@@ -40,13 +41,13 @@ function statusUlangan(u: {
   punyaSesi: boolean;
 }): StatusView {
   if (u.status === "akan") {
+    if (u.sudahSubmit)
+      return { label: "Sudah dikerjakan", varian: "sukses" };
     if (!u.dibuka) return { label: "Ditutup guru", varian: "bahaya" };
     if (u.punyaSesi && !u.deadlineLewat)
       return { label: "Sedang dikerjakan", varian: "info" };
     if (!u.bolehSoal) return { label: "Ditutup guru", varian: "bahaya" };
     if (u.deadlineLewat) return { label: "Lewat tenggat", varian: "netral" };
-    if (u.sudahSubmit)
-      return { label: "Sudah dikerjakan", varian: "sukses" };
     if (u.belumWaktunya)
       return { label: "Dijadwalkan", varian: "peringatan" };
     return { label: "Bisa dikerjakan", varian: "info" };
@@ -76,25 +77,50 @@ function bisaDikerjakan(u: {
 
 export default async function UlanganSiswaPage() {
   const { siswa, kelas } = await requireSiswa();
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
 
-  const [hasilUlangan, hasilSubmit, hasilSesi, pengaturanSoal] =
-    await Promise.all([
-      supabase
-        .from("exams")
-        .select(
-          "id, judul, kelas_id, tanggal, status, tenggat, durasi, dibuka, exam_classes(kelas_id)",
-        ),
-      supabase
-        .from("exam_submissions")
-        .select("exam_id")
-        .eq("siswa_id", siswa.id),
-      supabase
-        .from("exam_sessions")
-        .select("exam_id")
-        .eq("siswa_id", siswa.id),
-      ambilPengaturanSoal(supabase),
-    ]);
+  const [
+    hasilUlangan,
+    hasilSubmit,
+    hasilSesi,
+    pengaturanSoal,
+    hasilBagikan,
+    hasilNilai,
+  ] = await Promise.all([
+    supabase
+      .from("exams")
+      .select(
+        "id, judul, kelas_id, tanggal, status, tenggat, durasi, dibuka, exam_classes(kelas_id)",
+      ),
+    supabase
+      .from("exam_submissions")
+      .select("exam_id")
+      .eq("siswa_id", siswa.id),
+    supabase
+      .from("exam_sessions")
+      .select("exam_id")
+      .eq("siswa_id", siswa.id),
+    ambilPengaturanSoal(supabase),
+    // Tahap 48: status bagikan nilai untuk tombol "Lihat nilai".
+    supabase.from("exams").select("id, bagikan_nilai"),
+    // Nilai yang sudah ada untuk siswa ini (termasuk nilai manual guru).
+    supabase
+      .from("exam_scores")
+      .select("exam_id")
+      .eq("siswa_id", siswa.id),
+  ]);
+
+  const setBagikan = new Set(
+    ((hasilBagikan.data ?? []) as { id: string; bagikan_nilai: boolean }[])
+      .filter((row) => row.bagikan_nilai === true)
+      .map((row) => row.id),
+  );
+
+  const setNilai = new Set(
+    (hasilNilai.data ?? []).map(
+      (n) => (n as { exam_id: string }).exam_id,
+    ),
+  );
 
   const setSubmit = new Set(
     (hasilSubmit.data ?? []).map((s) => (s as { exam_id: string }).exam_id),
@@ -131,6 +157,18 @@ export default async function UlanganSiswaPage() {
       dibukaRow;
     const belumWaktunya =
       statusRow === "akan" && belumWaktunyaMulai(row.tanggal);
+    const bolehSoal = ulanganBolehDiakses(pengaturanSoal, dibukaRow);
+
+    // Detail hanya bisa dibuka bila ulangan tidak sedang ditutup / kehabisan
+    // waktu. Tutup akses soal global hanya relevan untuk ulangan yang masih
+    // berjalan (status "akan"); ulangan "sudah" tetap boleh dilihat detailnya.
+    const terkunci =
+      !dibukaRow || (statusRow === "akan" && (!bolehSoal || deadlineLewat));
+    const alasanTerkunci = !dibukaRow
+      ? "Ulangan sudah ditutup guru"
+      : deadlineLewat
+        ? "Waktu ulangan sudah habis"
+        : "Akses soal sedang ditutup guru";
 
     return [
       {
@@ -141,11 +179,15 @@ export default async function UlanganSiswaPage() {
         tenggat: row.tenggat,
         durasi: row.durasi,
         dibuka: dibukaRow,
-        bolehSoal: ulanganBolehDiakses(pengaturanSoal, dibukaRow),
+        dibagikan: setBagikan.has(row.id),
+        punyaNilai: setSubmit.has(row.id) || setNilai.has(row.id),
+        bolehSoal,
         punyaSesi: setSesi.has(row.id),
         deadlineLewat,
         belumWaktunya,
         sudahSubmit: setSubmit.has(row.id),
+        terkunci,
+        alasanTerkunci,
       },
     ];
   });
@@ -228,6 +270,7 @@ export default async function UlanganSiswaPage() {
           <ul className="mt-3 divide-y divide-slate-100">
             {urut.map((u) => {
               const status = statusUlangan(u);
+              const aksesSoal = statusAksesSoal(u);
               const boleh = bisaDikerjakan(u);
               return (
                 <li key={u.id} className="py-3">
@@ -262,6 +305,11 @@ export default async function UlanganSiswaPage() {
                       <Badge varian={status.varian} titik>
                         {status.label}
                       </Badge>
+                      {aksesSoal ? (
+                        <Badge varian={aksesSoal.varian}>
+                          {aksesSoal.label}
+                        </Badge>
+                      ) : null}
                       {boleh ? (
                         <Link
                           href={`/siswa/ulangan/${u.id}/konfirmasi`}
@@ -273,20 +321,52 @@ export default async function UlanganSiswaPage() {
                               ? "Lanjutkan"
                               : "Kerjakan"}
                         </Link>
-                      ) : u.sudahSubmit ? (
-                        <Link
-                          href={`/siswa/nilai/${u.id}`}
-                          className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
-                        >
-                          Lihat hasil
-                        </Link>
                       ) : (
-                        <Link
-                          href={`/siswa/nilai/${u.id}`}
-                          className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
-                        >
-                          Detail
-                        </Link>
+                        <>
+                          {u.terkunci ? (
+                            <button
+                              type="button"
+                              disabled
+                              title={u.alasanTerkunci}
+                              className="cursor-not-allowed rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-400 opacity-60"
+                            >
+                              Detail
+                            </button>
+                          ) : (
+                            <Link
+                              href={
+                                u.sudahSubmit
+                                  ? `/siswa/ulangan/${u.id}`
+                                  : `/siswa/ulangan/${u.id}/konfirmasi`
+                              }
+                              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+                            >
+                              Detail
+                            </Link>
+                          )}
+
+                          {u.dibagikan && u.punyaNilai ? (
+                            <Link
+                              href={`/siswa/nilai/${u.id}?nilai=1`}
+                              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-500"
+                            >
+                              Lihat nilai
+                            </Link>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled
+                              title={
+                                !u.dibagikan
+                                  ? "Nilai belum dibagikan guru"
+                                  : "Nilai belum tersedia"
+                              }
+                              className="cursor-not-allowed rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-400 opacity-60"
+                            >
+                              Lihat nilai
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>

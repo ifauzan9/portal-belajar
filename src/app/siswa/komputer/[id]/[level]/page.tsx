@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireSiswa } from "@/lib/sesi-siswa";
-import { createClient } from "@/lib/supabase/server";
+import { createSiswaClient } from "@/lib/supabase/siswa";
 import { TantanganKomputer, type Konfigurasi } from "@/components/tantangan-komputer";
 import { PetaLevel } from "@/components/peta-level";
 
@@ -25,7 +25,7 @@ export default async function LevelKomputerSiswaPage(
   if (!Number.isInteger(levelNum) || levelNum < 1) notFound();
 
   const { siswa } = await requireSiswa();
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
 
   const { data: lessonData } = await supabase
     .from("komputer_lessons")

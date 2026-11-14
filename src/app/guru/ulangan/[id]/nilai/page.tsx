@@ -15,7 +15,7 @@ import {
 import { gabungNilaiUlangan } from "@/lib/nilai-ulangan";
 import { hitungRanking } from "@/lib/ranking";
 import { ambilDataJawabanUlangan } from "@/lib/ulangan-jawaban";
-import { toggleUlangan } from "@/app/guru/ulangan/actions";
+import { toggleBagikanNilai, toggleUlangan } from "@/app/guru/ulangan/actions";
 import { jenisSoalTersedia } from "@/lib/jenis-soal-ulangan";
 
 type SiswaRow = {
@@ -50,13 +50,29 @@ export default async function InputNilaiPage({
     typeof kelasDimintaRaw === "string" ? kelasDimintaRaw : "";
 
   // Ambil detail ulangan + semua kelasnya (gabungan legacy + relasi)
-  const { data: ulangan, error: galatUlangan } = await supabase
+  // `bagikan_nilai` baru ada setelah Tahap 48; kalau belum, fallback ke
+  // query lama dan anggap nilai belum dibagikan.
+  const kolomUlangan =
+    "id, judul, kelas_id, tanggal, status, tenggat, dibuka, exam_classes(kelas_id)";
+
+  let hasilUlangan = await supabase
     .from("exams")
-    .select(
-      "id, judul, kelas_id, tanggal, status, tenggat, dibuka, exam_classes(kelas_id)",
-    )
+    .select(`${kolomUlangan}, bagikan_nilai`)
     .eq("id", id)
     .maybeSingle();
+
+  let siapBagikan = !hasilUlangan.error;
+
+  if (hasilUlangan.error) {
+    hasilUlangan = await supabase
+      .from("exams")
+      .select(kolomUlangan)
+      .eq("id", id)
+      .maybeSingle();
+    siapBagikan = false;
+  }
+
+  const { data: ulangan, error: galatUlangan } = hasilUlangan;
 
   if (galatUlangan || !ulangan) {
     notFound();
@@ -70,6 +86,7 @@ export default async function InputNilaiPage({
     status: "akan" | "sudah";
     tenggat: string | null;
     dibuka: boolean | null;
+    bagikan_nilai?: boolean | null;
     exam_classes: { kelas_id: string }[];
   };
 
@@ -305,7 +322,7 @@ export default async function InputNilaiPage({
           {dataUlangan.tanggal ? ` · Tanggal: ${dataUlangan.tanggal}` : ""}
           {dataUlangan.status === "akan" ? (
             <span className="ml-2 text-xs text-blue-600">
-              · Status: Akan dilaksanakan
+              · Status: Sedang dilaksanakan
             </span>
           ) : null}
           {dataUlangan.dibuka === false ? (
@@ -317,7 +334,7 @@ export default async function InputNilaiPage({
 
         {dataUlangan.status === "akan" ? (
           <div className="mt-3 rounded-xl bg-blue-50 p-3 text-xs text-blue-700 ring-1 ring-blue-100">
-            Ulangan ini berstatus <b>Akan dilaksanakan</b>. Siswa bisa
+            Ulangan ini berstatus <b>Sedang dilaksanakan</b>. Siswa bisa
             mengerjakan soal secara online. {teksInfoNilai}
             <Link
               href={`/guru/ulangan/${id}/soal`}
@@ -347,6 +364,56 @@ export default async function InputNilaiPage({
             </form>
           </div>
         ) : null}
+
+        {/* Tahap 48: bagikan / tarik nilai untuk siswa. */}
+        <div
+          className={`mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl p-3 ring-1 ${
+            dataUlangan.bagikan_nilai === true
+              ? "bg-emerald-50 ring-emerald-100"
+              : "bg-violet-50 ring-violet-100"
+          }`}
+        >
+          <p
+            className={`text-xs ${
+              dataUlangan.bagikan_nilai === true
+                ? "text-emerald-700"
+                : "text-violet-700"
+            }`}
+          >
+            {dataUlangan.bagikan_nilai === true ? (
+              <>
+                <b>📤 Nilai dibagikan ke siswa.</b> Siswa bisa melihat nilai
+                ulangan ini di halaman mereka.
+              </>
+            ) : (
+              <>
+                <b>🔒 Nilai belum dibagikan.</b> Siswa tidak melihat angka
+                nilai sampai kamu membagikannya.
+              </>
+            )}
+            {!siapBagikan ? (
+              <span className="ml-1 font-medium text-amber-700">
+                Jalankan <code>schema.sql</code> Tahap 48 untuk mengaktifkan.
+              </span>
+            ) : null}
+          </p>
+          <form action={toggleBagikanNilai}>
+            <input type="hidden" name="id" value={id} />
+            <button
+              type="submit"
+              disabled={!siapBagikan}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                dataUlangan.bagikan_nilai === true
+                  ? "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                  : "bg-emerald-600 text-white hover:bg-emerald-500"
+              }`}
+            >
+              {dataUlangan.bagikan_nilai === true
+                ? "Tarik nilai"
+                : "Bagikan nilai"}
+            </button>
+          </form>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-end justify-between gap-3 rounded-2xl bg-white p-4 ring-1 ring-slate-200">

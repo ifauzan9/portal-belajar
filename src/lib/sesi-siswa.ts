@@ -2,7 +2,7 @@ import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import { createSiswaClient } from "@/lib/supabase/siswa";
 
 // ============================================================================
 // Sesi login siswa (kustom, tanpa Supabase Auth).
@@ -160,7 +160,7 @@ export async function requireSiswa(): Promise<HasilRequireSiswa> {
 
   let kelas: { id: string; nama_kelas: string } | null = null;
   if (siswaRaw.kelas_id) {
-    const supabase = await createClient();
+    const supabase = await createSiswaClient();
     const { data: kelasData } = await supabase
       .from("classes")
       .select("id, nama_kelas")

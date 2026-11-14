@@ -2,8 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
-  selesaiDinilai,
-  batalkanSelesaiDinilai,
+  toggleBagikanNilai,
   toggleUlangan,
   toggleBlokirTempelUlangan,
 } from "@/app/guru/ulangan/actions";
@@ -13,7 +12,6 @@ import { DaftarJawaban } from "./daftar-jawaban";
 import { DaftarSoal } from "./daftar-soal";
 import { ambilDataJawabanUlangan } from "@/lib/ulangan-jawaban";
 import { formatWaktuWib } from "@/lib/waktu";
-import { jenisSoalTersedia } from "@/lib/jenis-soal-ulangan";
 
 // ============================================================================
 // Halaman kelola soal ulangan (status "akan dilaksanakan").
@@ -41,25 +39,40 @@ export default async function SoalUlanganPage({
   // Detail ulangan. Kolom `blokir_tempel` baru ada setelah Tahap 39;
   // kalau belum, fallback ke select lama dan anggap nonaktif.
   const kolomUlanganDasar =
-    "id, judul, status, tenggat, tanggal, durasi, nilai_ditampilkan, nilai_selesai, dibuka";
+    "id, judul, status, tenggat, tanggal, durasi, dibuka";
 
   const hasilUlanganLengkap = await supabase
     .from("exams")
-    .select(`${kolomUlanganDasar}, blokir_tempel`)
+    .select(`${kolomUlanganDasar}, blokir_tempel, bagikan_nilai`)
     .eq("id", id)
     .maybeSingle();
 
   let ulangan: unknown = hasilUlanganLengkap.data;
   let siapBlokir = !hasilUlanganLengkap.error;
+  let siapBagikan = !hasilUlanganLengkap.error;
 
   if (hasilUlanganLengkap.error) {
-    const fallback = await supabase
+    // Fallback kolom lama: coba tanpa bagikan_nilai, lalu tanpa blokir_tempel.
+    const tanpaBagikan = await supabase
       .from("exams")
-      .select(kolomUlanganDasar)
+      .select(`${kolomUlanganDasar}, blokir_tempel`)
       .eq("id", id)
       .maybeSingle();
-    ulangan = fallback.data;
-    siapBlokir = false;
+
+    if (!tanpaBagikan.error) {
+      ulangan = tanpaBagikan.data;
+      siapBlokir = true;
+      siapBagikan = false;
+    } else {
+      const fallback = await supabase
+        .from("exams")
+        .select(kolomUlanganDasar)
+        .eq("id", id)
+        .maybeSingle();
+      ulangan = fallback.data;
+      siapBlokir = false;
+      siapBagikan = false;
+    }
   }
 
   if (!ulangan) {
@@ -73,8 +86,7 @@ export default async function SoalUlanganPage({
     tenggat: string | null;
     tanggal: string | null;
     durasi: number | null;
-    nilai_ditampilkan: boolean;
-    nilai_selesai: boolean;
+    bagikan_nilai?: boolean | null;
     dibuka: boolean | null;
     blokir_tempel?: boolean | null;
   };
@@ -138,19 +150,6 @@ export default async function SoalUlanganPage({
 
   const soalKode = daftarSoal.filter((s) => s.jenis === "kode");
 
-  // Jenis soal yang ada → untuk teks info hasil nilai.
-  const jenisSoal = jenisSoalTersedia(daftarSoal.map((s) => s.jenis));
-  const teksInfoNilai =
-    jenisSoal.esai && jenisSoal.kode
-      ? "Nilai PG & kode otomatis terlihat; esai masih menunggu penilaian."
-      : jenisSoal.esai
-        ? "Nilai PG otomatis terlihat; esai masih menunggu penilaian."
-        : jenisSoal.kode && jenisSoal.pg
-          ? "Nilai PG & kode otomatis terlihat."
-          : jenisSoal.kode
-            ? "Nilai kode otomatis terlihat."
-            : "Nilai PG otomatis terlihat.";
-
   const { daftarSubmit, daftarSesi, soalCount, probeCounts, daftarSoalEsai } =
     await ambilDataJawabanUlangan(supabase, id, daftarSoal);
 
@@ -175,76 +174,66 @@ export default async function SoalUlanganPage({
         </p>
       </div>
 
-      {/* ======================= STATUS & NILAI ======================= */}
-      {dataUlangan.status === "akan" ? (
-        <section
-          className={`rounded-2xl p-5 ring-1 ${
-            !dataUlangan.nilai_selesai
-              ? "bg-emerald-50 ring-emerald-200"
-              : dataUlangan.nilai_ditampilkan
-                ? "bg-blue-50 ring-blue-200"
-                : "bg-violet-50 ring-violet-200"
-          }`}
-        >
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p
-                className={`text-sm font-semibold ${
-                  !dataUlangan.nilai_selesai
-                    ? "text-emerald-800"
-                    : dataUlangan.nilai_ditampilkan
-                      ? "text-blue-800"
-                      : "text-violet-800"
-                }`}
-              >
-                {!dataUlangan.nilai_selesai
-                  ? "✅ Selesai dinilai — nilai terbuka untuk semua siswa"
-                  : dataUlangan.nilai_ditampilkan
-                    ? "📊 Nilai langsung tampak setelah siswa submit"
-                    : "🔒 Nilai ditahan — siswa tidak melihat angka"}
+      {/* ======================= BAGIKAN NILAI ======================= */}
+      {/* Tahap 48: saklar nilai terpisah dari buka/tutup ulangan. */}
+      <section
+        className={`rounded-2xl p-5 ring-1 ${
+          dataUlangan.bagikan_nilai === true
+            ? "bg-emerald-50 ring-emerald-200"
+            : "bg-violet-50 ring-violet-200"
+        }`}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p
+              className={`text-sm font-semibold ${
+                dataUlangan.bagikan_nilai === true
+                  ? "text-emerald-800"
+                  : "text-violet-800"
+              }`}
+            >
+              {dataUlangan.bagikan_nilai === true
+                ? "📤 Nilai dibagikan — siswa bisa melihat hasil"
+                : "🔒 Nilai belum dibagikan — siswa tidak melihat angka"}
+            </p>
+            <p
+              className={`mt-0.5 text-xs ${
+                dataUlangan.bagikan_nilai === true
+                  ? "text-emerald-600"
+                  : "text-violet-600"
+              }`}
+            >
+              {dataUlangan.bagikan_nilai === true
+                ? "Siswa dapat melihat nilai ulangan ini di halaman mereka."
+                : "Nilai disembunyikan sampai kamu menekan tombol “Bagikan nilai”."}
+            </p>
+            {!siapBagikan ? (
+              <p className="mt-1 text-xs text-amber-700">
+                Jalankan <code>schema.sql</code> Tahap 48 untuk mengaktifkan
+                saklar ini.
               </p>
-              <p
-                className={`mt-0.5 text-xs ${
-                  !dataUlangan.nilai_selesai
-                    ? "text-emerald-600"
-                    : dataUlangan.nilai_ditampilkan
-                      ? "text-blue-600"
-                      : "text-violet-600"
-                }`}
-              >
-                {!dataUlangan.nilai_selesai
-                  ? "Semua siswa dapat melihat hasil di halaman mereka."
-                  : dataUlangan.nilai_ditampilkan
-                    ? teksInfoNilai
-                    : "Nilai baru terbuka setelah kamu tekan tombol &ldquo;Selesai dinilai&rdquo;."}
-              </p>
-            </div>
-            <div className="flex shrink-0 flex-wrap gap-2">
-              {!dataUlangan.nilai_selesai ? (
-                <form action={selesaiDinilai}>
-                  <input type="hidden" name="exam_id" value={id} />
-                  <button
-                    type="submit"
-                    className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-500"
-                  >
-                    ✓ Tandai Selesai Dinilai
-                  </button>
-                </form>
-              ) : (
-                <form action={batalkanSelesaiDinilai}>
-                  <input type="hidden" name="exam_id" value={id} />
-                  <button
-                    type="submit"
-                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
-                  >
-                    Batalkan
-                  </button>
-                </form>
-              )}
-            </div>
+            ) : null}
           </div>
-        </section>
-      ) : null}
+          <div className="shrink-0">
+            <form action={toggleBagikanNilai}>
+              <input type="hidden" name="id" value={id} />
+              <button
+                type="submit"
+                disabled={!siapBagikan}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                  dataUlangan.bagikan_nilai === true
+                    ? "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                    : "bg-emerald-600 text-white hover:bg-emerald-500"
+                }`}
+              >
+                {dataUlangan.bagikan_nilai === true
+                  ? "Tarik nilai"
+                  : "Bagikan nilai"}
+              </button>
+            </form>
+          </div>
+        </div>
+      </section>
 
       {/* ======================= BUKA / TUTUP ULANGAN ======================= */}
       {/* Kolom `dibuka` baru (Tahap 12): kalau DDL belum dijalankan,

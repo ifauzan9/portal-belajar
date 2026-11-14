@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireSiswa } from "@/lib/sesi-siswa";
-import { createClient } from "@/lib/supabase/server";
+import { createSiswaClient } from "@/lib/supabase/siswa";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { LabRunner } from "@/components/lab-runner";
 import { PetaLevel } from "@/components/peta-level";
@@ -57,7 +57,7 @@ export default async function LevelLabSiswaPage(
   if (!Number.isInteger(levelNum) || levelNum < 1) notFound();
 
   const { siswa } = await requireSiswa();
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
   const admin = createAdminClient();
 
   // Saklar global "tutup akses soal" (Tahap 41). Level lab tidak bisa dibuka

@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { requireSiswa } from "@/lib/sesi-siswa";
-import { createClient } from "@/lib/supabase/server";
+import { createSiswaClient } from "@/lib/supabase/siswa";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   sisaKuotaPassword,
@@ -56,7 +56,7 @@ export default async function ProfilSiswaPage() {
   // Jumlah teman sekelas.
   let jumlahKelas: number | null = null;
   if (siswa.kelas_id) {
-    const supabase = await createClient();
+    const supabase = await createSiswaClient();
     const { count } = await supabase
       .from("students")
       .select("id", { count: "exact", head: true })

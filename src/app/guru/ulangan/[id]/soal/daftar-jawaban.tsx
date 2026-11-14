@@ -1,11 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useActionState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  useActionState,
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import {
   simpanNilaiEsai,
-  simpanNilaiKodeManual,
+  simpanNilaiKodeManualBanyak,
 } from "@/app/guru/ulangan/actions";
+import { Badge } from "@/components/ui/badge";
+import {
+  bacaDraftNilaiKode,
+  tulisDraftNilaiKode,
+  type DraftNilaiKode,
+} from "@/lib/draft-nilai-kode";
 import { TombolReset } from "@/components/tombol-reset";
 import { formatWaktuWib } from "@/lib/waktu";
 import { jenisSoalTersedia } from "@/lib/jenis-soal-ulangan";
@@ -82,6 +95,27 @@ function formatAturan(aturan: NonNullable<SoalReview["aturan"]>): string {
   return bagian.length > 0 ? bagian.join(" · ") : "—";
 }
 
+// Nilai manual yang tersimpan di server, dalam bentuk string untuk input.
+function nilaiServerKode(row: SubmitRow): string {
+  return row.nilai_kode_manual === null ? "" : String(row.nilai_kode_manual);
+}
+
+// Nilai kode yang dipakai untuk tampilan total sementara.
+// Draft kosong = kembali ke nilai otomatis.
+function nilaiKodeEfektif(
+  row: SubmitRow,
+  draft: string | undefined,
+): number {
+  if (draft === undefined) {
+    return row.nilai_kode_manual ?? row.nilai_kode;
+  }
+  if (draft.trim() === "") return row.nilai_kode;
+
+  const angka = Number(draft);
+  if (!Number.isFinite(angka)) return row.nilai_kode;
+  return Math.max(0, Math.min(1000, Math.floor(angka)));
+}
+
 type SesiRow = {
   siswa_id: string;
   namaSiswa: string;
@@ -129,10 +163,109 @@ export function DaftarJawaban({
     FormData
   >(simpanNilaiEsai, { message: null });
 
-  const [stateKode, formActionKode, pendingKode] = useActionState<
-    { message: string | null },
-    FormData
-  >(simpanNilaiKodeManual, { message: null });
+  const router = useRouter();
+  const [draftKode, setDraftKode] = useState<DraftNilaiKode>({});
+  const draftKodeRef = useRef<DraftNilaiKode>({});
+  const [pesanKode, setPesanKode] = useState<string | null>(null);
+  const [pendingKode, mulaiSimpanKode] = useTransition();
+
+  // Muat draft dari browser setelah mount supaya tidak bentrok dengan SSR.
+  // Sekaligus buang draft milik siswa yang sudah tidak ada di daftar submit
+  // (misalnya setelah reset pengerjaan).
+  useEffect(() => {
+    const tersimpan = bacaDraftNilaiKode(examId);
+    const idAda = new Set(daftarSubmit.map((row) => row.siswa_id));
+    const bersih = Object.fromEntries(
+      Object.entries(tersimpan).filter(([siswaId]) => idAda.has(siswaId)),
+    );
+
+    draftKodeRef.current = bersih;
+    // Draft hanya bisa dibaca setelah mount (localStorage tidak ada di SSR).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDraftKode(bersih);
+
+    if (Object.keys(bersih).length !== Object.keys(tersimpan).length) {
+      tulisDraftNilaiKode(examId, bersih);
+    }
+  }, [examId, daftarSubmit]);
+
+  const ubahNilaiKode = (row: SubmitRow, value: string) => {
+    const next = { ...draftKodeRef.current };
+    if (value.trim() === nilaiServerKode(row).trim()) {
+      delete next[row.siswa_id];
+    } else {
+      next[row.siswa_id] = value;
+    }
+    draftKodeRef.current = next;
+    setDraftKode(next);
+    tulisDraftNilaiKode(examId, next);
+    setPesanKode(null);
+  };
+
+  const batalkanDraftKode = (row: SubmitRow) => {
+    const next = { ...draftKodeRef.current };
+    delete next[row.siswa_id];
+    draftKodeRef.current = next;
+    setDraftKode(next);
+    tulisDraftNilaiKode(examId, next);
+    setPesanKode(null);
+  };
+
+  // Hanya draft milik siswa yang masih ada di daftar submit yang dihitung.
+  const idSiswa = new Set(daftarSubmit.map((row) => row.siswa_id));
+  const draftItems = Object.entries(draftKode)
+    .filter(([siswaId]) => idSiswa.has(siswaId))
+    .map(([siswa_id, nilai_kode_manual]) => ({ siswa_id, nilai_kode_manual }));
+  const jumlahDraftKode = draftItems.length;
+
+  const simpanSemuaNilaiKode = () => {
+    if (pendingKode || draftItems.length === 0) return;
+
+    setPesanKode(null);
+    mulaiSimpanKode(async () => {
+      try {
+        const hasil = await simpanNilaiKodeManualBanyak({
+          examId,
+          items: draftItems,
+        });
+
+        if (hasil.disimpan.length > 0) {
+          const disimpan = new Set(hasil.disimpan);
+          const next = { ...draftKodeRef.current };
+          for (const item of draftItems) {
+            // Jangan hapus draft yang sempat diubah lagi saat proses simpan.
+            if (
+              disimpan.has(item.siswa_id) &&
+              next[item.siswa_id] === item.nilai_kode_manual
+            ) {
+              delete next[item.siswa_id];
+            }
+          }
+          draftKodeRef.current = next;
+          setDraftKode(next);
+          tulisDraftNilaiKode(examId, next);
+        }
+
+        if (hasil.message || hasil.gagal.length > 0) {
+          setPesanKode(
+            [
+              hasil.message,
+              hasil.gagal.length > 0
+                ? "Draft yang gagal tetap tersimpan di browser."
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" "),
+          );
+        }
+
+        // Ambil data server terbaru supaya total dan nilai manual ikut update.
+        if (hasil.disimpan.length > 0) router.refresh();
+      } catch {
+        setPesanKode("Gagal menyimpan nilai kode. Coba lagi.");
+      }
+    });
+  };
 
   // Hitung total nilai esai per siswa dari input per soal (untuk display
   // live sebelum simpan). Mengambil nilai tersimpan atau input lokal.
@@ -163,13 +296,43 @@ export function DaftarJawaban({
         jawaban, nilai sistem, dan tombol reset pengerjaan.
       </p>
 
+      {jumlahDraftKode > 0 ? (
+        <div className="sticky top-2 z-20 mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50/95 px-3 py-2 shadow-sm backdrop-blur">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge varian="peringatan">{jumlahDraftKode} draft</Badge>
+            <span className="text-xs text-amber-800">
+              Nilai kode belum disimpan ke server.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={simpanSemuaNilaiKode}
+            disabled={pendingKode}
+            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+          >
+            {pendingKode ? "Menyimpan..." : "Simpan Semua Nilai Kode"}
+          </button>
+        </div>
+      ) : null}
+
+      {pesanKode ? (
+        <p className="mt-2 text-xs text-red-600">{pesanKode}</p>
+      ) : null}
+
       {daftarSubmit.length === 0 ? (
         <p className="mt-4 text-sm text-slate-500">
           Belum ada siswa yang submit jawaban.
         </p>
       ) : (
         <div className="mt-4 space-y-2">
-          {daftarSubmit.map((row) => (
+          {daftarSubmit.map((row) => {
+            const draft = draftKode[row.siswa_id];
+            const adaDraft = draft !== undefined;
+            const kodeEfektif = nilaiKodeEfektif(row, draft);
+            const totalEfektif =
+              row.nilai_pg + row.nilai_esai + kodeEfektif;
+
+            return (
             <div
               key={row.id}
               className="rounded-xl ring-1 ring-slate-100 transition hover:ring-slate-200"
@@ -216,12 +379,17 @@ export function DaftarJawaban({
                   ) : null}
                   {jenisSoal.kode ? (
                     <span className="text-emerald-600">
-                      Kode: {row.nilai_kode_manual ?? row.nilai_kode}
-                      {row.nilai_kode_manual !== null ? " (manual)" : ""}
+                      Kode: {kodeEfektif}
+                      {adaDraft
+                        ? " (draft)"
+                        : row.nilai_kode_manual !== null
+                          ? " (manual)"
+                          : ""}
                     </span>
                   ) : null}
                   <span className="font-semibold text-slate-900">
-                    Total: {row.nilai_total}
+                    Total: {totalEfektif}
+                    {adaDraft ? " (draft)" : ""}
                   </span>
                   <span className="text-slate-400">
                     {bukaId === row.id ? "▲" : "▼"}
@@ -509,46 +677,41 @@ export function DaftarJawaban({
                         );
                       })}
 
-                      <form
-                        action={formActionKode}
-                        className="rounded-xl bg-emerald-50 p-4 ring-1 ring-emerald-200"
-                      >
-                        <input type="hidden" name="exam_id" value={examId} />
-                        <input
-                          type="hidden"
-                          name="siswa_id"
-                          value={row.siswa_id}
-                        />
-                        <p className="text-xs font-semibold text-emerald-800">
-                          Nilai Kode Manual (hibrida)
-                        </p>
+                      <div className="rounded-xl bg-emerald-50 p-4 ring-1 ring-emerald-200">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-xs font-semibold text-emerald-800">
+                            Nilai Kode Manual (hibrida)
+                          </p>
+                          {adaDraft ? (
+                            <Badge varian="peringatan">Draft</Badge>
+                          ) : null}
+                        </div>
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           <input
                             type="number"
-                            name="nilai_kode_manual"
                             min={0}
                             max={1000}
-                            defaultValue={row.nilai_kode_manual ?? ""}
+                            value={draft ?? nilaiServerKode(row)}
+                            onChange={(e) =>
+                              ubahNilaiKode(row, e.target.value)
+                            }
                             placeholder={`Otomatis: ${row.nilai_kode}`}
                             className="w-32 rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                           />
-                          <button
-                            type="submit"
-                            disabled={pendingKode}
-                            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
-                          >
-                            {pendingKode ? "Menyimpan..." : "Simpan Nilai Kode"}
-                          </button>
+                          {adaDraft ? (
+                            <button
+                              type="button"
+                              onClick={() => batalkanDraftKode(row)}
+                              className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-white"
+                            >
+                              Batalkan draft
+                            </button>
+                          ) : null}
                           <p className="text-xs text-slate-500">
                             Kosongkan untuk kembali ke nilai otomatis.
                           </p>
                         </div>
-                        {stateKode.message ? (
-                          <p className="mt-2 text-xs text-red-600">
-                            {stateKode.message}
-                          </p>
-                        ) : null}
-                      </form>
+                      </div>
                     </div>
                   ) : null}
 
@@ -643,7 +806,8 @@ export function DaftarJawaban({
                 </div>
               ) : null}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

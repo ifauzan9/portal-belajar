@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireSiswa } from "@/lib/sesi-siswa";
-import { createClient } from "@/lib/supabase/server";
+import { createSiswaClient } from "@/lib/supabase/siswa";
 import { ambilKelasUlangan } from "@/lib/ambil-kelas-ulangan";
 import { tenggatSudahLewat } from "@/lib/deadline";
 import { formatWaktuWib } from "@/lib/waktu";
@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Notifikasi } from "@/components/ui/notifikasi";
 import { IkonBuku } from "@/components/ui/ikon-siswa";
 import { jenisSoalTersedia } from "@/lib/jenis-soal-ulangan";
+import { nilaiDibagikan } from "@/lib/bagikan-nilai";
 
 // ============================================================================
 // Halaman mengerjakan soal ulangan (status "akan dilaksanakan").
@@ -41,18 +42,22 @@ export default async function KerjakanUlanganPage(
 ) {
   const { id } = await props.params;
   const { siswa } = await requireSiswa();
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
 
   // Ambil detail ulangan. Kolom `blokir_tempel` baru ada setelah Tahap 39;
   // kalau belum, fallback ke select lama dan anggap nonaktif.
   const kolomUlanganDasar =
-    "id, judul, status, tenggat, durasi, nilai_ditampilkan, nilai_selesai, dibuka, kelas_id, exam_classes(kelas_id)";
+    "id, judul, status, tenggat, durasi, dibuka, kelas_id, exam_classes(kelas_id)";
 
-  const hasilUlanganLengkap = await supabase
-    .from("exams")
-    .select(`${kolomUlanganDasar}, blokir_tempel`)
-    .eq("id", id)
-    .maybeSingle();
+  const [hasilUlanganLengkap, hasilBagikan] = await Promise.all([
+    supabase
+      .from("exams")
+      .select(`${kolomUlanganDasar}, blokir_tempel`)
+      .eq("id", id)
+      .maybeSingle(),
+    // Tahap 48: nilai hanya tampil bila guru membagikannya.
+    supabase.from("exams").select("bagikan_nilai").eq("id", id).maybeSingle(),
+  ]);
 
   let ulangan: unknown = hasilUlanganLengkap.data;
 
@@ -75,8 +80,6 @@ export default async function KerjakanUlanganPage(
     status: "akan" | "sudah";
     tenggat: string | null;
     durasi: number | null;
-    nilai_ditampilkan: boolean;
-    nilai_selesai: boolean;
     dibuka: boolean | null;
     kelas_id: string | null;
     exam_classes?: { kelas_id: string }[];
@@ -164,9 +167,10 @@ export default async function KerjakanUlanganPage(
   const pengaturanSoal = await ambilPengaturanSoal(supabase);
   const soalDitutupGlobal = pengaturanSoal.tutupUlangan && !punyaSesi;
 
-  // Cek apakah nilai boleh ditampilkan (guru menahan / sudah selesai dinilai)
-  const nilaiDitampilkan =
-    dataUlangan.nilai_ditampilkan === true || dataUlangan.nilai_selesai === true;
+  // Apakah nilai boleh ditampilkan? (Tahap 48: saklar bagikan nilai)
+  const nilaiDitampilkan = nilaiDibagikan(
+    hasilBagikan.data as { bagikan_nilai?: boolean | null } | null,
+  );
 
   const soalList = (soalData ?? []) as {
     id: string;
@@ -296,10 +300,10 @@ export default async function KerjakanUlanganPage(
           ) : (
             <div className="mt-4">
               <Notifikasi varian="info" judul="Jawaban sudah dikumpulkan">
-                Nilai kamu ditahan oleh guru dan akan ditampilkan setelah selesai
-                dinilai. Nanti kamu bisa lihat di halaman{" "}
+                Nilai kamu belum dibagikan oleh guru. Nanti kamu bisa lihat di
+                halaman{" "}
                 <Link
-                  href={`/siswa/nilai/${id}`}
+                  href={`/siswa/nilai/${id}?nilai=1`}
                   className="font-medium underline hover:no-underline"
                 >
                   Detail Nilai
@@ -311,7 +315,7 @@ export default async function KerjakanUlanganPage(
         </Kartu>
 
         <Link
-          href={`/siswa/nilai/${id}`}
+          href={`/siswa/nilai/${id}?nilai=1`}
           className="inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
         >
           Lihat Detail Nilai →

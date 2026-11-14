@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireSiswa } from "@/lib/sesi-siswa";
-import { createClient } from "@/lib/supabase/server";
+import { createSiswaClient } from "@/lib/supabase/siswa";
 import { tenggatSudahLewat } from "@/lib/deadline";
 import { Kartu, KartuJudul } from "@/components/ui/kartu";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +20,7 @@ type StatusView = {
 
 export default async function TugasSiswaPage() {
   const { siswa, kelas } = await requireSiswa();
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
 
   const [hasilTugas, hasilSubmit] = await Promise.all([
     supabase

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireSiswa } from "@/lib/sesi-siswa";
-import { createClient } from "@/lib/supabase/server";
+import { createSiswaClient } from "@/lib/supabase/siswa";
 import { Kartu } from "@/components/ui/kartu";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -16,7 +16,7 @@ type LessonRow = {
 
 export default async function KomputerSiswaPage() {
   const { siswa, kelas } = await requireSiswa();
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
 
   const [hasilLesson, hasilTantangan, hasilHasil] = await Promise.all([
     supabase

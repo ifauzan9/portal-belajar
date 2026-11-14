@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { ambilSesiSiswa } from "@/lib/sesi-siswa";
-import { createClient } from "@/lib/supabase/server";
+import { createSiswaClient } from "@/lib/supabase/siswa";
 import {
   BUCKET_TUGAS,
   MAKS_FILE,
@@ -42,7 +42,7 @@ export async function kumpulkanTugas(
   const sesi = await ambilSesiSiswa();
   if (!sesi) redirect("/login-siswa");
 
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
 
   const { data: tugasData } = await supabase
     .from("assignments")

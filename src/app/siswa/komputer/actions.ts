@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { ambilSesiSiswa } from "@/lib/sesi-siswa";
-import { createClient } from "@/lib/supabase/server";
+import { createSiswaClient } from "@/lib/supabase/siswa";
 
 // ============================================================================
 // Simpan hasil tantangan Lab Komputer. Dipanggil setiap kali siswa menjawab
@@ -36,7 +36,7 @@ export async function simpanHasilKomputer(input: {
     };
   }
 
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
 
   const { data: lama } = await supabase
     .from("komputer_hasil")

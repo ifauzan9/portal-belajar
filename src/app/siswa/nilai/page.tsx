@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireSiswa } from "@/lib/sesi-siswa";
-import { createClient } from "@/lib/supabase/server";
+import { createSiswaClient } from "@/lib/supabase/siswa";
 import { hitungRataRata, tampilkanRataRata } from "@/lib/rata-rata";
 import { ambilKelasUlangan } from "@/lib/ambil-kelas-ulangan";
 import { tenggatSudahLewat } from "@/lib/deadline";
@@ -9,6 +9,7 @@ import {
   ambilPengaturanSoal,
   ulanganBolehDiakses,
 } from "@/lib/pengaturan-soal";
+import { statusAksesSoal } from "@/lib/status-soal";
 import { PemberitahuanSoalDitutup } from "@/components/pemberitahuan-soal";
 import { Kartu, KartuJudul } from "@/components/ui/kartu";
 import { KartuStat } from "@/components/ui/kartu-stat";
@@ -35,8 +36,9 @@ function statusUlangan(u: {
   tenggat: string | null;
 }): StatusView {
   if (u.status === "akan") {
+    if (u.sudahSubmit)
+      return { label: "Sudah dikerjakan", varian: "sukses" };
     if (!u.dibuka) return { label: "Ditutup guru", varian: "bahaya" };
-    if (u.sudahSubmit) return { label: "Sudah dijawab", varian: "sukses" };
     if (u.punyaSesi) return { label: "Sedang dikerjakan", varian: "info" };
     if (!u.bolehSoal) return { label: "Ditutup guru", varian: "bahaya" };
     if (u.deadlineLewat) return { label: "Ditutup", varian: "netral" };
@@ -73,21 +75,36 @@ function bisaDikerjakan(u: {
 
 export default async function NilaiSiswaPage() {
   const { siswa, kelas } = await requireSiswa();
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
 
-  const [{ data: ulanganData }, { data: sesiData }, pengaturanSoal] =
+  const [
+    { data: ulanganData },
+    { data: sesiData },
+    pengaturanSoal,
+    { data: bagikanData },
+  ] =
     await Promise.all([
       supabase
         .from("exams")
         .select(
-          "id, judul, kelas_id, tanggal, status, tenggat, durasi, nilai_ditampilkan, nilai_selesai, dibuka, exam_scores(nilai, siswa_id), exam_classes(kelas_id), exam_submissions(nilai_total, siswa_id)",
+          "id, judul, kelas_id, tanggal, status, tenggat, durasi, dibuka, exam_scores(nilai, siswa_id), exam_classes(kelas_id), exam_submissions(nilai_total, siswa_id)",
         ),
       supabase
         .from("exam_sessions")
         .select("exam_id")
         .eq("siswa_id", siswa.id),
       ambilPengaturanSoal(supabase),
+      // Tahap 48: status bagikan nilai per ulangan. Kalau kolom belum ada,
+      // query ini gagal → semua dianggap belum dibagikan.
+      supabase.from("exams").select("id, bagikan_nilai"),
     ]);
+
+  // Hanya ulangan dengan bagikan_nilai = true yang nilainya boleh tampil.
+  const setBagikan = new Set(
+    ((bagikanData ?? []) as { id: string; bagikan_nilai: boolean }[])
+      .filter((row) => row.bagikan_nilai === true)
+      .map((row) => row.id),
+  );
 
   const setSesi = new Set(
     (sesiData ?? []).map((s) => (s as { exam_id: string }).exam_id),
@@ -119,8 +136,6 @@ export default async function NilaiSiswaPage() {
       status: "akan" | "sudah";
       tenggat: string | null;
       durasi: number | null;
-      nilai_ditampilkan: boolean;
-      nilai_selesai: boolean;
       dibuka: boolean | null;
       exam_scores?: { nilai: number; siswa_id: string }[];
       exam_classes?: { kelas_id: string }[];
@@ -141,11 +156,9 @@ export default async function NilaiSiswaPage() {
       mapSubmit.get(row.id)?.nilai_total ??
       null;
 
-    // Jika nilai ditahan oleh guru, sembunyikan angka dari tampilan siswa.
-    const nilaiTerbuka =
-      row.nilai_ditampilkan === true || row.nilai_selesai === true;
-    const nilaiSiswa =
-      row.status === "akan" && !nilaiTerbuka ? null : nilaiSiswaRaw;
+    // Tahap 48: nilai hanya tampil bila guru sudah membagikannya.
+    const dibagikan = setBagikan.has(row.id);
+    const nilaiSiswa = dibagikan ? nilaiSiswaRaw : null;
 
     const statusRow = row.status ?? "sudah";
     // Ulangan ditutup guru (kolom baru; null = DDL belum jalan → anggap dibuka)
@@ -157,6 +170,7 @@ export default async function NilaiSiswaPage() {
     const sudahSubmit = mapSubmit.has(row.id);
     const belumWaktunya =
       statusRow === "akan" && belumWaktunyaMulai(row.tanggal);
+    const bolehSoal = ulanganBolehDiakses(pengaturanSoal, dibukaRow);
 
     return [
       {
@@ -164,14 +178,22 @@ export default async function NilaiSiswaPage() {
         judul: row.judul,
         tanggal: row.tanggal,
         nilai: nilaiSiswa,
+        dibagikan,
         status: statusRow,
         tenggat: row.tenggat,
         deadlineLewat,
         belumWaktunya,
         dibuka: dibukaRow,
-        bolehSoal: ulanganBolehDiakses(pengaturanSoal, dibukaRow),
+        bolehSoal,
         punyaSesi: setSesi.has(row.id),
         sudahSubmit,
+        aksesSoal: statusAksesSoal({
+          status: statusRow,
+          dibuka: dibukaRow,
+          bolehSoal,
+          deadlineLewat,
+          belumWaktunya,
+        }),
       },
     ];
   });
@@ -262,7 +284,7 @@ export default async function NilaiSiswaPage() {
             padat
             ikon={<IkonNilai className="h-5 w-5" />}
             judul="Belum ada nilai yang terisi"
-            keterangan="Grafik muncul setelah gurumu menampilkan nilai."
+            keterangan="Grafik muncul setelah gurumu membagikan nilai."
           />
         )}
       </Kartu>
@@ -290,12 +312,24 @@ export default async function NilaiSiswaPage() {
                       <span className="min-w-0 text-sm font-medium text-slate-900">
                         {u.judul}
                       </span>
-                      <span className="shrink-0 text-lg font-semibold tabular-nums text-slate-900">
-                        {u.nilai === null ? "–" : u.nilai}
-                      </span>
+                      <div className="shrink-0 text-right">
+                        <span className="text-lg font-semibold tabular-nums text-slate-900">
+                          {u.nilai === null ? "–" : u.nilai}
+                        </span>
+                        {u.nilai === null && !u.dibagikan ? (
+                          <p className="text-[10px] text-slate-400">
+                            Belum dibagikan
+                          </p>
+                        ) : null}
+                      </div>
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <Badge varian={s.varian}>{s.label}</Badge>
+                      {u.aksesSoal ? (
+                        <Badge varian={u.aksesSoal.varian}>
+                          {u.aksesSoal.label}
+                        </Badge>
+                      ) : null}
                       <span className="text-xs text-slate-400">
                         {tanggalPendek(u.tanggal)}
                       </span>
@@ -310,7 +344,7 @@ export default async function NilaiSiswaPage() {
                         </Link>
                       ) : null}
                       <Link
-                        href={`/siswa/nilai/${u.id}`}
+                        href={`/siswa/nilai/${u.id}?nilai=1`}
                         className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
                       >
                         Lihat detail
@@ -352,10 +386,22 @@ export default async function NilaiSiswaPage() {
                           {tanggalPendek(u.tanggal)}
                         </td>
                         <td className="px-4 py-3">
-                          <Badge varian={s.varian}>{s.label}</Badge>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Badge varian={s.varian}>{s.label}</Badge>
+                            {u.aksesSoal ? (
+                              <Badge varian={u.aksesSoal.varian}>
+                                {u.aksesSoal.label}
+                              </Badge>
+                            ) : null}
+                          </div>
                         </td>
                         <td className="px-4 py-3 tabular-nums font-medium text-slate-700">
                           {u.nilai === null ? "–" : u.nilai}
+                          {u.nilai === null && !u.dibagikan ? (
+                            <span className="block text-[11px] font-normal text-slate-400">
+                              Belum dibagikan
+                            </span>
+                          ) : null}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-1.5">
@@ -368,7 +414,7 @@ export default async function NilaiSiswaPage() {
                               </Link>
                             ) : null}
                             <Link
-                              href={`/siswa/nilai/${u.id}`}
+                              href={`/siswa/nilai/${u.id}?nilai=1`}
                               className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
                             >
                               Lihat detail

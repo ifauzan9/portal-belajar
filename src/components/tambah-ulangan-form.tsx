@@ -85,7 +85,7 @@ export function TambahUlanganForm({ kelasList }: { kelasList: Kelas[] }) {
                     : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
                 }`}
               >
-                {nilaiStatus === "sudah" ? "Sudah dilaksanakan" : "Akan dilaksanakan"}
+                {nilaiStatus === "sudah" ? "Sudah dilaksanakan" : "Sedang dilaksanakan"}
               </button>
             ))}
           </div>
@@ -102,7 +102,7 @@ export function TambahUlanganForm({ kelasList }: { kelasList: Kelas[] }) {
             type="datetime-local"
             required={status === "akan"}
             disabled={status !== "akan"}
-            placeholder={status === "akan" ? undefined : "Wajib saat status 'Akan dilaksanakan'"}
+            placeholder={status === "akan" ? undefined : "Wajib saat status 'Sedang dilaksanakan'"}
             className={`${inputBase} disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400`}
           />
           <p className={hintBase}>Batas akhir siswa submit</p>
@@ -128,7 +128,7 @@ export function TambahUlanganForm({ kelasList }: { kelasList: Kelas[] }) {
           <p className={hintBase}>
             {status === "akan"
               ? "Kosongkan = pakai tenggat waktu saja"
-              : "Pilih status 'Akan dilaksanakan' dulu"}
+              : "Pilih status 'Sedang dilaksanakan' dulu"}
           </p>
         </div>
 
@@ -136,17 +136,15 @@ export function TambahUlanganForm({ kelasList }: { kelasList: Kelas[] }) {
           <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
             <input
               type="checkbox"
-              name="tampilkan_nilai"
-              defaultChecked
-              disabled={status !== "akan"}
-              className="h-4 w-4 rounded border-slate-300 text-emerald-600 accent-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
+              name="bagikan_nilai"
+              className="h-4 w-4 rounded border-slate-300 text-emerald-600 accent-emerald-600"
             />
-            Tampilkan nilai langsung setelah submit
+            Bagikan nilai ke siswa
           </label>
           <p className={hintBase}>
             {status === "akan"
-              ? "Centang = nilai PG & esai kelihatan setelah siswa kumpulkan. Hapus centang = nilai ditahan sampai guru tekan tombol &ldquo;Selesai dinilai&rdquo;."
-              : "Hanya berlaku untuk ulangan bersoal."}
+              ? "Centang = nilai terlihat siswa setelah dinilai. Kosong = nilai disembunyikan sampai kamu membagikannya."
+              : "Centang = siswa bisa melihat nilai ulangan ini. Kosong = nilai disembunyikan."}
           </p>
         </div>
 

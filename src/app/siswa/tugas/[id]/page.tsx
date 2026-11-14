@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireSiswa } from "@/lib/sesi-siswa";
-import { createClient } from "@/lib/supabase/server";
+import { createSiswaClient } from "@/lib/supabase/siswa";
 import { tenggatSudahLewat } from "@/lib/deadline";
 import { FormKumpulTugas } from "@/components/form-kumpul-tugas";
 import { Kartu } from "@/components/ui/kartu";
@@ -35,7 +35,7 @@ export default async function DetailTugasSiswaPage(
 ) {
   const { id } = await props.params;
   const { siswa } = await requireSiswa();
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
 
   const { data: tugasData } = await supabase
     .from("assignments")

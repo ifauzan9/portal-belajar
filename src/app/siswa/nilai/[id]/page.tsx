@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireSiswa } from "@/lib/sesi-siswa";
-import { createClient } from "@/lib/supabase/server";
+import { createSiswaClient } from "@/lib/supabase/siswa";
 import {
   ambilKelasUlangan,
   namaKelasDariIds,
@@ -10,9 +10,12 @@ import { tenggatSudahLewat } from "@/lib/deadline";
 import { belumWaktunyaMulai } from "@/lib/jadwal-ulangan";
 import { formatTanggalWib, formatWaktuWib } from "@/lib/waktu";
 import { ambilPengaturanSoal } from "@/lib/pengaturan-soal";
+import { statusAksesSoal } from "@/lib/status-soal";
 import { PemberitahuanSoalDitutup } from "@/components/pemberitahuan-soal";
+import { Badge } from "@/components/ui/badge";
 import { jenisSoalTersedia } from "@/lib/jenis-soal-ulangan";
 import { ambilRankingUlangan } from "@/lib/ranking-ulangan";
+import { nilaiDibagikan } from "@/lib/bagikan-nilai";
 import {
   KartuPosisiRanking,
   PapanPeringkatSiswa,
@@ -31,21 +34,35 @@ import { FormKode } from "./form-kode";
 export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id]">) {
   const { id } = await props.params;
   const { siswa } = await requireSiswa();
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
 
   const searchParams = await props.searchParams;
   const kodeTerbuka = searchParams.kode === "1";
+  // ?nilai=1 = siswa memang membuka halaman untuk melihat nilai, bukan
+  // untuk mengerjakan / melihat info ulangan.
+  const mintaNilai = searchParams.nilai === "1";
 
-  const [{ data: ulangan, error: galatUlangan }, pengaturanSoal] =
+  const [
+    { data: ulangan, error: galatUlangan },
+    pengaturanSoal,
+    { data: infoBagikan },
+  ] =
     await Promise.all([
       supabase
         .from("exams")
         .select(
-          "id, judul, tanggal, kelas_id, access_code, status, tenggat, durasi, nilai_ditampilkan, nilai_selesai, dibuka, exam_classes(kelas_id)",
+          "id, judul, tanggal, kelas_id, access_code, status, tenggat, durasi, dibuka, exam_classes(kelas_id)",
         )
         .eq("id", id)
         .maybeSingle(),
       ambilPengaturanSoal(supabase),
+      // Tahap 48: nilai hanya boleh tampil jika guru membagikannya.
+      // Kalau kolom belum ada, query gagal → infoBagikan null → disembunyikan.
+      supabase
+        .from("exams")
+        .select("bagikan_nilai")
+        .eq("id", id)
+        .maybeSingle(),
     ]);
 
   if (galatUlangan || !ulangan) {
@@ -61,8 +78,6 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
     status: "akan" | "sudah";
     tenggat: string | null;
     durasi: number | null;
-    nilai_ditampilkan: boolean;
-    nilai_selesai: boolean;
     dibuka: boolean | null;
     exam_classes?: { kelas_id: string }[];
   };
@@ -71,9 +86,10 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
     dataUlangan.status === "akan" &&
     belumWaktunyaMulai(dataUlangan.tanggal);
 
-  // Apakah nilai boleh dilihat siswa?
-  const nilaiTerbuka =
-    dataUlangan.nilai_ditampilkan === true || dataUlangan.nilai_selesai === true;
+  // Apakah nilai boleh dilihat siswa? (Tahap 48: saklar bagikan nilai)
+  const nilaiTerbuka = nilaiDibagikan(
+    infoBagikan as { bagikan_nilai?: boolean | null } | null,
+  );
 
   // Cek submit untuk ulangan bersoal
   let sudahSubmit = false;
@@ -156,6 +172,13 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
   const soalDitutupGlobal = pengaturanSoal.tutupUlangan;
   const bolehKerjakan =
     dibukaUlangan && (!soalDitutupGlobal || punyaSesiUjian);
+  const aksesSoal = statusAksesSoal({
+    status: dataUlangan.status,
+    dibuka: dibukaUlangan,
+    bolehSoal: dibukaUlangan && !soalDitutupGlobal,
+    deadlineLewat,
+    belumWaktunya,
+  });
 
   // Nama kelas untuk subtitle: gabung kolom lama + relasi baru.
   // [] berarti "Semua kelas".
@@ -197,9 +220,11 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
   // Ranking seluruh siswa. Hanya dimuat bila memang akan ditampilkan:
   //  - ulangan "akan" + sudah submit, atau
   //  - ulangan "sudah" + kode akses sudah benar.
+  // Ranking hanya dimuat bila nilainya memang sudah dibagikan.
   const perluRanking =
-    (dataUlangan.status === "akan" && sudahSubmit) ||
-    (dataUlangan.status === "sudah" && kodeTerbuka);
+    nilaiTerbuka &&
+    ((dataUlangan.status === "akan" && sudahSubmit) ||
+      (dataUlangan.status === "sudah" && kodeTerbuka));
   const ranking = perluRanking
     ? await ambilRankingUlangan(
         supabase,
@@ -213,17 +238,17 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
   // Badge status
   const badgeStatus =
     dataUlangan.status === "akan" ? (
-      !bolehKerjakan ? (
+      sudahSubmit ? (
+        <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
+          Sudah dikerjakan
+        </span>
+      ) : !bolehKerjakan ? (
         <span className="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 ring-1 ring-red-200">
           Ditutup guru
         </span>
       ) : deadlineLewat ? (
         <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
           Ditutup
-        </span>
-      ) : sudahSubmit ? (
-        <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
-          Sudah dijawab
         </span>
       ) : punyaSesiUjian ? (
         <span className="inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-blue-200">
@@ -243,6 +268,93 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
       </span>
     );
 
+  const badgeStatusLengkap = (
+    <>
+      {badgeStatus}
+      {aksesSoal ? (
+        <Badge varian={aksesSoal.varian}>{aksesSoal.label}</Badge>
+      ) : null}
+    </>
+  );
+
+  // Header yang dipakai bersama oleh tampilan nilai dan status tertahan.
+  const headerHalaman = (
+    <div>
+      <Link
+        href="/siswa/nilai"
+        className="text-sm text-slate-500 transition hover:text-slate-900"
+      >
+        ← Kembali ke Daftar Nilai
+      </Link>
+      <h1 className="mt-1 text-2xl font-semibold text-slate-900">
+        {dataUlangan.judul}
+      </h1>
+      <div className="mt-1 flex flex-wrap items-center gap-2">
+        <p className="text-sm text-slate-500">
+          Kelas: {teksKelas}
+          {dataUlangan.tanggal ? ` · Tanggal: ${dataUlangan.tanggal}` : ""}
+        </p>
+        {badgeStatusLengkap}
+      </div>
+    </div>
+  );
+
+  const kartuNilaiSiswa = (
+    <div className="rounded-2xl bg-white p-5 ring-1 ring-slate-200">
+      <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">
+        Nilai kamu
+      </p>
+      <p
+        className={`mt-1 text-4xl font-semibold tabular-nums ${
+          nilaiSaya === null
+            ? "text-slate-400"
+            : nilaiSaya >= 70
+              ? "text-emerald-600"
+              : nilaiSaya >= 50
+                ? "text-amber-600"
+                : "text-red-600"
+        }`}
+      >
+        {nilaiSaya === null ? "Belum dinilai" : nilaiSaya}
+      </p>
+      {nilaiSaya === null ? (
+        <p className="mt-1 text-sm text-slate-500">
+          Nilai kamu untuk ulangan ini belum tersedia. Kamu belum mengerjakan
+          ulangan atau guru belum menginput nilainya.
+        </p>
+      ) : null}
+    </div>
+  );
+
+  const halamanNilaiTertahan = (
+    <div className="space-y-6">
+      {headerHalaman}
+      <div className="rounded-2xl bg-violet-50 p-5 ring-1 ring-violet-200">
+        <p className="text-sm font-semibold text-violet-800">
+          🔒 Nilai belum dibagikan
+        </p>
+        <p className="mt-1 text-xs text-violet-600">
+          Guru belum membagikan nilai ulangan ini. Coba cek lagi nanti.
+        </p>
+      </div>
+    </div>
+  );
+
+  // Bila siswa membuka khusus untuk melihat nilai, jangan tampilkan pesan
+  // "ulangan ditutup" — tampilkan status nilai yang sebenarnya.
+  if (mintaNilai && !nilaiTerbuka) {
+    return halamanNilaiTertahan;
+  }
+
+  if (mintaNilai && dataUlangan.status === "akan" && !sudahSubmit) {
+    return (
+      <div className="space-y-6">
+        {headerHalaman}
+        {kartuNilaiSiswa}
+      </div>
+    );
+  }
+
   // Kalau ulangan "akan" dan belum submit → tampilkan form jawaban
   // (hanya kalau ulangan dibuka oleh guru; kalau ditutup, tampilkan pesan)
   if (dataUlangan.status === "akan" && !sudahSubmit) {
@@ -259,9 +371,9 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
             <h1 className="mt-1 text-2xl font-semibold text-slate-900">
               {dataUlangan.judul}
             </h1>
-            <div className="mt-1 flex items-center gap-2">
+            <div className="mt-1 flex flex-wrap items-center gap-2">
               <p className="text-sm text-slate-500">Kelas: {teksKelas}</p>
-              {badgeStatus}
+              {badgeStatusLengkap}
             </div>
           </div>
 
@@ -298,9 +410,9 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
             <h1 className="mt-1 text-2xl font-semibold text-slate-900">
               {dataUlangan.judul}
             </h1>
-            <div className="mt-1 flex items-center gap-2">
+            <div className="mt-1 flex flex-wrap items-center gap-2">
               <p className="text-sm text-slate-500">Kelas: {teksKelas}</p>
-              {badgeStatus}
+              {badgeStatusLengkap}
             </div>
           </div>
 
@@ -328,9 +440,9 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
           <h1 className="mt-1 text-2xl font-semibold text-slate-900">
             {dataUlangan.judul}
           </h1>
-          <div className="mt-1 flex items-center gap-2">
+          <div className="mt-1 flex flex-wrap items-center gap-2">
             <p className="text-sm text-slate-500">Kelas: {teksKelas}</p>
-            {badgeStatus}
+            {badgeStatusLengkap}
           </div>
         </div>
 
@@ -384,9 +496,9 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
           <h1 className="mt-1 text-2xl font-semibold text-slate-900">
             {dataUlangan.judul}
           </h1>
-          <div className="mt-1 flex items-center gap-2">
+          <div className="mt-1 flex flex-wrap items-center gap-2">
             <p className="text-sm text-slate-500">Kelas: {teksKelas}</p>
-            {badgeStatus}
+            {badgeStatusLengkap}
           </div>
         </div>
 
@@ -498,8 +610,8 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
                 📋 Jawaban sudah dikumpulkan
               </p>
               <p className="mt-1 text-xs text-violet-600">
-                Nilai kamu ditahan oleh guru dan akan ditampilkan setelah
-                selesai dinilai.
+                Nilai kamu belum dibagikan oleh guru. Nilai akan muncul di sini
+                setelah guru membagikannya.
               </p>
             </div>
           )}
@@ -531,6 +643,12 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
     );
   }
 
+  // Ulangan "sudah" tapi nilainya belum dibagikan guru → jangan tampilkan
+  // form kode akses maupun angka nilai.
+  if (!nilaiTerbuka) {
+    return halamanNilaiTertahan;
+  }
+
   // Ulangan "sudah" → alur kode akses yang sudah ada
   if (!kodeTerbuka) {
     return (
@@ -545,12 +663,12 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
           <h1 className="mt-1 text-2xl font-semibold text-slate-900">
             {dataUlangan.judul}
           </h1>
-          <div className="mt-1 flex items-center gap-2">
+          <div className="mt-1 flex flex-wrap items-center gap-2">
             <p className="text-sm text-slate-500">
               Kelas: {teksKelas}
               {dataUlangan.tanggal ? ` · Tanggal: ${dataUlangan.tanggal}` : ""}
             </p>
-            {badgeStatus}
+            {badgeStatusLengkap}
           </div>
         </div>
 
@@ -572,38 +690,16 @@ export default async function DetailNilaiPage(props: PageProps<"/siswa/nilai/[id
         <h1 className="mt-1 text-2xl font-semibold text-slate-900">
           Nilai — {dataUlangan.judul}
         </h1>
-        <div className="mt-1 flex items-center gap-2">
+        <div className="mt-1 flex flex-wrap items-center gap-2">
           <p className="text-sm text-slate-500">
             Kelas: {teksKelas}
             {dataUlangan.tanggal ? ` · Tanggal: ${dataUlangan.tanggal}` : ""}
           </p>
-          {badgeStatus}
+          {badgeStatusLengkap}
         </div>
       </div>
 
-      <div className="rounded-2xl bg-white p-5 ring-1 ring-slate-200">
-        <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">
-          Nilai kamu
-        </p>
-        <p
-          className={`mt-1 text-4xl font-semibold tabular-nums ${
-            nilaiSaya === null
-              ? "text-slate-400"
-              : nilaiSaya >= 70
-                ? "text-emerald-600"
-                : nilaiSaya >= 50
-                  ? "text-amber-600"
-                  : "text-red-600"
-          }`}
-        >
-          {nilaiSaya === null ? "Belum dinilai" : nilaiSaya}
-        </p>
-        {nilaiSaya === null ? (
-          <p className="mt-1 text-sm text-slate-500">
-            Nilai kamu untuk ulangan ini belum diinput oleh guru.
-          </p>
-        ) : null}
-      </div>
+      {kartuNilaiSiswa}
 
       {ranking ? (
         <>

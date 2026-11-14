@@ -1,5 +1,5 @@
 import { requireSiswa } from "@/lib/sesi-siswa";
-import { createClient } from "@/lib/supabase/server";
+import { createSiswaClient } from "@/lib/supabase/siswa";
 import { sudahTampil } from "@/lib/jadwal-pengumuman";
 import { formatTanggalWib } from "@/lib/waktu";
 import { Kartu } from "@/components/ui/kartu";
@@ -13,7 +13,7 @@ function tanggalPendek(iso: string | null): string {
 
 export default async function PengumumanSiswaPage() {
   const { siswa, kelas } = await requireSiswa();
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
 
   const { data: pengumumanData } = await supabase
     .from("announcements")

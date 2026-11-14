@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createSiswaClient } from "@/lib/supabase/siswa";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hashPassword, verifikasiPassword } from "@/lib/hash-password";
 import { hapusSesiSesi, simpanSesiSesi, ambilSesiSiswa } from "@/lib/sesi-siswa";
@@ -48,7 +48,7 @@ export type HasilLogin = { message: string | null };
 // Dijalankan lewat after() agar penulisan log TIDAK menambah waktu tunggu
 // login (dieksekusi setelah respons dikirim). Best-effort.
 async function catatLogLogin(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: Awaited<ReturnType<typeof createSiswaClient>>,
   data: {
     siswaId: string | null;
     username: string;
@@ -96,7 +96,7 @@ export async function loginSiswa(
     return { message: "Username dan password wajib diisi." };
   }
 
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
   const admin = createAdminClient();
 
   // Pembatasan percobaan login (anti brute force / spam).
@@ -210,7 +210,7 @@ export async function loginSiswaToken(
   const siswaId = String(formData.get("siswa_id") ?? "").trim();
   const token = String(formData.get("token") ?? "").trim().toUpperCase();
 
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
   const admin = createAdminClient();
 
   // Saklar induk + aturan mode login token (Tahap 43 + 45 + 46). Ditegakkan di
@@ -509,7 +509,7 @@ export async function mulaiUjianSiswa(
     redirect("/login-siswa");
   }
 
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
 
   const { data: ulangan, error: galatUlangan } = await supabase
     .from("exams")
@@ -668,7 +668,7 @@ export async function catatProbe(formData: FormData) {
   if (!sesi) return; // siswa tidak login → abaikan
 
   // Cek ulangan masih aktif (belum lewat tenggat, status "akan")
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
   const { data: ulangan } = await supabase
     .from("exams")
     .select("status, tenggat")
@@ -717,7 +717,7 @@ export async function ambilMasukanUjiUlangan(
   const idSoal = String(soalId ?? "").trim();
   if (!idExam || !idSoal) return null;
 
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
 
   // Saklar global (Tahap 41): input uji hanya boleh diambil siswa yang sudah
   // punya sesi pengerjaan (sedang mengerjakan). Selebihnya tolak.
@@ -780,16 +780,27 @@ export async function submitUlangan(
     redirect("/login-siswa");
   }
 
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
 
-  // Cek status + tenggat + durasi ulangan
-  const { data: ulangan, error: galatUlangan } = await supabase
+  // Cek status + tenggat + durasi ulangan.
+  // `bagikan_nilai` baru setelah Tahap 48 → fallback tanpa kolom itu.
+  let hasilUlangan = await supabase
     .from("exams")
     .select(
-      "id, status, tanggal, tenggat, durasi, nilai_ditampilkan, nilai_selesai, dibuka",
+      "id, status, tanggal, tenggat, durasi, dibuka, bagikan_nilai",
     )
     .eq("id", examId)
     .maybeSingle();
+
+  if (hasilUlangan.error) {
+    hasilUlangan = await supabase
+      .from("exams")
+      .select("id, status, tanggal, tenggat, durasi, dibuka")
+      .eq("id", examId)
+      .maybeSingle();
+  }
+
+  const { data: ulangan, error: galatUlangan } = hasilUlangan;
 
   if (galatUlangan || !ulangan) {
     return { message: "Ulangan tidak ditemukan.", nilaiTotal: null };
@@ -800,9 +811,8 @@ export async function submitUlangan(
     tanggal: string | null;
     tenggat: string | null;
     durasi: number | null;
-    nilai_ditampilkan: boolean;
-    nilai_selesai: boolean;
     dibuka: boolean | null;
+    bagikan_nilai?: boolean | null;
   };
 
   if (dataUlangan.status !== "akan") {
@@ -1132,14 +1142,13 @@ export async function submitUlangan(
   revalidatePath("/siswa/nilai");
   revalidatePath(`/siswa/nilai/${examId}`);
 
-  // Jika nilai ditahan oleh guru, jangan tampilkan angka ke siswa.
-  const nilaiBolehTampil =
-    dataUlangan.nilai_ditampilkan || dataUlangan.nilai_selesai;
+  // Jika nilai belum dibagikan guru, jangan tampilkan angka ke siswa.
+  const nilaiBolehTampil = dataUlangan.bagikan_nilai === true;
 
   return {
     message: nilaiBolehTampil
       ? "Jawaban berhasil dikumpulkan!"
-      : "Jawaban berhasil dikumpulkan. Nilai akan ditampilkan setelah guru selesai menilai.",
+      : "Jawaban berhasil dikumpulkan. Nilai akan ditampilkan setelah guru membagikannya.",
     nilaiTotal: nilaiBolehTampil ? nilaiTotal : null,
   };
 }
@@ -1168,7 +1177,7 @@ export async function verifikasiKodeUlangan(
     redirect("/login-siswa");
   }
 
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
 
   const { data: ulangan, error } = await supabase
     .from("exams")

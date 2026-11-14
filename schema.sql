@@ -4491,3 +4491,36 @@ comment on column public.pengaturan_guru.info_token_login_aktif is
 -- Selesai Tahap 47. Kolom baru: "pengaturan_guru.info_token_login"
 -- dan "pengaturan_guru.info_token_login_aktif".
 -- ============================================================
+
+-- ============================================================
+-- TAHAP 48: SAKLAR "BAGIKAN NILAI" PER ULANGAN
+-- ============================================================
+-- Kolom `bagikan_nilai` di tabel exams:
+--   false (default) = nilai disembunyikan dari siswa, walau ulangan
+--                     sudah ditutup/dibuka. Guru harus membagikannya.
+--   true            = siswa boleh melihat nilai ulangan ini.
+--
+-- Saklar ini TERPISAH dari `dibuka`:
+--   dibuka        = boleh/tidaknya siswa mengakses soal & ulangan
+--   bagikan_nilai = boleh/tidaknya siswa melihat angka nilai
+--
+-- Menutup ulangan TIDAK otomatis membagikan/menyembunyikan nilai.
+-- Guru mengaturnya lewat tombol "Bagikan nilai" / "Tarik nilai" di
+-- daftar ulangan, halaman Input Nilai, atau halaman Soal.
+--
+-- Catatan: default false membuat SEMUA nilai lama ikut tersembunyi
+-- sampai guru membagikannya. Ini sengaja supaya tidak ada nilai yang
+-- bocor tanpa persetujuan guru.
+alter table public.exams add column if not exists bagikan_nilai boolean
+  not null default false;
+
+comment on column public.exams.bagikan_nilai is
+  'true = siswa boleh melihat nilai ulangan ini; false = nilai disembunyikan';
+
+-- Kolom lama nilai_ditampilkan & nilai_selesai tidak lagi dipakai
+-- sebagai gerbang tampilan nilai (digantikan bagikan_nilai). Kolomnya
+-- tetap dibiarkan agar data lama tidak hilang.
+
+-- ============================================================
+-- Selesai Tahap 48. Kolom baru: "exams.bagikan_nilai".
+-- ============================================================

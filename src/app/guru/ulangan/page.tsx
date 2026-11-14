@@ -40,8 +40,8 @@ type UlanganRow = {
   tenggat: string | null;
   // Durasi pengerjaan dalam menit (null = tanpa timer, pakai tenggat saja)
   durasi: number | null;
-  // Tampilkan nilai langsung setelah submit (default true)
-  nilaiDitampilkan: boolean;
+  // Tampilkan nilai ke siswa (Tahap 48; default false = disembunyikan)
+  bagikanNilai: boolean;
   // Ulangan dibuka/ditutup oleh guru (default true)
   dibuka: boolean;
   // Jumlah soal di ulangan ini
@@ -102,7 +102,7 @@ export default async function UlanganPage(
   const { data: ulanganData, error } = await supabase
     .from("exams")
     .select(
-      "id, judul, kelas_id, tanggal, access_code, status, tenggat, durasi, nilai_ditampilkan, dibuka, exam_scores(siswa_id, nilai), exam_submissions(siswa_id, nilai_total), exam_classes(kelas_id)",
+      "id, judul, kelas_id, tanggal, access_code, status, tenggat, durasi, bagikan_nilai, dibuka, exam_scores(siswa_id, nilai), exam_submissions(siswa_id, nilai_total), exam_classes(kelas_id)",
     );
 
   const semua: UlanganRow[] = (ulanganData ?? []).map((row) => {
@@ -115,7 +115,7 @@ export default async function UlanganPage(
       status: "akan" | "sudah";
       tenggat: string | null;
       durasi: number | null;
-      nilai_ditampilkan: boolean;
+      bagikan_nilai: boolean;
       dibuka: boolean;
       exam_scores?: { siswa_id: string; nilai: number }[];
       exam_submissions?: { siswa_id: string; nilai_total: number }[];
@@ -139,7 +139,8 @@ export default async function UlanganPage(
       status: dataRow.status ?? "sudah",
       tenggat: dataRow.tenggat,
       durasi: dataRow.durasi ?? null,
-      nilaiDitampilkan: dataRow.nilai_ditampilkan ?? true,
+      // Tahap 48: default false = nilai belum dibagikan ke siswa.
+      bagikanNilai: dataRow.bagikan_nilai === true,
       // Kolom baru `dibuka` default true; jika DDL Tahap 12 belum
       // dijalankan nilainya null → anggap dibuka (tidak menghalangi).
       dibuka: dataRow.dibuka !== false,
@@ -318,7 +319,7 @@ export default async function UlanganPage(
                     status={item.status}
                     tenggat={item.tenggat}
                     durasi={item.durasi}
-                    nilaiDitampilkan={item.nilaiDitampilkan}
+                    bagikanNilai={item.bagikanNilai}
                     jumlahSoal={item.jumlahSoal}
                     deadlineLewat={tenggatSudahLewat(item.tenggat)}
                     dibuka={item.dibuka}

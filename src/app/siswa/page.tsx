@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireSiswa } from "@/lib/sesi-siswa";
-import { createClient } from "@/lib/supabase/server";
+import { createSiswaClient } from "@/lib/supabase/siswa";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hitungRataRata, tampilkanRataRata } from "@/lib/rata-rata";
 import { ambilKelasUlangan } from "@/lib/ambil-kelas-ulangan";
@@ -12,6 +12,7 @@ import {
   ambilPengaturanSoal,
   ulanganBolehDiakses,
 } from "@/lib/pengaturan-soal";
+import { statusAksesSoal } from "@/lib/status-soal";
 import { PemberitahuanSoalDitutup } from "@/components/pemberitahuan-soal";
 import {
   formatTanggalJamPendekWib,
@@ -49,7 +50,7 @@ function tenggatPendek(iso: string | null): string {
 export default async function DashboardSiswaPage() {
   const { siswa, kelas } = await requireSiswa();
 
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
   const admin = createAdminClient();
 
   // Jalankan semua query independen secara paralel untuk mengurangi
@@ -65,11 +66,12 @@ export default async function DashboardSiswaPage() {
     hasilLatihanLab,
     hasilSelesaiLab,
     pengaturanSoal,
+    hasilBagikan,
   ] = await Promise.all([
     supabase
       .from("exams")
       .select(
-        "id, judul, kelas_id, tanggal, status, tenggat, durasi, nilai_ditampilkan, nilai_selesai, dibuka, exam_scores(nilai, siswa_id), exam_classes(kelas_id)",
+        "id, judul, kelas_id, tanggal, status, tenggat, durasi, dibuka, exam_scores(nilai, siswa_id), exam_classes(kelas_id)",
       ),
     supabase
       .from("exam_submissions")
@@ -102,7 +104,16 @@ export default async function DashboardSiswaPage() {
       .eq("siswa_id", siswa.id)
       .eq("pernah_benar", true),
     ambilPengaturanSoal(supabase),
+    // Tahap 48: status bagikan nilai per ulangan.
+    supabase.from("exams").select("id, bagikan_nilai"),
   ]);
+
+  // Hanya nilai dari ulangan yang sudah dibagikan yang boleh dihitung.
+  const setBagikan = new Set(
+    ((hasilBagikan.data ?? []) as { id: string; bagikan_nilai: boolean }[])
+      .filter((row) => row.bagikan_nilai === true)
+      .map((row) => row.id),
+  );
 
   const mapSubmit = new Map(
     (hasilSubmit.data ?? []).map((s) => [
@@ -125,8 +136,6 @@ export default async function DashboardSiswaPage() {
         status: "akan" | "sudah";
         tenggat: string | null;
         durasi: number | null;
-        nilai_ditampilkan: boolean;
-        nilai_selesai: boolean;
         dibuka: boolean | null;
         exam_scores?: { nilai: number; siswa_id: string }[];
         exam_classes?: { kelas_id: string }[];
@@ -144,13 +153,8 @@ export default async function DashboardSiswaPage() {
         mapSubmit.get(row.id)?.nilai_total ??
         null;
 
-      // Jika nilai ditahan, sembunyikan angka dari dashboard siswa.
-      const nilaiTerbuka =
-        row.nilai_ditampilkan === true || row.nilai_selesai === true;
-      const nilaiSiswa =
-        (row.status ?? "sudah") === "akan" && !nilaiTerbuka
-          ? null
-          : nilaiSiswaRaw;
+      // Tahap 48: nilai hanya tampil bila guru sudah membagikannya.
+      const nilaiSiswa = setBagikan.has(row.id) ? nilaiSiswaRaw : null;
 
       const statusRow = row.status ?? "sudah";
       // Kolom baru dibuka: null (DDL belum jalan) → anggap dibuka.
@@ -160,6 +164,7 @@ export default async function DashboardSiswaPage() {
       const sudahSubmit = mapSubmit.has(row.id);
       const belumWaktunya =
         statusRow === "akan" && belumWaktunyaMulai(row.tanggal);
+      const bolehSoal = ulanganBolehDiakses(pengaturanSoal, dibukaRow);
 
       return [
         {
@@ -172,9 +177,16 @@ export default async function DashboardSiswaPage() {
           deadlineLewat,
           belumWaktunya,
           dibuka: dibukaRow,
-          bolehSoal: ulanganBolehDiakses(pengaturanSoal, dibukaRow),
+          bolehSoal,
           punyaSesi: setSesi.has(row.id),
           sudahSubmit,
+          aksesSoal: statusAksesSoal({
+            status: statusRow,
+            dibuka: dibukaRow,
+            bolehSoal,
+            deadlineLewat,
+            belumWaktunya,
+          }),
         },
       ];
     });
@@ -621,19 +633,22 @@ export default async function DashboardSiswaPage() {
                 <span className="min-w-0 truncate text-slate-700">
                   {u.judul}
                 </span>
-                <span className="flex shrink-0 items-center gap-2">
-                  {u.status === "akan" && !u.dibuka ? (
+                <span className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                  {u.status === "akan" && u.sudahSubmit ? (
+                    <Badge varian="sukses">Sudah dikerjakan</Badge>
+                  ) : u.status === "akan" && !u.dibuka ? (
                     <Badge varian="bahaya">Ditutup guru</Badge>
                   ) : u.status === "akan" && u.punyaSesi ? (
                     <Badge varian="info">Sedang dikerjakan</Badge>
                   ) : u.status === "akan" && !u.bolehSoal ? (
                     <Badge varian="bahaya">Ditutup guru</Badge>
-                  ) : u.status === "akan" &&
-                    !u.sudahSubmit &&
-                    !u.deadlineLewat ? (
+                  ) : u.status === "akan" && !u.deadlineLewat ? (
                     <Badge varian="info">Buka</Badge>
-                  ) : u.status === "akan" && u.sudahSubmit ? (
-                    <Badge varian="sukses">Selesai</Badge>
+                  ) : null}
+                  {u.aksesSoal ? (
+                    <Badge varian={u.aksesSoal.varian}>
+                      {u.aksesSoal.label}
+                    </Badge>
                   ) : null}
                   <span className="tabular-nums font-medium text-slate-700">
                     {u.nilai === null ? "–" : u.nilai}

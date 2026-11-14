@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireSiswa } from "@/lib/sesi-siswa";
-import { createClient } from "@/lib/supabase/server";
+import { createSiswaClient } from "@/lib/supabase/siswa";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   cekKaryaBebas,
@@ -89,7 +89,7 @@ export async function simpanHasilLab(input: {
     return { ...HASIL_GAGAL, message: "Latihan tidak ditemukan." };
   }
 
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
   const admin = createAdminClient();
 
   // Saklar global "tutup akses soal" (Tahap 41): tolak penyimpanan hasil
@@ -450,7 +450,7 @@ export async function ambilMasukanUji(
   const id = String(exerciseId ?? "").trim();
   if (!id) return null;
 
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
 
   // Saklar global (Tahap 41): jangan bocorkan input uji saat akses ditutup.
   const pengaturanSoal = await ambilPengaturanSoal(supabase);

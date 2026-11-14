@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireSiswa } from "@/lib/sesi-siswa";
-import { createClient } from "@/lib/supabase/server";
+import { createSiswaClient } from "@/lib/supabase/siswa";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hitungLevelTerkunci } from "@/lib/lab";
 import { Kartu } from "@/components/ui/kartu";
@@ -17,7 +17,7 @@ export default async function ModulLabSiswaPage(
 ) {
   const { id } = await props.params;
   const { siswa } = await requireSiswa();
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
   const admin = createAdminClient();
 
   // Saklar global "tutup akses soal" (Tahap 41). Modul lab tidak bisa dibuka

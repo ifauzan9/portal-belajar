@@ -611,7 +611,7 @@ export function FormJawaban({
             </p>
           ) : state.nilaiTotal !== null ? (
             <p className="mt-1 text-xs opacity-80">
-              Nilai akan ditampilkan setelah guru selesai menilai.
+              Nilai akan ditampilkan setelah guru membagikannya.
             </p>
           ) : null}
         </Notifikasi>

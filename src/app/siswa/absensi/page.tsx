@@ -1,5 +1,5 @@
 import { requireSiswa } from "@/lib/sesi-siswa";
-import { createClient } from "@/lib/supabase/server";
+import { createSiswaClient } from "@/lib/supabase/siswa";
 import { Kartu, KartuJudul } from "@/components/ui/kartu";
 import { KartuStat } from "@/components/ui/kartu-stat";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +16,7 @@ import {
 
 export default async function AbsensiSiswaPage() {
   const { siswa } = await requireSiswa();
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
 
   const { data } = await supabase
     .from("attendance")

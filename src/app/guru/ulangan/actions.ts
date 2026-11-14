@@ -71,8 +71,9 @@ export async function addUlangan(
   const status = String(formData.get("status") ?? "sudah").trim();
   const tenggat = String(formData.get("tenggat") ?? "").trim();
   const durasiRaw = String(formData.get("durasi") ?? "").trim();
-  // nilai_ditampilkan: checkbox "tampilkan_nilai". Unchecked = false, checked = true.
-  const nilaiDitampilkan = formData.get("tampilkan_nilai") !== null;
+  // bagikan_nilai: checkbox "bagikan_nilai". Unchecked = false (nilai
+  // disembunyikan dari siswa), checked = true (siswa boleh melihat nilai).
+  const bagikanNilai = formData.get("bagikan_nilai") !== null;
 
   if (!judul) {
     return { message: "Judul ulangan wajib diisi." };
@@ -117,7 +118,7 @@ export async function addUlangan(
       status: statusValid,
       tenggat: tenggatValue,
       durasi: statusValid === "akan" ? durasiValue : null,
-      nilai_ditampilkan: statusValid === "akan" ? nilaiDitampilkan : true,
+      bagikan_nilai: bagikanNilai,
     })
     .select("id")
     .single();
@@ -142,46 +143,48 @@ export async function addUlangan(
   return { message: null };
 }
 
-// Tandai ulangan "selesai dinilai" — nilai terbuka untuk semua siswa.
-// Field: exam_id
-export async function selesaiDinilai(formData: FormData) {
-  const examId = String(formData.get("exam_id") ?? "");
-  if (!examId) return;
+// Membalik saklar "bagikan nilai" per ulangan.
+// Field: id (exam id)
+//   false → true = nilai mulai terlihat oleh siswa
+//   true → false = nilai ditarik/disembunyikan lagi
+export async function toggleBagikanNilai(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
 
   const supabase = await requireGuru();
-  const { error } = await supabase
-    .from("exams")
-    .update({ nilai_selesai: true })
-    .eq("id", examId);
 
-  if (error) {
-    console.error("Gagal menandai selesai dinilai:", error.message);
+  const { data, error } = await supabase
+    .from("exams")
+    .select("bagikan_nilai")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error || !data) {
+    if (error) {
+      console.error("Gagal membaca status bagikan_nilai:", error.message);
+    }
+    return;
   }
 
-  revalidatePath(`/guru/ulangan/${examId}/soal`);
-  revalidatePath(`/siswa/nilai/${examId}`);
-  revalidatePath("/siswa/nilai");
-}
-
-// Batalkan "selesai dinilai" (jika guru ingin menahan nilai lagi).
-// Field: exam_id
-export async function batalkanSelesaiDinilai(formData: FormData) {
-  const examId = String(formData.get("exam_id") ?? "");
-  if (!examId) return;
-
-  const supabase = await requireGuru();
-  const { error } = await supabase
+  const dibagikanSekarang = data.bagikan_nilai === true;
+  const { error: galatUpdate } = await supabase
     .from("exams")
-    .update({ nilai_selesai: false })
-    .eq("id", examId);
+    .update({ bagikan_nilai: !dibagikanSekarang })
+    .eq("id", id);
 
-  if (error) {
-    console.error("Gagal membatalkan selesai dinilai:", error.message);
+  if (galatUpdate) {
+    console.error("Gagal membalik bagikan_nilai:", galatUpdate.message);
+    return;
   }
 
-  revalidatePath(`/guru/ulangan/${examId}/soal`);
-  revalidatePath(`/siswa/nilai/${examId}`);
+  revalidatePath("/guru/ulangan");
+  revalidatePath(`/guru/ulangan/${id}/nilai`);
+  revalidatePath(`/guru/ulangan/${id}/soal`);
+  revalidatePath("/siswa");
   revalidatePath("/siswa/nilai");
+  revalidatePath(`/siswa/nilai/${id}`);
+  revalidatePath("/siswa/ulangan");
+  revalidatePath(`/siswa/ulangan/${id}`);
 }
 
 export async function updateUlangan(
@@ -196,7 +199,7 @@ export async function updateUlangan(
   const status = String(formData.get("status") ?? "sudah").trim();
   const tenggat = String(formData.get("tenggat") ?? "").trim();
   const durasiRaw = String(formData.get("durasi") ?? "").trim();
-  const nilaiDitampilkan = formData.get("tampilkan_nilai") !== null;
+  const bagikanNilai = formData.get("bagikan_nilai") !== null;
 
   if (!id) {
     return { message: "Data ulangan tidak ditemukan." };
@@ -243,7 +246,7 @@ export async function updateUlangan(
       status: statusValid,
       tenggat: tenggatValue,
       durasi: statusValid === "akan" ? durasiValue : null,
-      nilai_ditampilkan: statusValid === "akan" ? nilaiDitampilkan : true,
+      bagikan_nilai: bagikanNilai,
     })
     .eq("id", id)
     .select("id");
@@ -1065,80 +1068,198 @@ export async function simpanNilaiEsai(
 
 // ============================================================================
 // Nilai kode manual (hibrida): guru boleh menimpa nilai kode otomatis.
-// Field: exam_id, siswa_id, nilai_kode_manual (kosong = kembali otomatis).
+//
+// Versi massal dipakai oleh tombol "Simpan Semua Nilai Kode" di halaman
+// jawaban siswa. Guru mengetik beberapa nilai sebagai draft di browser, lalu
+// satu request menyimpan semuanya. Nilai kosong = kembali ke nilai otomatis.
 // Total dihitung ulang = PG + esai + (manual ?? otomatis).
 // ============================================================================
-export async function simpanNilaiKodeManual(
-  _prevState: { message: string | null },
-  formData: FormData,
-): Promise<{ message: string | null }> {
-  const examId = String(formData.get("exam_id") ?? "");
-  const siswaId = String(formData.get("siswa_id") ?? "");
-  const raw = String(formData.get("nilai_kode_manual") ?? "").trim();
+export type HasilSimpanNilaiKodeBanyak = {
+  message: string | null;
+  disimpan: string[];
+  gagal: string[];
+};
 
-  if (!examId || !siswaId) {
-    return { message: "Data tidak lengkap." };
+export async function simpanNilaiKodeManualBanyak(input: {
+  examId: string;
+  items: { siswa_id: string; nilai_kode_manual: string }[];
+}): Promise<HasilSimpanNilaiKodeBanyak> {
+  const examId = String(input?.examId ?? "").trim();
+  const items = Array.isArray(input?.items) ? input.items : [];
+
+  if (!examId || items.length === 0) {
+    return {
+      message: "Tidak ada nilai kode yang perlu disimpan.",
+      disimpan: [],
+      gagal: [],
+    };
   }
 
-  let manual: number | null = null;
-  if (raw !== "") {
+  // Satu siswa hanya boleh muncul sekali. Nilai terakhir yang dipakai.
+  const unik = new Map<string, string>();
+  for (const item of items.slice(0, 1000)) {
+    const siswaId = String(item?.siswa_id ?? "").trim();
+    if (!siswaId) continue;
+    unik.set(siswaId, String(item?.nilai_kode_manual ?? "").trim());
+  }
+
+  if (unik.size === 0) {
+    return {
+      message: "Tidak ada nilai kode yang perlu disimpan.",
+      disimpan: [],
+      gagal: [],
+    };
+  }
+
+  const valid: { siswaId: string; manual: number | null }[] = [];
+  const gagal = new Set<string>();
+
+  for (const [siswaId, raw] of unik) {
+    if (raw === "") {
+      valid.push({ siswaId, manual: null });
+      continue;
+    }
+
     const angka = Number(raw);
     if (!Number.isFinite(angka)) {
-      return { message: "Nilai kode manual harus berupa angka." };
+      gagal.add(siswaId);
+      continue;
     }
-    manual = Math.max(0, Math.min(1000, Math.floor(angka)));
+
+    valid.push({
+      siswaId,
+      manual: Math.max(0, Math.min(1000, Math.floor(angka))),
+    });
+  }
+
+  if (valid.length === 0) {
+    return {
+      message: "Nilai kode manual harus berupa angka.",
+      disimpan: [],
+      gagal: [...gagal],
+    };
   }
 
   const supabase = await requireGuru();
 
-  const { data: submit, error: galatSubmit } = await supabase
+  // Ambil semua submit sekaligus supaya perhitungan total konsisten.
+  const { data: submits, error: galatSubmits } = await supabase
     .from("exam_submissions")
-    .select("nilai_pg, nilai_esai, nilai_kode")
+    .select("siswa_id, nilai_pg, nilai_esai, nilai_kode")
     .eq("exam_id", examId)
-    .eq("siswa_id", siswaId)
-    .maybeSingle();
+    .in(
+      "siswa_id",
+      valid.map((item) => item.siswaId),
+    );
 
-  if (galatSubmit || !submit) {
-    return { message: "Submit siswa ini tidak ditemukan." };
-  }
-
-  const dataSubmit = submit as {
-    nilai_pg: number;
-    nilai_esai: number;
-    nilai_kode: number | null;
-  };
-
-  const nilaiKode = manual ?? dataSubmit.nilai_kode ?? 0;
-  const nilaiTotal =
-    dataSubmit.nilai_pg + dataSubmit.nilai_esai + nilaiKode;
-
-  const { error: galatUpdate } = await supabase
-    .from("exam_submissions")
-    .update({ nilai_kode_manual: manual, nilai_total: nilaiTotal })
-    .eq("exam_id", examId)
-    .eq("siswa_id", siswaId);
-
-  if (galatUpdate) {
+  if (galatSubmits) {
     return {
-      message: `Gagal menyimpan nilai kode: ${galatUpdate.message}`,
+      message: `Gagal membaca submit siswa: ${galatSubmits.message}`,
+      disimpan: [],
+      gagal: valid.map((item) => item.siswaId),
     };
   }
 
-  const { error: galatScores } = await supabase
-    .from("exam_scores")
-    .upsert(
-      [{ exam_id: examId, siswa_id: siswaId, nilai: nilaiTotal }],
-      { onConflict: "exam_id,siswa_id" },
-    );
+  const mapSubmit = new Map<
+    string,
+    { nilai_pg: number; nilai_esai: number; nilai_kode: number | null }
+  >();
 
-  if (galatScores) {
-    console.error("Gagal sinkronkan exam_scores:", galatScores.message);
+  for (const row of (submits ?? []) as {
+    siswa_id: string;
+    nilai_pg: number | null;
+    nilai_esai: number | null;
+    nilai_kode: number | null;
+  }[]) {
+    mapSubmit.set(row.siswa_id, {
+      nilai_pg: row.nilai_pg ?? 0,
+      nilai_esai: row.nilai_esai ?? 0,
+      nilai_kode: row.nilai_kode ?? null,
+    });
   }
 
-  revalidatePath(`/guru/ulangan/${examId}/soal`);
-  revalidatePath(`/guru/ulangan/${examId}/nilai`);
-  revalidatePath(`/siswa/nilai/${examId}`);
-  revalidatePath("/siswa/nilai");
-  return { message: null };
+  const barisSubmits: {
+    exam_id: string;
+    siswa_id: string;
+    nilai_pg: number;
+    nilai_esai: number;
+    nilai_kode: number;
+    nilai_kode_manual: number | null;
+    nilai_total: number;
+  }[] = [];
+
+  for (const item of valid) {
+    const submit = mapSubmit.get(item.siswaId);
+    if (!submit) {
+      gagal.add(item.siswaId);
+      continue;
+    }
+
+    const nilaiKode = item.manual ?? submit.nilai_kode ?? 0;
+    barisSubmits.push({
+      exam_id: examId,
+      siswa_id: item.siswaId,
+      nilai_pg: submit.nilai_pg,
+      nilai_esai: submit.nilai_esai,
+      nilai_kode: submit.nilai_kode ?? 0,
+      nilai_kode_manual: item.manual,
+      nilai_total: submit.nilai_pg + submit.nilai_esai + nilaiKode,
+    });
+  }
+
+  let disimpan: string[] = [];
+  let pesanGagal: string | null = null;
+
+  // Satu upsert untuk semua siswa. Semua baris sudah dipastikan ada lewat
+  // query di atas, jadi tidak ada submission baru yang tidak sengaja dibuat.
+  if (barisSubmits.length > 0) {
+    const { error: galatUpsert } = await supabase
+      .from("exam_submissions")
+      .upsert(barisSubmits, { onConflict: "exam_id,siswa_id" });
+
+    if (galatUpsert) {
+      pesanGagal = `Gagal menyimpan nilai kode: ${galatUpsert.message}`;
+      console.error("Gagal menyimpan nilai kode massal:", galatUpsert.message);
+      for (const baris of barisSubmits) gagal.add(baris.siswa_id);
+    } else {
+      disimpan = barisSubmits.map((baris) => baris.siswa_id);
+    }
+  }
+
+  // Sinkronkan semua nilai ke exam_scores dalam satu upsert.
+  const idDisimpan = new Set(disimpan);
+  const barisScores = barisSubmits
+    .filter((baris) => idDisimpan.has(baris.siswa_id))
+    .map((baris) => ({
+      exam_id: baris.exam_id,
+      siswa_id: baris.siswa_id,
+      nilai: baris.nilai_total,
+    }));
+
+  if (barisScores.length > 0) {
+    const { error: galatScores } = await supabase
+      .from("exam_scores")
+      .upsert(barisScores, { onConflict: "exam_id,siswa_id" });
+
+    if (galatScores) {
+      console.error("Gagal sinkronkan exam_scores:", galatScores.message);
+    }
+  }
+
+  if (disimpan.length > 0) {
+    revalidatePath(`/guru/ulangan/${examId}/soal`);
+    revalidatePath(`/guru/ulangan/${examId}/nilai`);
+    revalidatePath(`/siswa/nilai/${examId}`);
+    revalidatePath("/siswa/nilai");
+    revalidatePath("/guru/ulangan");
+  }
+
+  return {
+    message:
+      pesanGagal ??
+      (gagal.size > 0 ? `${gagal.size} nilai gagal disimpan.` : null),
+    disimpan,
+    gagal: [...gagal],
+  };
 }
 

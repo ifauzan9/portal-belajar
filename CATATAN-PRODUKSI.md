@@ -85,6 +85,9 @@ Hal yang disiapkan di database:
 - Kolom **`pengaturan_guru.info_login_siswa`** &
   **`info_login_siswa_aktif`** (Tahap 44) untuk **Informasi di halaman login
   siswa** yang diatur dari **/guru/pengaturan**.
+- Kolom **`exams.bagikan_nilai`** (Tahap 48) untuk saklar **Bagikan nilai /
+  Tarik nilai** per ulangan. Default `false`: nilai disembunyikan sampai guru
+  membagikannya. Terpisah dari `dibuka` (tutup/buka akses soal).
 
 ## Batasan Penting
 
@@ -157,6 +160,9 @@ Setelah itu (opsional) samakan **Supabase → Authentication → URL Configurati
 | Jam tutup otomatis tidak bisa diubah | Schema Tahap 46 belum dijalankan (kolom `pengaturan_guru.token_login_tutup_waktu` belum ada). Selama kolom belum ada, jam tutup memakai **18:00 WIB**. Jalankan Tahap 46 di Supabase SQL Editor. |
 | Form "Informasi di halaman login siswa" tidak bisa disimpan | Schema Tahap 44 belum dijalankan (kolom `pengaturan_guru.info_login_siswa` belum ada). Jalankan Tahap 44 di Supabase SQL Editor. |
 | Informasi tidak muncul di /login-siswa | Pastikan centang **Tampilkan di halaman login siswa** aktif dan teksnya tidak kosong. Setelah disimpan, muat ulang halaman login siswa. |
+| Nilai siswa masih terlihat walau ulangan sudah ditutup | Cek saklar **Bagikan nilai** di menu titik-tiga daftar Ulangan atau halaman Input Nilai. Tutup/buka ulangan hanya mengatur akses soal; nilai diatur terpisah oleh saklar tersebut. |
+| Nilai tidak muncul di akun siswa padahal sudah diisi | Nilai belum dibagikan. Buka **/guru/ulangan/[id]/nilai** atau menu titik-tiga → **Bagikan nilai**. |
+| Tombol "Bagikan nilai" tidak berpengaruh / halaman Ulangan error "column bagikan_nilai does not exist" | Schema Tahap 48 belum dijalankan. Jalankan Tahap 48 di Supabase SQL Editor. |
 
 ## Checklist Cepat
 
@@ -175,4 +181,5 @@ Setelah itu (opsional) samakan **Supabase → Authentication → URL Configurati
 - [ ] Kolom `pengaturan_guru.token_login_mode` sudah ada (Tahap 45) — untuk pilihan mode Otomatis/Manual login token
 - [ ] Kolom `pengaturan_guru.token_login_tutup_waktu` sudah ada (Tahap 46) — untuk mengatur jam tutup otomatis login token
 - [ ] Kolom `pengaturan_guru.info_login_siswa` & `info_login_siswa_aktif` sudah ada (Tahap 44) — untuk informasi di halaman login siswa
+- [ ] Kolom `exams.bagikan_nilai` sudah ada (Tahap 48) — untuk saklar **Bagikan nilai** per ulangan
 - [ ] Login guru & siswa sudah dicoba di URL produksi

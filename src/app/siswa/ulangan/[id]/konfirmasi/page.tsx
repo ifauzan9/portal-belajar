@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireSiswa } from "@/lib/sesi-siswa";
-import { createClient } from "@/lib/supabase/server";
+import { createSiswaClient } from "@/lib/supabase/siswa";
 import { ambilKelasUlangan } from "@/lib/ambil-kelas-ulangan";
 import { tenggatSudahLewat } from "@/lib/deadline";
 import { belumWaktunyaMulai, sisaMenitUjian } from "@/lib/jadwal-ulangan";
 import { formatTanggalWib, formatWaktuWib } from "@/lib/waktu";
 import { ambilPengaturanSoal } from "@/lib/pengaturan-soal";
+import { statusAksesSoal } from "@/lib/status-soal";
 import { PemberitahuanSoalDitutup } from "@/components/pemberitahuan-soal";
 import { Badge } from "@/components/ui/badge";
 import { Kartu } from "@/components/ui/kartu";
@@ -39,7 +40,7 @@ export default async function KonfirmasiUlanganPage({
 }) {
   const { id } = await params;
   const { siswa } = await requireSiswa();
-  const supabase = await createClient();
+  const supabase = await createSiswaClient();
 
   const { data: ulangan, error: galatUlangan } = await supabase
     .from("exams")
@@ -111,6 +112,13 @@ export default async function KonfirmasiUlanganPage({
     status === "akan" && tenggatSudahLewat(dataUlangan.tenggat);
   const belumMulai =
     status === "akan" && belumWaktunyaMulai(dataUlangan.tanggal);
+  const aksesSoal = statusAksesSoal({
+    status,
+    dibuka,
+    bolehSoal: dibuka && !pengaturanSoal.tutupUlangan,
+    deadlineLewat,
+    belumWaktunya: belumMulai,
+  });
   const sudahSubmit = Boolean(submit);
   const sedangMengerjakan = Boolean(sesi) && !sudahSubmit;
   // Saklar global (Tahap 41): menutup untuk siswa yang BELUM memulai.
@@ -174,6 +182,9 @@ export default async function KonfirmasiUlanganPage({
           <Badge varian={statusTampil.varian} titik>
             {statusTampil.label}
           </Badge>
+          {aksesSoal ? (
+            <Badge varian={aksesSoal.varian}>{aksesSoal.label}</Badge>
+          ) : null}
         </div>
         <p className="mt-1 text-sm text-slate-500">
           Konfirmasi pengerjaan · {jumlahSoal} soal
@@ -225,7 +236,7 @@ export default async function KonfirmasiUlanganPage({
             nilai.
           </p>
           <Link
-            href={`/siswa/nilai/${id}`}
+            href={`/siswa/nilai/${id}?nilai=1`}
             className="mt-3 inline-block rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
           >
             Lihat Detail Nilai →
@@ -234,6 +245,7 @@ export default async function KonfirmasiUlanganPage({
       ) : status !== "akan" ? (
         <Notifikasi varian="info" judul="Ulangan sudah dilaksanakan">
           Ulangan ini bukan ulangan bersoal yang bisa dikerjakan sekarang.
+          Kalau kamu belum mengerjakannya, hubungi gurumu.
         </Notifikasi>
       ) : !dibuka ? (
         <Notifikasi varian="gagal" judul="Ulangan ditutup oleh guru">
